@@ -20,6 +20,8 @@ const ListDetail = () => {
     const [editItemData, setEditItemData] = useState({});
     const [isCreatingCategory, setIsCreatingCategory] = useState(false);
     const [newCategoryName, setNewCategoryName] = useState('');
+    const [isRenaming, setIsRenaming] = useState(false);
+    const [renameValue, setRenameValue] = useState('');
 
     useEffect(() => {
         fetchList();
@@ -182,6 +184,37 @@ const ListDetail = () => {
         }
     };
 
+    const handleRenameList = async () => {
+        if (!renameValue.trim() || renameValue === list.title) {
+            setIsRenaming(false);
+            return;
+        }
+
+        const resp = await fetch(`${API_BASE_URL}/api/lists/${id}`, {
+            method: 'PATCH',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title: renameValue.trim() })
+        });
+
+        if (resp.ok) {
+            setList({ ...list, title: renameValue.trim() });
+            setIsRenaming(false);
+        }
+    };
+
+    const handleDeleteList = async () => {
+        if (!window.confirm('Are you sure you want to delete this list? This action cannot be undone.')) return;
+
+        const resp = await fetch(`${API_BASE_URL}/api/lists/${id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (resp.ok) {
+            navigate('/');
+        }
+    };
+
     if (!list) return <div className="container">Loading...</div>;
 
     const progress = list.items?.length ? (list.items.filter(i => i.is_bought).length / list.items.length) * 100 : 0;
@@ -228,7 +261,38 @@ const ListDetail = () => {
                     <ArrowLeft size={20} />
                 </button>
                 <div style={{ flex: 1 }}>
-                    <h1 style={{ fontSize: '1.25rem', fontWeight: 800 }}>{list.title}</h1>
+                    {isRenaming ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <input
+                                value={renameValue}
+                                onChange={(e) => setRenameValue(e.target.value)}
+                                onBlur={handleRenameList}
+                                onKeyDown={(e) => e.key === 'Enter' && handleRenameList()}
+                                autoFocus
+                                style={{
+                                    fontSize: '1.25rem',
+                                    fontWeight: 800,
+                                    padding: '0.25rem',
+                                    borderRadius: '8px',
+                                    border: '1px solid var(--border)',
+                                    width: '100%'
+                                }}
+                            />
+                        </div>
+                    ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <h1 style={{ fontSize: '1.25rem', fontWeight: 800 }}>{list.title}</h1>
+                            {isManager && (
+                                <button
+                                    onClick={() => { setIsRenaming(true); setRenameValue(list.title); }}
+                                    style={{ padding: '4px', color: 'var(--text-muted)', cursor: 'pointer', background: 'transparent', border: 'none' }}
+                                    title="Rename List"
+                                >
+                                    <Edit2 size={16} />
+                                </button>
+                            )}
+                        </div>
+                    )}
                     <div style={{ display: 'flex', gap: '0.8rem', marginTop: '0.25rem' }}>
                         {isManager ? (
                             <div style={{ display: 'flex', gap: '0.25rem', background: 'var(--bg-secondary)', padding: '2px', borderRadius: '8px' }}>
@@ -292,6 +356,17 @@ const ListDetail = () => {
                         </select>
                         <Store size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--primary)' }} />
                     </div>
+                )}
+
+                {isManager && (
+                    <button
+                        onClick={handleDeleteList}
+                        className="card"
+                        style={{ padding: '0.5rem', borderRadius: '50%', color: 'var(--danger)', border: '1px solid var(--border)' }}
+                        title="Delete List"
+                    >
+                        <Trash2 size={20} />
+                    </button>
                 )}
             </header>
 

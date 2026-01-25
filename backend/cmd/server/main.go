@@ -49,6 +49,7 @@ func main() {
 			protected.POST("/lists", handlers.CreateList)
 			protected.PATCH("/lists/:id", handlers.UpdateList)
 			protected.POST("/lists/:id/duplicate", handlers.DuplicateList)
+			protected.DELETE("/lists/:id", handlers.DeleteList)
 
 			protected.POST("/lists/:id/items", handlers.AddItemToList)
 			protected.PATCH("/items/:id", handlers.UpdateItem)

@@ -1,3 +1,4 @@
 *.db
 *.png
 backend/server
+backend/main

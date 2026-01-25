@@ -7,6 +7,7 @@ import (
 	"kincart/internal/models"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 func GetLists(c *gin.Context) {
@@ -108,4 +109,35 @@ func DuplicateList(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, newList)
+}
+
+func DeleteList(c *gin.Context) {
+	familyID := c.MustGet("family_id").(uint)
+	listID := c.Param("id")
+
+	var list models.ShoppingList
+	if err := database.DB.Where("id = ? AND family_id = ?", listID, familyID).First(&list).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "List not found"})
+		return
+	}
+
+	err := database.DB.Transaction(func(tx *gorm.DB) error {
+		// Delete list items first
+		if err := tx.Where("list_id = ?", list.ID).Delete(&models.Item{}).Error; err != nil {
+			return err
+		}
+
+		// Delete the list
+		if err := tx.Delete(&list).Error; err != nil {
+			return err
+		}
+		return nil
+	})
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete list"})
+		return
+	}
+
+	c.Status(http.StatusNoContent)
 }
