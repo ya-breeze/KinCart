@@ -9,6 +9,8 @@ const Dashboard = () => {
     const navigate = useNavigate();
     const [lists, setLists] = useState([]);
 
+
+
     useEffect(() => {
         fetchLists();
     }, []);
@@ -23,6 +25,23 @@ const Dashboard = () => {
     };
 
     const isManager = mode === 'manager';
+
+    const visibleLists = [...lists]
+        .filter(list => isManager || list.status === 'ready for shopping')
+        .sort((a, b) => {
+            if (isManager) {
+                // For managers: Group by status, then sort by name
+                // Define priority: 'ready for shopping' < 'completed' (or whatever string comparison gives)
+                // If we want specific order, we could map status to numbers.
+                // Request says "groupped by status". String sort achieves grouping.
+                if (a.status !== b.status) {
+                    return a.status.localeCompare(b.status);
+                }
+                return a.title.localeCompare(b.title);
+            }
+            // For shoppers: Sort by name
+            return a.title.localeCompare(b.title);
+        });
 
     const createNewList = async () => {
         const title = prompt('Enter list title:');
@@ -112,10 +131,70 @@ const Dashboard = () => {
                     {isManager ? 'All Lists' : 'Active Shopping'}
                 </h2>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                    {lists
-                        .filter(list => isManager || list.status === 'ready for shopping')
-                        .map(list => (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                    {isManager ? (
+                        // Manager View: Grouped by Status
+                        ['preparing', 'ready for shopping', 'completed'].map(statusGroup => {
+                            const groupLists = visibleLists.filter(l => l.status === statusGroup);
+                            if (groupLists.length === 0) return null;
+
+                            return (
+                                <div key={statusGroup}>
+                                    <h3 style={{
+                                        fontSize: '1rem',
+                                        fontWeight: 700,
+                                        color: 'var(--text-muted)',
+                                        textTransform: 'uppercase',
+                                        marginBottom: '1rem',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.5rem'
+                                    }}>
+                                        {statusGroup === 'completed' ? <CheckCircle2 size={16} /> : <Clock size={16} />}
+                                        {statusGroup}
+                                    </h3>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                        {groupLists.map(list => (
+                                            <div
+                                                key={list.id}
+                                                className="card"
+                                                onClick={() => navigate(`/list/${list.id}`)}
+                                                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
+                                                title={`View details of ${list.title}`}
+                                            >
+                                                <div style={{ flex: 1 }}>
+                                                    <h3 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '0.25rem' }}>{list.title}</h3>
+                                                    <div style={{ display: 'flex', gap: '1rem', fontSize: '0.875rem', color: 'var(--text-muted)' }}>
+                                                        <span>{list.items?.length || 0} items</span>
+                                                        <span>≈ {list.estimated_amount || 0} {currency}</span>
+                                                    </div>
+                                                </div>
+                                                <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                                    <div>
+                                                        <span className={`badge ${list.status === 'completed' ? 'badge-success' : list.status === 'ready for shopping' ? 'badge-warning' : 'badge-neutral'}`}>
+                                                            {list.status}
+                                                        </span>
+                                                        <p style={{ marginTop: '0.5rem', fontWeight: 700, color: 'var(--success)' }}>
+                                                            {list.actual_amount > 0 ? `${list.actual_amount} ${currency}` : ''}
+                                                        </p>
+                                                    </div>
+                                                    <button
+                                                        onClick={(e) => duplicateList(e, list.id)}
+                                                        style={{ background: 'transparent', border: 'none', color: 'var(--primary)', cursor: 'pointer', padding: '0.5rem' }}
+                                                        title="Duplicate List"
+                                                    >
+                                                        <Copy size={20} />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            );
+                        })
+                    ) : (
+                        // Shopper View: Flat List
+                        visibleLists.map(list => (
                             <div
                                 key={list.id}
                                 className="card"
@@ -140,20 +219,12 @@ const Dashboard = () => {
                                             {list.actual_amount > 0 ? `${list.actual_amount} ${currency}` : ''}
                                         </p>
                                     </div>
-                                    {isManager && (
-                                        <button
-                                            onClick={(e) => duplicateList(e, list.id)}
-                                            style={{ background: 'transparent', border: 'none', color: 'var(--primary)', cursor: 'pointer', padding: '0.5rem' }}
-                                            title="Duplicate List"
-                                        >
-                                            <Copy size={20} />
-                                        </button>
-                                    )}
                                 </div>
                             </div>
-                        ))}
+                        ))
+                    )}
 
-                    {lists.filter(list => isManager || list.status === 'ready for shopping').length === 0 && (
+                    {visibleLists.length === 0 && (
                         <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
                             <ShoppingBasket size={48} style={{ opacity: 0.2, marginBottom: '1rem' }} />
                             <p>No {isManager ? '' : 'active'} lists yet. {isManager ? "Let's start planning!" : "Wait for a manager to assign one."}</p>
