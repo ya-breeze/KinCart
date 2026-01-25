@@ -13,6 +13,7 @@ services:
       UPLOADS_PATH: /data/uploads
       JWT_SECRET: ${JWT_SECRET:-kincart-super-secret-key}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+      KINCART_SEED_USERS: ${KINCART_SEED_USERS:-}
     networks:
       - kincart-network
     restart: always

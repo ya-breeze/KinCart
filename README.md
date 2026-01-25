@@ -101,9 +101,7 @@ You can configure the app using a `.env` file in the project root:
 | `KINCART_DATA_PATH` | Path to the data folder | `/path/to/storage` |
 | `JWT_SECRET` | JWT signing key (KEEP SECRET) | `your-secret-key` |
 | `ALLOWED_ORIGINS` | Allowed domains for CORS (see below) | `https://kincart.example.com` |
-| `KINCART_SEED_FAMILY` | Family name for auto-creation | `TheSmiths` |
-| `KINCART_SEED_USER` | Username of the first user | `john` |
-| `KINCART_SEED_PASS` | Password of the first user | `mypassword` |
+| `KINCART_SEED_USERS` | Seed users/families at startup | `Smith:dad:pass1,Jones:mom:pass2` |
 
 ### CORS Configuration (Required for Production)
 
@@ -168,7 +166,7 @@ Setting `ALLOWED_ORIGINS` protects your KinCart instance from:
 - **Credential theft** - Ensures only your frontend can use authentication cookies
 
 **Automatic User Creation:**
-If `KINCART_SEED_FAMILY`, `KINCART_SEED_USER`, and `KINCART_SEED_PASS` are provided, the server will automatically create the family and user upon startup if they don't already exist. This is the fastest way to get started.
+If `KINCART_SEED_USERS` is provided, the server will automatically create the specified families and users upon startup if they don't already exist. Format: `FamilyName:Username:Password`, separated by commas. Usage of this variable is recommended for development or initial setup only.
 
 ### Data Persistence
 All important files are stored in the data directory:
