@@ -29,7 +29,7 @@ const ListDetail = () => {
     }, [id]);
 
     const fetchShops = async () => {
-        const resp = await fetch('${API_BASE_URL}/api/shops', {
+        const resp = await fetch(`${API_BASE_URL}/api/shops`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         if (resp.ok) setShops(await resp.json());
@@ -53,14 +53,14 @@ const ListDetail = () => {
     };
 
     const fetchFrequentItems = async () => {
-        const resp = await fetch('${API_BASE_URL}/api/family/frequent-items', {
+        const resp = await fetch(`${API_BASE_URL}/api/family/frequent-items`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         if (resp.ok) setFrequentItems(await resp.json());
     };
 
     const fetchCategories = async () => {
-        const resp = await fetch('${API_BASE_URL}/api/categories', {
+        const resp = await fetch(`${API_BASE_URL}/api/categories`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         if (resp.ok) setCategories(await resp.json());
