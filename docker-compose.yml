@@ -1,0 +1,27 @@
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    volumes:
+      - ${KINCART_DATA_PATH:-./kincart-data}:/data
+    environment:
+      DB_PATH: /data/kincart.db
+      UPLOADS_PATH: /data/uploads
+      JWT_SECRET: ${JWT_SECRET:-kincart-super-secret-key}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+
+    restart: always
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: always

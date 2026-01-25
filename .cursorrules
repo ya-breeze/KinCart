@@ -1,0 +1,13 @@
+# KinCart Agent Rules
+
+## Browser Testing
+- ALWAYS use the following credentials from the `Makefile`:
+  - Manager: `manager_test` (password: `pass1234`)
+  - Shopper: `shopper_test` (password: `pass1234`)
+- Do not use random login/passwords.
+- Before testing, ensure you run `make seed-test-data` if the database is not initialized.
+
+## Code Standards
+- Follow the patterns in `backend/` and `frontend/`.
+- Use Vanilla CSS for all styling.
+- Ensure all new features are added to `development_plan.md`.

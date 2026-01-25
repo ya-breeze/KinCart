@@ -1,35 +1,41 @@
-Концепция приложения: KinCart
-KinCart — это интеллектуальный ассистент для семейных закупок, который разделяет роли «Менеджера» (кто планирует) и «Шопера» (кто покупает), минимизируя время нахождения в магазине и лишние переписки.
+# KinCart Concept
 
-Основной рабочий процесс
+KinCart is an intelligent assistant for family shopping that connects users into "Families." Within a family, it supports role separation between a "Manager" (who plans) and a "Shopper" (who buys), minimizing time spent in the store and redundant back-and-forth messaging.
 
-Интеллектуальное планирование: Составитель видит историю прошлых покупок. Вместо ввода текста он просто нажимает на часто покупаемые товары (например, «Молоко 2л»), и они добавляются в текущий список. Most probably, there will be a lot in common between different lists, so it would make sense to start a new list using one of previous lists instead of creating completely new list. Adjust UI for that
+## Primary Workflow
 
-Автоматическая категоризация: Приложение на базе AI или предустановленных словарей мгновенно распределяет товары по группам: Овощи/Фрукты, Мясной отдел, Бакалея, Бытовая химия.
+**Intelligent Planning:** The planner can see past purchase history. Instead of typing text, they simply click on frequently purchased items (e.g., "Milk 2L"), and they are added to the current list. Users can create a new list from scratch or based on previous/template lists (Weekly Groceries, BBQ Party, etc.).
 
-Режим «В магазине»: Покупатель открывает список, где товары уже сгруппированы по отделам. При нажатии на товар он скрывается или переносится в секцию «В корзине», чтобы фокус оставался только на невыполненных пунктах.
+**Automatic Categorization:** The app, powered by AI or pre-defined dictionaries, instantly sorts items into groups: Fruits & Vegetables, Meat, Bakery, Household, etc.
 
-Дополнительные функции для эффективности
-1. Оптимизация маршрута (Aisle Mapping)
+**"In Store" Mode:** The shopper opens the list where items are already grouped by department. When an item is clicked, it is hidden or moved to the "In Cart" section, keeping the focus only on pending items.
 
-Позволить пользователю один раз настроить порядок категорий под конкретный супермаркет (например, если в вашем магазине сначала идет отдел овощей, а потом хлеб). Список будет выстраиваться в логической последовательности движения по залу.
+## Additional Efficiency Features
 
-2. Фото-подсказки (Visual Confirmation)
+### 1. Aisle Mapping (Route Optimization)
+Allow users to configure the order of categories once for a specific supermarket (e.g., if your store starts with the vegetable department then bakery). The list will be organized in the logical sequence of movement through the store. A drag-and-drop interface is available in store settings to form the optimal route.
 
-Составитель может прикрепить фото конкретного бренда или упаковки товара. Это исключает риск того, что покупатель возьмет «не тот» стиральный порошок или соус. Изображение будет отображаться рядом с товаром в списке. Изображение будет переиспользоваться для следующих покупок.
+### 2. Item Details (Visual Cues)
+The planner can attach a photo of a specific brand or packaging, as well as add a text description (e.g., "get exactly this one, do not take a substitute"). This eliminates the risk of the shopper picking the "wrong" laundry detergent or sauce. The image and description will be displayed next to the item in the list and reused for future purchases.
 
-3. Бюджетирование
+### 3. Budgeting
+**Cost Estimation:** The app can automatically fetch prices and discounts from store websites.
+**Receipt Archive:** The shopper can take a photo of the paper receipt after purchase, and price data will automatically update the information in the app for future planning.
 
-Оценка стоимости: Приложение автоматически скачивает цены и скидочные цены с сайта магазинов.
+### 4. "I Forgot!" Push Notifications
+If the shopper has already started the shopping process, the manager can send an urgent addition. it will appear at the top of the shopper's screen with a bright orange "Urgent Addition!" label, ensuring important items aren't missed at the last moment.
 
-Архив чеков: Покупатель может сфотографировать бумажный чек после покупки, и данные о ценах автоматически обновят информацию в приложении для следующего планирования.
+### 5. Security and Family Access
+The app requires authentication (login/password) for each user.
+The application is built around the **Family** concept:
+- One user creates a Family and invites other members.
+- All family members have access to shared lists, purchase history, and store route settings.
+- Any member can act as a Manager or Shopper for a specific purchase.
+- Access is password-protected; data is isolated between different families.
+- Data is available to all family devices and updates in real-time.
 
-4. Push-уведомления «Забыл!»
+## Other Features
 
-Если покупатель нажал кнопку «Начинаю покупки», составитель может отправить срочное уведомление с дополнением, которое появится в топе списка с яркой пометкой.
+**Common Templates:** Creating ready-set lists for recurring scenarios (e.g., "BBQ Set" or "Weekly Restock").
 
-5. Остальное
-
-Общие шаблоны: Создание готовых наборов для повторяющихся сценариев (например, «Набор для шашлыка» или «Закупка на неделю»).
-
-Чтобы функция группировки по отделам (молочка, мясо и т.д.) работала эффективно, стоит внедритьдвуязычную базу товаров: Автоматическое сопоставление (например, если написано "Mléko", приложение понимает, что это "Dairy/Молочка").
+**Bilingual Product Support:** To ensure the department grouping (dairy, meat, etc.) works effectively, a bilingual product database can be implemented for automatic matching (e.g., if "Mléko" is written, the app understands it is "Dairy").

@@ -1,0 +1,22 @@
+# Docker ignore file for frontend
+
+# Dependency directories
+node_modules/
+
+# Build artifacts
+dist/
+
+# Version control
+.git
+.gitignore
+
+# Docker
+Dockerfile
+.dockerignore
+
+# OS files
+.DS_Store
+
+# Environment variables
+.env*
+!.env.example
