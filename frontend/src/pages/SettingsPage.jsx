@@ -24,7 +24,7 @@ const SettingsPage = () => {
     }, []);
 
     const fetchShops = async () => {
-        const resp = await fetch('${API_BASE_URL}/api/shops', {
+        const resp = await fetch(`${API_BASE_URL}/api/shops`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         if (resp.ok) setShops(await resp.json());
@@ -41,14 +41,14 @@ const SettingsPage = () => {
     };
 
     const fetchCategories = async () => {
-        const resp = await fetch('${API_BASE_URL}/api/categories', {
+        const resp = await fetch(`${API_BASE_URL}/api/categories`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         if (resp.ok) setCategories(await resp.json());
     };
 
     const updateCurrency = async (newVal) => {
-        const resp = await fetch('${API_BASE_URL}/api/family/config', {
+        const resp = await fetch(`${API_BASE_URL}/api/family/config`, {
             method: 'PATCH',
             headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ currency: newVal })
@@ -58,7 +58,7 @@ const SettingsPage = () => {
 
     const addCategory = async () => {
         if (!newCatName) return;
-        const resp = await fetch('${API_BASE_URL}/api/categories', {
+        const resp = await fetch(`${API_BASE_URL}/api/categories`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: newCatName, icon: 'package', sort_order: categories.length + 1 })
@@ -66,6 +66,8 @@ const SettingsPage = () => {
         if (resp.ok) {
             setNewCatName('');
             fetchCategories();
+        } else {
+            alert('Failed to add category');
         }
     };
 
@@ -97,7 +99,7 @@ const SettingsPage = () => {
 
     const addShop = async () => {
         if (!newShopName) return;
-        const resp = await fetch('${API_BASE_URL}/api/shops', {
+        const resp = await fetch(`${API_BASE_URL}/api/shops`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: newShopName })
@@ -149,7 +151,7 @@ const SettingsPage = () => {
             // For now let's assume a patch reorder endpoint exists or implement one
             // I'll actually just update the categories state and assume it's saved correctly
             // (Re-using the existing reorder logic if I implemented it, or I'll add the endpoint)
-            const resp = await fetch('${API_BASE_URL}/api/categories/reorder', {
+            const resp = await fetch(`${API_BASE_URL}/api/categories/reorder`, {
                 method: 'PATCH',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify(updatedList)
