@@ -1,0 +1,24 @@
+# Docker ignore file for backend
+
+# Dependency directories
+node_modules/
+vendor/
+
+# Data and logs
+data/
+*.log
+
+# Version control
+.git
+.gitignore
+
+# Docker
+Dockerfile
+.dockerignore
+
+# OS files
+.DS_Store
+
+# Build artifacts
+kincart-server
+kincart-admin

@@ -1,0 +1,49 @@
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    volumes:
+      - ${KINCART_DATA_PATH:-./kincart-data}:/data
+    environment:
+      DB_PATH: /data/kincart.db
+      UPLOADS_PATH: /data/uploads
+      JWT_SECRET: ${JWT_SECRET:-kincart-super-secret-key}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+    networks:
+      - kincart-network
+    restart: always
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    depends_on:
+      - backend
+    networks:
+      - kincart-network
+    restart: always
+
+
+  # Nginx Reverse Proxy
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: kincart-nginx
+    restart: unless-stopped
+    ports:
+      - "${NGINX_HTTP_PORT:-80}:80"
+      - "${NGINX_HTTPS_PORT:-443}:443"
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - kincart-network
+
+networks:
+  kincart-network:
+    driver: bridge
