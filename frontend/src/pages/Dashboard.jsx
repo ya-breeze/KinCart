@@ -30,13 +30,22 @@ const Dashboard = () => {
         .filter(list => isManager || list.status === 'ready for shopping')
         .sort((a, b) => {
             if (isManager) {
-                // For managers: Group by status, then sort by name
-                // Define priority: 'ready for shopping' < 'completed' (or whatever string comparison gives)
-                // If we want specific order, we could map status to numbers.
-                // Request says "groupped by status". String sort achieves grouping.
-                if (a.status !== b.status) {
-                    return a.status.localeCompare(b.status);
+                // Manager View: Grouped by Status
+                // Group Order: 'preparing' -> 'ready for shopping' -> 'completed'
+                const statusPriority = { 'preparing': 0, 'ready for shopping': 1, 'completed': 2 };
+                const priorityA = statusPriority[a.status] !== undefined ? statusPriority[a.status] : 99;
+                const priorityB = statusPriority[b.status] !== undefined ? statusPriority[b.status] : 99;
+
+                if (priorityA !== priorityB) {
+                    return priorityA - priorityB;
                 }
+
+                // If completed, sort by completed_at desc
+                if (a.status === 'completed' && a.completed_at && b.completed_at) {
+                    return new Date(b.completed_at) - new Date(a.completed_at);
+                }
+
+                // Secondary sort by title
                 return a.title.localeCompare(b.title);
             }
             // For shoppers: Sort by name
@@ -215,6 +224,11 @@ const Dashboard = () => {
                                             {list.status === 'completed' ? <CheckCircle2 size={14} style={{ marginRight: '4px' }} /> : <Clock size={14} style={{ marginRight: '4px' }} />}
                                             {list.status}
                                         </span>
+                                        {list.status === 'completed' && list.completed_at && (
+                                            <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '4px', textAlign: 'right' }}>
+                                                {new Date(list.completed_at).toLocaleDateString(undefined, { day: '2-digit', month: '2-digit' })}
+                                            </p>
+                                        )}
                                         <p style={{ marginTop: '0.5rem', fontWeight: 700, color: 'var(--success)' }}>
                                             {list.actual_amount > 0 ? `${list.actual_amount} ${currency}` : ''}
                                         </p>

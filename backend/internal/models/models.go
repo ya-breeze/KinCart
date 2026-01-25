@@ -38,6 +38,7 @@ type ShoppingList struct {
 	Status          string         `json:"status"` // "planning", "in-progress", "completed"
 	EstimatedAmount float64        `json:"estimated_amount"`
 	ActualAmount    float64        `json:"actual_amount"`
+	CompletedAt     *time.Time     `json:"completed_at"`
 	FamilyID        uint           `json:"family_id"`
 	Items           []Item         `gorm:"foreignKey:ListID" json:"items"`
 }

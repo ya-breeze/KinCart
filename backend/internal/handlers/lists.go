@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"time"
 
 	"kincart/internal/database"
 	"kincart/internal/models"
@@ -67,6 +68,14 @@ func UpdateList(c *gin.Context) {
 	if err := c.ShouldBindJSON(&list); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Handle completion status change
+	if list.Status == "completed" && (list.CompletedAt == nil) {
+		now := time.Now()
+		list.CompletedAt = &now
+	} else if list.Status != "completed" {
+		list.CompletedAt = nil
 	}
 
 	database.DB.Save(&list)
