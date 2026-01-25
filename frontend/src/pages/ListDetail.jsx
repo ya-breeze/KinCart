@@ -18,6 +18,8 @@ const ListDetail = () => {
     const [selectedPhoto, setSelectedPhoto] = useState(null);
     const [editingItemId, setEditingItemId] = useState(null);
     const [editItemData, setEditItemData] = useState({});
+    const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+    const [newCategoryName, setNewCategoryName] = useState('');
 
     useEffect(() => {
         fetchList();
@@ -161,6 +163,22 @@ const ListDetail = () => {
         if (resp.ok) {
             setEditingItemId(null);
             fetchList();
+        }
+    };
+
+    const handleCreateCategory = async () => {
+        if (!newCategoryName.trim()) return;
+        const resp = await fetch(`${API_BASE_URL}/api/categories`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: newCategoryName.trim() })
+        });
+        if (resp.ok) {
+            const newCat = await resp.json();
+            setCategories([...categories, newCat]);
+            setNewItem({ ...newItem, category_id: newCat.id });
+            setIsCreatingCategory(false);
+            setNewCategoryName('');
         }
     };
 
@@ -536,16 +554,53 @@ const ListDetail = () => {
                                 </div>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                                     <label style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Category</label>
-                                    <select
-                                        style={{ padding: '0.75rem', borderRadius: '12px', border: '1px solid var(--border)', outline: 'none', background: 'white', fontWeight: 600 }}
-                                        value={newItem.category_id}
-                                        onChange={e => setNewItem({ ...newItem, category_id: e.target.value })}
-                                    >
-                                        <option value="">Select...</option>
-                                        {categories.map(c => (
-                                            <option key={c.id} value={c.id}>{c.name}</option>
-                                        ))}
-                                    </select>
+                                    {isCreatingCategory ? (
+                                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                            <input
+                                                style={{ flex: 1, padding: '0.75rem', borderRadius: '12px', border: '1px solid var(--border)', outline: 'none', fontWeight: 600 }}
+                                                placeholder="New Category Name"
+                                                autoFocus
+                                                value={newCategoryName}
+                                                onChange={e => setNewCategoryName(e.target.value)}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={handleCreateCategory}
+                                                style={{ padding: '0.5rem', borderRadius: '8px', background: 'var(--success)', color: 'white', border: 'none' }}
+                                                title="Save Category"
+                                            >
+                                                <Check size={20} />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => { setIsCreatingCategory(false); setNewCategoryName(''); }}
+                                                style={{ padding: '0.5rem', borderRadius: '8px', background: 'var(--bg-secondary)', color: 'var(--text-muted)', border: 'none' }}
+                                                title="Cancel"
+                                            >
+                                                <X size={20} />
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                            <select
+                                                style={{ flex: 1, padding: '0.75rem', borderRadius: '12px', border: '1px solid var(--border)', outline: 'none', background: 'white', fontWeight: 600 }}
+                                                value={newItem.category_id}
+                                                onChange={e => {
+                                                    if (e.target.value === 'NEW') {
+                                                        setIsCreatingCategory(true);
+                                                    } else {
+                                                        setNewItem({ ...newItem, category_id: e.target.value });
+                                                    }
+                                                }}
+                                            >
+                                                <option value="">Select...</option>
+                                                {categories.map(c => (
+                                                    <option key={c.id} value={c.id}>{c.name}</option>
+                                                ))}
+                                                <option value="NEW" style={{ fontWeight: 800, color: 'var(--primary)' }}>+ Create New Category</option>
+                                            </select>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 

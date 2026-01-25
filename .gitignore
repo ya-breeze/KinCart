@@ -1,4 +1,3 @@
-backend/data/kincart.db
-backend/kincart.db
+*.db
 *.png
 backend/server
