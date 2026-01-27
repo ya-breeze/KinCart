@@ -19,6 +19,11 @@
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
+html, body {
+  overflow-x: hidden;
+  width: 100%;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -31,12 +36,20 @@ body {
   color: var(--text-main);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
 }
 
 .container {
   max-width: 800px;
   margin: 0 auto;
   padding: 1rem;
+  width: 100%;
+}
+
+@media (max-width: 480px) {
+  .container {
+    padding: 0.75rem;
+  }
 }
 
 button {
@@ -44,6 +57,7 @@ button {
   border: none;
   font-family: inherit;
   transition: all 0.2s ease;
+  user-select: none;
 }
 
 .btn-primary {
@@ -56,12 +70,17 @@ button {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
+  font-size: 1rem;
 }
 
 .btn-primary:hover {
   background-color: var(--primary-hover);
   transform: translateY(-1px);
   box-shadow: var(--shadow);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
 }
 
 .card {
@@ -71,6 +90,12 @@ button {
   box-shadow: var(--shadow-sm);
   border: 1px solid var(--border);
   transition: all 0.2s ease;
+}
+
+@media (max-width: 480px) {
+  .card {
+    padding: 1rem;
+  }
 }
 
 .card:hover {
@@ -83,6 +108,9 @@ button {
   font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
 }
 
 .badge-success {
@@ -105,3 +133,33 @@ button {
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.3);
 }
+
+/* Responsive Utilities */
+.flex-responsive {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+@media (max-width: 640px) {
+  .flex-responsive {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  
+  .hide-mobile {
+    display: none;
+  }
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.text-break {
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+

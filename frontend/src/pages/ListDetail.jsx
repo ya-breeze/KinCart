@@ -256,11 +256,18 @@ const ListDetail = () => {
 
     return (
         <div className="container">
-            <header style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem', paddingTop: '1rem' }}>
-                <button onClick={() => navigate('/')} className="card" style={{ padding: '0.5rem', borderRadius: '50%' }} title="Back to Dashboard">
+            <header style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '1rem',
+                marginBottom: '2rem',
+                paddingTop: '1rem',
+                flexWrap: 'wrap'
+            }}>
+                <button onClick={() => navigate('/')} className="card" style={{ padding: '0.5rem', borderRadius: '50%', flexShrink: 0 }} title="Back to Dashboard">
                     <ArrowLeft size={20} />
                 </button>
-                <div style={{ flex: 1 }}>
+                <div style={{ flex: '1 1 200px', minWidth: '200px' }}>
                     {isRenaming ? (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <input
@@ -280,8 +287,8 @@ const ListDetail = () => {
                             />
                         </div>
                     ) : (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <h1 style={{ fontSize: '1.25rem', fontWeight: 800 }}>{list.title}</h1>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                            <h1 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0 }}>{list.title}</h1>
                             {isManager && (
                                 <button
                                     onClick={() => { setIsRenaming(true); setRenameValue(list.title); }}
@@ -293,9 +300,9 @@ const ListDetail = () => {
                             )}
                         </div>
                     )}
-                    <div style={{ display: 'flex', gap: '0.8rem', marginTop: '0.25rem' }}>
+                    <div style={{ display: 'flex', gap: '0.8rem', marginTop: '0.25rem', flexWrap: 'wrap', alignItems: 'center' }}>
                         {isManager ? (
-                            <div style={{ display: 'flex', gap: '0.25rem', background: 'var(--bg-secondary)', padding: '2px', borderRadius: '8px' }}>
+                            <div style={{ display: 'flex', gap: '0.25rem', background: 'var(--bg-secondary)', padding: '2px', borderRadius: '8px', flexWrap: 'wrap' }}>
                                 {['preparing', 'ready for shopping', 'completed'].map(status => (
                                     <button
                                         key={status}
@@ -303,14 +310,15 @@ const ListDetail = () => {
                                         style={{
                                             padding: '4px 8px',
                                             borderRadius: '6px',
-                                            fontSize: '0.7rem',
+                                            fontSize: '0.65rem',
                                             fontWeight: 700,
                                             textTransform: 'uppercase',
                                             cursor: 'pointer',
                                             border: 'none',
                                             background: list.status === status ? 'var(--primary)' : 'transparent',
                                             color: list.status === status ? 'white' : 'var(--text-muted)',
-                                            transition: 'all 0.2s'
+                                            transition: 'all 0.2s',
+                                            whiteSpace: 'nowrap'
                                         }}
                                         title={`Mark list as ${status}`}
                                     >
@@ -319,11 +327,11 @@ const ListDetail = () => {
                                 ))}
                             </div>
                         ) : (
-                            <span className={`badge ${list.status === 'completed' ? 'badge-success' : list.status === 'ready for shopping' ? 'badge-warning' : 'badge-neutral'}`} style={{ fontSize: '0.7rem' }}>
+                            <span className={`badge ${list.status === 'completed' ? 'badge-success' : list.status === 'ready for shopping' ? 'badge-warning' : 'badge-neutral'}`} style={{ fontSize: '0.65rem' }}>
                                 {list.status}
                             </span>
                         )}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 600 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 600, flexWrap: 'wrap' }}>
                             <span>{list.items?.length || 0} items</span>
                             <span>•</span>
                             <span style={{ color: 'var(--success)' }}>
@@ -403,7 +411,14 @@ const ListDetail = () => {
                         </h3>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                             {groupedItems[catId].map(item => (
-                                <div key={item.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: '1rem', opacity: item.is_bought ? 0.6 : 1, borderLeft: item.is_urgent ? '4px solid var(--danger)' : 'none' }}>
+                                <div key={item.id} className="card" style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '1rem',
+                                    opacity: item.is_bought ? 0.6 : 1,
+                                    borderLeft: item.is_urgent ? '4px solid var(--danger)' : 'none',
+                                    flexWrap: 'wrap'
+                                }}>
                                     {isShopper ? (
                                         <button
                                             onClick={() => toggleItem(item)}
@@ -489,7 +504,7 @@ const ListDetail = () => {
                                         <div style={{ flex: 1 }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-                                                    <p style={{ fontWeight: 800, textDecoration: item.is_bought ? 'line-through' : 'none', fontSize: '1.15rem', color: 'var(--text-dark)' }}>
+                                                    <p className="text-break" style={{ fontWeight: 800, textDecoration: item.is_bought ? 'line-through' : 'none', fontSize: '1.15rem', color: 'var(--text-dark)' }}>
                                                         {item.name}
                                                     </p>
                                                     <span style={{
@@ -601,8 +616,8 @@ const ListDetail = () => {
                                 />
                             </div>
 
-                            <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '1rem' }}>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                            <div className="flex-responsive" style={{ gap: '1rem', flexWrap: 'wrap' }}>
+                                <div style={{ flex: '1 1 200px', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                                     <label style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Quantity & Measure</label>
                                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                                         <input
@@ -627,7 +642,7 @@ const ListDetail = () => {
                                         </select>
                                     </div>
                                 </div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                <div style={{ flex: '1 1 200px', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                                     <label style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Category</label>
                                     {isCreatingCategory ? (
                                         <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -689,8 +704,8 @@ const ListDetail = () => {
                                 />
                             </div>
 
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', alignItems: 'end' }}>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                            <div className="flex-responsive" style={{ gap: '1rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                                <div style={{ flex: '1 1 200px', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                                     <label style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Price (Optional)</label>
                                     <input
                                         type="number"
@@ -700,7 +715,7 @@ const ListDetail = () => {
                                         onChange={e => setNewItem({ ...newItem, price: e.target.value })}
                                     />
                                 </div>
-                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.95rem', fontWeight: 700, cursor: 'pointer', padding: '0.75rem', borderRadius: '12px', background: newItem.is_urgent ? '#fee2e2' : 'var(--bg-secondary)', border: `1px solid ${newItem.is_urgent ? 'var(--danger)' : 'var(--border)'}`, transition: 'all 0.2s' }}>
+                                <label style={{ flex: '1 1 200px', display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.95rem', fontWeight: 700, cursor: 'pointer', padding: '0.75rem', borderRadius: '12px', background: newItem.is_urgent ? '#fee2e2' : 'var(--bg-secondary)', border: `1px solid ${newItem.is_urgent ? 'var(--danger)' : 'var(--border)'}`, transition: 'all 0.2s', height: 'fit-content' }}>
                                     <input
                                         type="checkbox"
                                         checked={newItem.is_urgent}

@@ -177,12 +177,20 @@ const SettingsPage = () => {
 
     return (
         <div className="container" style={{ paddingBottom: '4rem' }}>
-            <header style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem', paddingTop: '1rem' }}>
-                <button onClick={() => navigate('/')} className="card" style={{ padding: '0.5rem', borderRadius: '50%' }} title="Back to Dashboard">
+            <header style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '1rem',
+                marginBottom: '2rem',
+                paddingTop: '1rem',
+                flexWrap: 'wrap'
+            }}>
+                <button onClick={() => navigate('/')} className="card" style={{ padding: '0.5rem', borderRadius: '50%', flexShrink: 0 }} title="Back to Dashboard">
                     <ArrowLeft size={20} />
                 </button>
                 <h1 style={{ fontSize: '1.25rem', fontWeight: 800 }}>Family Settings</h1>
             </header>
+
 
             <section className="card" style={{ marginBottom: '2rem' }}>
                 <h2 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem' }}>General Configuration</h2>
@@ -270,18 +278,19 @@ const SettingsPage = () => {
                         </div>
                     ))}
 
-                    <div className="card" style={{ border: '2px dashed var(--border)', background: 'transparent', display: 'flex', gap: '0.5rem' }}>
+                    <div className="card" style={{ border: '2px dashed var(--border)', background: 'transparent', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                         <input
-                            placeholder="Add new shop (e.g. Lidl, Billa, Tesco)..."
+                            placeholder="Add new shop..."
                             value={newShopName}
                             onChange={(e) => setNewShopName(e.target.value)}
-                            style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontWeight: 600 }}
+                            style={{ flex: '1 1 200px', background: 'transparent', border: 'none', outline: 'none', fontWeight: 600, padding: '0.5rem' }}
                         />
-                        <button onClick={addShop} className="btn-primary" style={{ padding: '0.5rem 1rem' }} title="Add a new shop">
+                        <button onClick={addShop} className="btn-primary" style={{ padding: '0.5rem 1rem', flex: '1 1 auto' }} title="Add a new shop">
                             <Plus size={18} />
                             Add
                         </button>
                     </div>
+
                 </div>
             </section>
 
@@ -321,18 +330,19 @@ const SettingsPage = () => {
                         </div>
                     ))}
 
-                    <div className="card" style={{ border: '2px dashed var(--border)', background: 'transparent', display: 'flex', gap: '0.5rem' }}>
+                    <div className="card" style={{ border: '2px dashed var(--border)', background: 'transparent', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                         <input
-                            placeholder="New category name..."
+                            placeholder="New category..."
                             value={newCatName}
                             onChange={(e) => setNewCatName(e.target.value)}
-                            style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontWeight: 600 }}
+                            style={{ flex: '1 1 150px', background: 'transparent', border: 'none', outline: 'none', fontWeight: 600, padding: '0.5rem' }}
                         />
-                        <button onClick={addCategory} className="btn-primary" style={{ padding: '0.5rem 1rem' }} title="Add a new category">
+                        <button onClick={addCategory} className="btn-primary" style={{ padding: '0.5rem 1rem', flex: '1 1 auto' }} title="Add a new category">
                             <Plus size={18} />
                             Add
                         </button>
                     </div>
+
                 </div>
             </section>
         </div>

@@ -83,10 +83,18 @@ const Dashboard = () => {
 
     return (
         <div className="container">
-            <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', paddingTop: '1rem' }}>
-                <div>
+            <header style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '2rem',
+                paddingTop: '1rem',
+                gap: '1rem'
+            }}>
+                <div style={{ minWidth: '200px' }}>
                     <h1 style={{ fontSize: '1.5rem', fontWeight: 800 }}>KinCart</h1>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                         <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
                             {isManager ? 'Manager Mode' : 'Shopper Mode'} • {user?.username}
                         </p>
@@ -94,20 +102,22 @@ const Dashboard = () => {
                             title={`Switch to ${isManager ? 'Shopper' : 'Manager'} mode`}
                             onClick={toggleMode}
                             style={{
-                                background: 'var(--card-bg)',
+                                background: 'white',
                                 border: '1px solid var(--border)',
                                 borderRadius: '20px',
                                 padding: '2px 12px',
                                 fontSize: '0.75rem',
                                 cursor: 'pointer',
                                 fontWeight: 600,
-                                color: 'var(--primary)'
+                                color: 'var(--primary)',
+                                whiteSpace: 'nowrap'
                             }}
                         >
                             Switch to {isManager ? 'Shopper' : 'Manager'}
                         </button>
                     </div>
                 </div>
+
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                     <button
                         onClick={() => navigate('/settings')}
@@ -168,17 +178,17 @@ const Dashboard = () => {
                                                 key={list.id}
                                                 className="card"
                                                 onClick={() => navigate(`/list/${list.id}`)}
-                                                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
+                                                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', flexWrap: 'wrap', gap: '1rem' }}
                                                 title={`View details of ${list.title}`}
                                             >
-                                                <div style={{ flex: 1 }}>
+                                                <div style={{ flex: '1 1 200px' }}>
                                                     <h3 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '0.25rem' }}>{list.title}</h3>
                                                     <div style={{ display: 'flex', gap: '1rem', fontSize: '0.875rem', color: 'var(--text-muted)' }}>
                                                         <span>{list.items?.length || 0} items</span>
                                                         <span>≈ {list.estimated_amount || 0} {currency}</span>
                                                     </div>
                                                 </div>
-                                                <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                                <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '1rem', flexShrink: 0 }}>
                                                     <div>
                                                         <span className={`badge ${list.status === 'completed' ? 'badge-success' : list.status === 'ready for shopping' ? 'badge-warning' : 'badge-neutral'}`}>
                                                             {list.status}
@@ -208,17 +218,17 @@ const Dashboard = () => {
                                 key={list.id}
                                 className="card"
                                 onClick={() => navigate(`/list/${list.id}`)}
-                                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
+                                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', flexWrap: 'wrap', gap: '1rem' }}
                                 title={`View details of ${list.title}`}
                             >
-                                <div style={{ flex: 1 }}>
+                                <div style={{ flex: '1 1 200px' }}>
                                     <h3 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '0.25rem' }}>{list.title}</h3>
                                     <div style={{ display: 'flex', gap: '1rem', fontSize: '0.875rem', color: 'var(--text-muted)' }}>
                                         <span>{list.items?.length || 0} items</span>
                                         <span>≈ {list.estimated_amount || 0} {currency}</span>
                                     </div>
                                 </div>
-                                <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '1rem', flexShrink: 0 }}>
                                     <div>
                                         <span className={`badge ${list.status === 'completed' ? 'badge-success' : list.status === 'ready for shopping' ? 'badge-warning' : 'badge-neutral'}`}>
                                             {list.status === 'completed' ? <CheckCircle2 size={14} style={{ marginRight: '4px' }} /> : <Clock size={14} style={{ marginRight: '4px' }} />}
