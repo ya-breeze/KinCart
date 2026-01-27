@@ -74,6 +74,12 @@ func main() {
 			protected.GET("/shops/:id/order", handlers.GetShopCategoryOrder)
 			protected.PATCH("/shops/:id/order", handlers.SetShopCategoryOrder)
 		}
+
+		// Internal routes (blocked by Nginx)
+		internal := api.Group("/internal")
+		{
+			internal.POST("/flyers/fetch", handlers.FetchFlyers)
+		}
 	}
 
 	uploadsPath := os.Getenv("UPLOADS_PATH")

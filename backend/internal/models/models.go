@@ -93,3 +93,28 @@ type ItemFrequency struct {
 	ItemName  string `gorm:"not null" json:"item_name"`
 	Frequency int    `gorm:"default:1" json:"frequency"`
 }
+
+type Flyer struct {
+	ID        uint           `gorm:"primaryKey" json:"id"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+	ShopName  string         `json:"shop_name"`
+	StartDate time.Time      `json:"start_date"`
+	EndDate   time.Time      `json:"end_date"`
+	ParsedAt  time.Time      `json:"parsed_at"`
+	Items     []FlyerItem    `gorm:"foreignKey:FlyerID" json:"items"`
+}
+
+type FlyerItem struct {
+	ID             uint           `gorm:"primaryKey" json:"id"`
+	CreatedAt      time.Time      `json:"created_at"`
+	UpdatedAt      time.Time      `json:"updated_at"`
+	DeletedAt      gorm.DeletedAt `gorm:"index" json:"-"`
+	FlyerID        uint           `json:"flyer_id"`
+	Name           string         `json:"name"`
+	Price          float64        `json:"price"`
+	Quantity       string         `json:"quantity"` // e.g., "1kg", "100g", "pcs"
+	PhotoURL       string         `json:"photo_url"`
+	LocalPhotoPath string         `json:"local_photo_path"`
+}

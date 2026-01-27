@@ -2,3 +2,7 @@
 *.png
 backend/server
 backend/main
+backend/flyer-parser
+.gitignore
+backend/imap-test
+.DS_Store
