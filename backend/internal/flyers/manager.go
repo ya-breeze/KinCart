@@ -14,83 +14,61 @@ import (
 )
 
 type Manager struct {
-	db      *gorm.DB
-	fetcher *Fetcher
-	parser  *Parser
+	db        *gorm.DB
+	parser    *Parser
+	OutputDir string
 }
 
-func NewManager(db *gorm.DB, fetcher *Fetcher, parser *Parser) *Manager {
+func NewManager(db *gorm.DB, parser *Parser) *Manager {
 	return &Manager{
-		db:      db,
-		fetcher: fetcher,
-		parser:  parser,
+		db:        db,
+		parser:    parser,
+		OutputDir: "data/flyer_items", // Default for CLI
 	}
 }
 
-func (m *Manager) ProcessNewFlyers(ctx context.Context, folder string, fetchAttachments bool, subjects []string) error {
-	slog.Info("Starting flyer processing", "folder", folder, "attachments", fetchAttachments, "subjects", subjects)
-
-	emails, err := m.fetcher.FetchRecentFlyers(folder, fetchAttachments, subjects)
+func (m *Manager) ProcessAttachment(ctx context.Context, att Attachment) error {
+	// Create a temporary directory for splitting results
+	tempDir, err := os.MkdirTemp("", "flyer-parse-upload-*")
 	if err != nil {
-		return fmt.Errorf("failed to fetch flyers: %w", err)
+		return fmt.Errorf("failed to create temp dir: %w", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	var attachments []Attachment
+	if att.ContentType == "application/pdf" {
+		slog.Info("Splitting uploaded PDF flyer", "filename", att.Filename)
+		pageFiles, err := SplitPDF(att.Data, tempDir)
+		if err != nil {
+			return fmt.Errorf("failed to split PDF: %w", err)
+		}
+		for _, pf := range pageFiles {
+			pData, err := os.ReadFile(pf)
+			if err != nil {
+				continue
+			}
+			attachments = append(attachments, Attachment{
+				Filename:    filepath.Base(pf),
+				ContentType: "image/png",
+				Data:        pData,
+			})
+		}
+	} else {
+		attachments = append(attachments, att)
 	}
 
-	for _, email := range emails {
-		if len(email.Attachments) == 0 {
-			continue
-		}
-
-		slog.Info("Processing email flyer", "subject", email.Subject, "from", email.From)
-
-		// Create a temporary directory for splitting results
-		tempDir, err := os.MkdirTemp("", "flyer-parse-*")
+	total := len(attachments)
+	for i, a := range attachments {
+		slog.Info("Parsing flyer attachment", "current", i+1, "total", total, "file", a.Filename)
+		parsed, err := m.parser.ParseFlyer(ctx, []Attachment{a})
 		if err != nil {
-			slog.Error("Failed to create temp dir", "error", err)
+			slog.Error("Failed to parse flyer attachment", "current", i+1, "total", total, "file", a.Filename, "error", err)
 			continue
 		}
-		defer os.RemoveAll(tempDir)
 
-		var allAttachments []Attachment
-		for _, att := range email.Attachments {
-			if att.ContentType == "application/pdf" {
-				slog.Info("Splitting PDF flyer", "filename", att.Filename)
-				pageFiles, err := SplitPDF(att.Data, tempDir)
-				if err != nil {
-					slog.Error("Failed to split PDF", "filename", att.Filename, "error", err)
-					// Fallback: try parsing original if split fails (maybe Gemini can handle it)
-					allAttachments = append(allAttachments, att)
-					continue
-				}
-				for _, pf := range pageFiles {
-					pData, err := os.ReadFile(pf)
-					if err != nil {
-						continue
-					}
-					allAttachments = append(allAttachments, Attachment{
-						Filename:    filepath.Base(pf),
-						ContentType: "image/png",
-						Data:        pData,
-					})
-				}
-			} else {
-				allAttachments = append(allAttachments, att)
-			}
-		}
-
-		// Parse each attachment (page) separately for better accuracy
-		total := len(allAttachments)
-		for i, att := range allAttachments {
-			slog.Info("Parsing flyer page", "current", i+1, "total", total, "file", att.Filename)
-			parsed, err := m.parser.ParseFlyer(ctx, []Attachment{att})
-			if err != nil {
-				slog.Error("Failed to parse flyer page", "current", i+1, "total", total, "file", att.Filename, "error", err)
-				continue
-			}
-
-			if err := m.SaveParsedFlyer(parsed, att.Data); err != nil {
-				slog.Error("Failed to save flyer", "shop", parsed.ShopName, "error", err)
-				continue
-			}
+		if err := m.SaveParsedFlyer(parsed, a.Data); err != nil {
+			slog.Error("Failed to save flyer", "shop", parsed.ShopName, "error", err)
+			continue
 		}
 	}
 
@@ -110,7 +88,10 @@ func (m *Manager) SaveParsedFlyer(parsed *ParsedFlyer, imageData []byte) error {
 		ParsedAt:  time.Now(),
 	}
 
-	outputDir := "data/flyer_items"
+	outputDir := m.OutputDir
+	if outputDir == "" {
+		outputDir = "data/flyer_items"
+	}
 	for _, pi := range parsed.Items {
 		var localPath string
 		// Currently we only support cropping from images (not PDFs)

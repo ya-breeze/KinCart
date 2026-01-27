@@ -78,7 +78,7 @@ func main() {
 		// Internal routes (blocked by Nginx)
 		internal := api.Group("/internal")
 		{
-			internal.POST("/flyers/fetch", handlers.FetchFlyers)
+			internal.POST("/flyers/parse", handlers.ParseFlyer)
 		}
 	}
 

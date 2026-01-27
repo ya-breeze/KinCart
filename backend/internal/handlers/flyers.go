@@ -2,8 +2,10 @@ package handlers
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 
 	"kincart/internal/database"
 	"kincart/internal/flyers"
@@ -11,37 +13,48 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func FetchFlyers(c *gin.Context) {
-	imapServer := os.Getenv("IMAP_SERVER")
-	imapUser := os.Getenv("IMAP_USER")
-	imapPassword := os.Getenv("IMAP_PASSWORD")
+func ParseFlyer(c *gin.Context) {
 	geminiKey := os.Getenv("GEMINI_API_KEY")
-
-	if imapServer == "" || imapUser == "" || imapPassword == "" || geminiKey == "" {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "IMAP or Gemini credentials not configured"})
+	if geminiKey == "" {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gemini API key not configured"})
 		return
 	}
 
-	fetcher := flyers.NewFetcher(imapServer, imapUser, imapPassword)
+	file, header, err := c.Request.FormFile("flyer")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get flyer file", "details": err.Error()})
+		return
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read flyer file", "details": err.Error()})
+		return
+	}
+
 	parser, err := flyers.NewParser(geminiKey)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initialize parser", "details": err.Error()})
 		return
 	}
 
-	manager := flyers.NewManager(database.DB, fetcher, parser)
+	manager := flyers.NewManager(database.DB, parser)
 
-	folder := c.Query("folder")
-	if folder == "" {
-		folder = "INBOX"
+	// Set output directory for cropped images
+	uploadsPath := os.Getenv("UPLOADS_PATH")
+	if uploadsPath == "" {
+		uploadsPath = "./uploads"
 	}
-	subjects := c.QueryArray("subject")
+	manager.OutputDir = filepath.Join(uploadsPath, "flyer_items")
 
-	// Run in background or wait?
-	// Given typical LLM latency, maybe background is better,
-	// but for a trigger endpoint, blocking until done might be easier for the caller to know it's finished.
-	// Let's block for now as it's an internal trigger.
-	if err := manager.ProcessNewFlyers(context.Background(), folder, true, subjects); err != nil {
+	att := flyers.Attachment{
+		Filename:    header.Filename,
+		ContentType: header.Header.Get("Content-Type"),
+		Data:        data,
+	}
+
+	if err := manager.ProcessAttachment(context.Background(), att); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Flyer processing failed", "details": err.Error()})
 		return
 	}
@@ -50,6 +63,5 @@ func FetchFlyers(c *gin.Context) {
 }
 
 func GetFlyers(c *gin.Context) {
-	// Optional: endpoint to list stored flyers
 	// ... implementation ...
 }

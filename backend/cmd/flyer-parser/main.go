@@ -57,7 +57,7 @@ func main() {
 		log.Fatalf("failed to create parser: %v", err)
 	}
 
-	manager := flyers.NewManager(db, nil, parser)
+	manager := flyers.NewManager(db, parser)
 
 	if filePath != "" {
 		parseLocalFile(manager, parser, filePath)

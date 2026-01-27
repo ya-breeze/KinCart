@@ -10,6 +10,12 @@ import (
 	"google.golang.org/genai"
 )
 
+type Attachment struct {
+	Filename    string
+	ContentType string
+	Data        []byte
+}
+
 type ParsedFlyer struct {
 	ShopName  string       `json:"shop_name"`
 	StartDate string       `json:"start_date"` // YYYY-MM-DD

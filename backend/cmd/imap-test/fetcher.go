@@ -1,4 +1,4 @@
-package flyers
+package main
 
 import (
 	"fmt"
@@ -165,11 +165,7 @@ func (f *Fetcher) fetchMessages(c *imapclient.Client, uids []uint32, fetchAttach
 }
 
 func (f *Fetcher) fetchMessagesBySeq(c *imapclient.Client, count uint32, fetchAttachments bool, subjects []string) ([]EmailFlyer, error) {
-	// We need the number of messages in the mailbox to fetch the last ones.
-	// Since FetchRecentFlyers already selected the mailbox, we might need the count.
-	// For simplicity, let's just fetch everything from the end.
-
-	// Re-select to get the message count if not passed.
+	// Re-select to get the message count
 	mbox, err := c.Select("INBOX", nil).Wait()
 	if err != nil {
 		return nil, fmt.Errorf("failed to select INBOX for seq fetch: %w", err)
