@@ -15,6 +15,7 @@ services:
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
       KINCART_SEED_USERS: ${KINCART_SEED_USERS:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      FLYER_ITEMS_PATH: /data/flyer_items
     networks:
       - kincart-network
     restart: always

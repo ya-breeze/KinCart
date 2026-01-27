@@ -42,11 +42,15 @@ func ParseFlyer(c *gin.Context) {
 	manager := flyers.NewManager(database.DB, parser)
 
 	// Set output directory for cropped images
-	uploadsPath := os.Getenv("UPLOADS_PATH")
-	if uploadsPath == "" {
-		uploadsPath = "./uploads"
+	flyerItemsPath := os.Getenv("FLYER_ITEMS_PATH")
+	if flyerItemsPath == "" {
+		uploadsPath := os.Getenv("UPLOADS_PATH")
+		if uploadsPath == "" {
+			uploadsPath = "./uploads"
+		}
+		flyerItemsPath = filepath.Join(uploadsPath, "flyer_items")
 	}
-	manager.OutputDir = filepath.Join(uploadsPath, "flyer_items")
+	manager.OutputDir = flyerItemsPath
 
 	att := flyers.Attachment{
 		Filename:    header.Filename,
