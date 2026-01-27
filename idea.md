@@ -25,6 +25,13 @@ The planner can attach a photo of a specific brand or packaging, as well as add 
 ### 4. "I Forgot!" Push Notifications
 If the shopper has already started the shopping process, the manager can send an urgent addition. it will appear at the top of the shopper's screen with a bright orange "Urgent Addition!" label, ensuring important items aren't missed at the last moment.
 
+### 5. Waiting for Discount
+Users can mark specific items as "Waiting for Discount."
+- **Wishlist Tracking:** The Manager adds an item but flags it as non-urgent, waiting for a price drop.
+- **Automated Monitoring:** The system cross-references these items with fetched prices and discounts from store flyers/websites.
+- **Manager Notification:** As soon as a discount is detected in any shop (or a specific preferred shop), the Manager receives a notification: "Item [X] is on sale at [Shop Y]!".
+- **One-Click Activation:** The Manager can then move the item to the active shopping list with a single click.
+
 ### 5. Security and Family Access
 The app requires authentication (login/password) for each user.
 The application is built around the **Family** concept:

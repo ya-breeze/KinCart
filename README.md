@@ -46,6 +46,7 @@ Items are grouped by department in the order specified by the Manager. If the Ma
 - **Aisle Mapping:** Automatic list sorting based on the store route.
 - **Real-time Updates:** Instant status updates upon page reload or navigation.
 - **Budgeting:** Automatic calculation of the estimated purchase total.
+- **Waiting for Discount:** Automated notifications for the Manager when wishlist items go on sale in local stores.
 
 ---
 
