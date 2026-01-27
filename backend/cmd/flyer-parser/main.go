@@ -24,7 +24,9 @@ func main() {
 	var filePath string
 	var port int
 	var serveOnly bool
+	var shopName string
 	flag.StringVar(&filePath, "file", "", "Path to local flyer file (image/PDF)")
+	flag.StringVar(&shopName, "shop", "", "Name of the shop (mandatory for parsing)")
 	flag.IntVar(&port, "port", 8081, "Port for the HTTP server")
 	flag.BoolVar(&serveOnly, "serve", false, "Start only the HTTP server to view previous results")
 	flag.Parse()
@@ -47,6 +49,10 @@ func main() {
 		return
 	}
 
+	if !serveOnly && filePath != "" && shopName == "" {
+		log.Fatal("-shop is mandatory when parsing a file")
+	}
+
 	apiKey := os.Getenv("GEMINI_API_KEY")
 	if apiKey == "" {
 		log.Fatal("GEMINI_API_KEY must be set in .env")
@@ -60,13 +66,13 @@ func main() {
 	manager := flyers.NewManager(db, parser)
 
 	if filePath != "" {
-		parseLocalFile(manager, parser, filePath)
+		parseLocalFile(manager, parser, filePath, shopName)
 	}
 
 	startServer(db, port)
 }
 
-func parseLocalFile(manager *flyers.Manager, parser *flyers.Parser, path string) {
+func parseLocalFile(manager *flyers.Manager, parser *flyers.Parser, path string, shopName string) {
 	fmt.Printf("Parsing local file: %s\n", path)
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -123,8 +129,8 @@ func parseLocalFile(manager *flyers.Manager, parser *flyers.Parser, path string)
 			continue
 		}
 
-		fmt.Printf("[%d/%d] Saving items from %s: %s...\n", i+1, total, p.Filename, parsed.ShopName)
-		if err := manager.SaveParsedFlyer(parsed, p.Data); err != nil {
+		fmt.Printf("[%d/%d] Saving items from %s: %s...\n", i+1, total, p.Filename, shopName)
+		if err := manager.SaveParsedFlyer(parsed, p.Data, shopName); err != nil {
 			slog.Error("failed to save page", "current", i+1, "total", total, "file", p.Filename, "err", err)
 			continue
 		}
@@ -142,14 +148,28 @@ func startServer(db *gorm.DB, port int) {
 	r.SetHTMLTemplate(loadTemplate())
 
 	r.GET("/", func(c *gin.Context) {
+		q := c.Query("q")
 		var flyers []models.Flyer
-		if err := db.Preload("Items").Order("created_at desc").Find(&flyers).Error; err != nil {
+
+		query := db.Order("created_at desc")
+		if q != "" {
+			term := "%" + q + "%"
+			// Only show flyers that have matching items
+			query = query.Where("id IN (SELECT flyer_id FROM flyer_items WHERE name LIKE ? OR categories LIKE ? OR keywords LIKE ?)", term, term, term)
+			// Filter items within the flyer record
+			query = query.Preload("Items", "name LIKE ? OR categories LIKE ? OR keywords LIKE ?", term, term, term)
+		} else {
+			query = query.Preload("Items")
+		}
+
+		if err := query.Find(&flyers).Error; err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
 		}
 
 		c.HTML(http.StatusOK, "index.html", gin.H{
 			"flyers": flyers,
+			"query":  q,
 		})
 	})
 
@@ -178,12 +198,23 @@ func loadTemplate() *template.Template {
 				.item .price-box { display: flex; justify-content: space-between; align-items: center; }
 				.item .price { font-size: 1.4em; font-weight: bold; color: #00a884; }
 				.item .quantity { color: #65676b; font-size: 0.9em; }
-				h1 { color: #1c1e21; margin-bottom: 30px; text-align: center; }
+				h1 { color: #1c1e21; margin-bottom: 10px; text-align: center; }
+				.search-box { text-align: center; margin-bottom: 30px; }
+				.search-box input { padding: 10px 15px; width: 400px; border: 1px solid #e4e6eb; border-radius: 20px; outline: none; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+				.search-box button { padding: 10px 20px; background: #00a884; color: white; border: none; border-radius: 20px; cursor: pointer; margin-left: 10px; font-weight: 600; }
+				.search-box a { color: #65676b; text-decoration: none; font-size: 0.9em; margin-left: 10px; }
 			</style>
 		</head>
 		<body>
 			<div class="container">
 				<h1>Flyer Parsing Results</h1>
+				<div class="search-box">
+					<form action="/" method="GET">
+						<input type="text" name="q" value="{{.query}}" placeholder="Search items by name, category, or keywords...">
+						<button type="submit">Filter</button>
+						{{if .query}}<a href="/">Clear Filter</a>{{end}}
+					</form>
+				</div>
 				{{range .flyers}}
 				<div class="flyer">
 					<h2>{{.ShopName}}</h2>
@@ -201,8 +232,17 @@ func loadTemplate() *template.Template {
 							{{end}}
 							<div class="name">{{.Name}}</div>
 							<div class="price-box">
-								<div class="price">{{.Price}}</div>
+								<div>
+									<div class="price">{{.Price}}</div>
+									{{if .OriginalPrice}}
+									<div style="text-decoration: line-through; color: #65676b; font-size: 0.9em;">{{.OriginalPrice}}</div>
+									{{end}}
+								</div>
 								<div class="quantity">{{.Quantity}}</div>
+							</div>
+							<div style="margin-top: 10px; font-size: 0.8em; color: #65676b;">
+								{{if .Categories}}<div><strong>Categories:</strong> {{.Categories}}</div>{{end}}
+								{{if .Keywords}}<div><strong>Keywords:</strong> {{.Keywords}}</div>{{end}}
 							</div>
 						</div>
 						{{end}}

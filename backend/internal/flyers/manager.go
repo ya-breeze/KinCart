@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"kincart/internal/models"
@@ -27,7 +28,7 @@ func NewManager(db *gorm.DB, parser *Parser) *Manager {
 	}
 }
 
-func (m *Manager) ProcessAttachment(ctx context.Context, att Attachment) error {
+func (m *Manager) ProcessAttachment(ctx context.Context, att Attachment, shopName string) error {
 	// Create a temporary directory for splitting results
 	tempDir, err := os.MkdirTemp("", "flyer-parse-upload-*")
 	if err != nil {
@@ -66,8 +67,8 @@ func (m *Manager) ProcessAttachment(ctx context.Context, att Attachment) error {
 			continue
 		}
 
-		if err := m.SaveParsedFlyer(parsed, a.Data); err != nil {
-			slog.Error("Failed to save flyer", "shop", parsed.ShopName, "error", err)
+		if err := m.SaveParsedFlyer(parsed, a.Data, shopName); err != nil {
+			slog.Error("Failed to save flyer", "shop", shopName, "error", err)
 			continue
 		}
 	}
@@ -75,14 +76,14 @@ func (m *Manager) ProcessAttachment(ctx context.Context, att Attachment) error {
 	return nil
 }
 
-func (m *Manager) SaveParsedFlyer(parsed *ParsedFlyer, imageData []byte) error {
+func (m *Manager) SaveParsedFlyer(parsed *ParsedFlyer, imageData []byte, shopName string) error {
 	// Parse dates
 	layout := "2006-01-02"
 	startDate, _ := time.Parse(layout, parsed.StartDate)
 	endDate, _ := time.Parse(layout, parsed.EndDate)
 
 	flyer := models.Flyer{
-		ShopName:  parsed.ShopName,
+		ShopName:  shopName,
 		StartDate: startDate,
 		EndDate:   endDate,
 		ParsedAt:  time.Now(),
@@ -107,8 +108,11 @@ func (m *Manager) SaveParsedFlyer(parsed *ParsedFlyer, imageData []byte) error {
 		flyer.Items = append(flyer.Items, models.FlyerItem{
 			Name:           pi.Name,
 			Price:          pi.Price,
+			OriginalPrice:  pi.OriginalPrice,
 			Quantity:       pi.Quantity,
 			LocalPhotoPath: localPath,
+			Categories:     strings.Join(pi.Categories, ", "),
+			Keywords:       strings.Join(pi.Keywords, ", "),
 		})
 	}
 

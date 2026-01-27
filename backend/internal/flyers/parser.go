@@ -17,17 +17,19 @@ type Attachment struct {
 }
 
 type ParsedFlyer struct {
-	ShopName  string       `json:"shop_name"`
 	StartDate string       `json:"start_date"` // YYYY-MM-DD
 	EndDate   string       `json:"end_date"`   // YYYY-MM-DD
 	Items     []ParsedItem `json:"items"`
 }
 
 type ParsedItem struct {
-	Name        string    `json:"name"`
-	Price       float64   `json:"price"`
-	Quantity    string    `json:"quantity"`     // kg, 100g, pcs, pack, etc.
-	BoundingBox []float64 `json:"bounding_box"` // [ymin, xmin, ymax, xmax]
+	Name          string    `json:"name"`
+	Price         float64   `json:"price"`
+	OriginalPrice *float64  `json:"original_price"` // Pointer to handle null from LLM
+	Quantity      string    `json:"quantity"`       // kg, 100g, pcs, pack, etc.
+	BoundingBox   []float64 `json:"bounding_box"`   // [ymin, xmin, ymax, xmax]
+	Categories    []string  `json:"categories"`     // English categories
+	Keywords      []string  `json:"keywords"`       // English keywords
 }
 
 type Parser struct {
@@ -59,21 +61,28 @@ For each item, provide a "bounding_box" that encompasses the entire area relevan
 2. The name/description text of the item.
 3. The price tag.
 
+Include the following for each item:
+1. a list of "categories" (e.g., fruits, tools, selfcare, toys, meat, etc.). MUST be in English.
+2. a list of "keywords" (e.g., beer, toothpaste, cafe, meat, chicken, lego, cheese, etc.). MUST be in English.
+3. original price if available.
+
 Return JSON in the following format:
 {
-  "shop_name": "Name of the shop",
   "start_date": "YYYY-MM-DD or empty if not found",
   "end_date": "YYYY-MM-DD or empty if not found",
   "items": [
     {
       "name": "Item name",
       "price": 12.34,
+      "original_price": 15.99,
       "quantity": "kg, 100g, pcs, pack, etc.",
-      "bounding_box": [ymin, xmin, ymax, xmax]
+      "bounding_box": [ymin, xmin, ymax, xmax],
+      "categories": ["category 1", "category 2"],
+      "keywords": ["keyword1", "keyword2"]
     }
   ]
 }
-Return ONLY valid JSON.
+Return ONLY valid JSON. Do not include any text before or after the JSON block. Do not include comments or trailing commas. Ensure all strings are properly escaped.
 Keep bounding box coordinates as normalized values [0, 1000].
 The bounding box should be generous enough to capture all the mentioned elements without cutting them off.
 `
@@ -110,7 +119,11 @@ The bounding box should be generous enough to capture all the mentioned elements
 		}
 	}
 
-	resp, err := p.client.Models.GenerateContent(ctx, "gemini-3-flash-preview", []*genai.Content{content}, nil)
+	config := &genai.GenerateContentConfig{
+		ResponseMIMEType: "application/json",
+	}
+
+	resp, err := p.client.Models.GenerateContent(ctx, "gemini-3-flash-preview", []*genai.Content{content}, config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate content: %w", err)
 	}

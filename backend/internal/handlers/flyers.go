@@ -58,7 +58,13 @@ func ParseFlyer(c *gin.Context) {
 		Data:        data,
 	}
 
-	if err := manager.ProcessAttachment(context.Background(), att); err != nil {
+	shopName := c.Query("shop")
+	if shopName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "shop name is mandatory"})
+		return
+	}
+
+	if err := manager.ProcessAttachment(context.Background(), att, shopName); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Flyer processing failed", "details": err.Error()})
 		return
 	}

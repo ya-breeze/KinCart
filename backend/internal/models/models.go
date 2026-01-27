@@ -114,7 +114,10 @@ type FlyerItem struct {
 	FlyerID        uint           `json:"flyer_id"`
 	Name           string         `json:"name"`
 	Price          float64        `json:"price"`
+	OriginalPrice  *float64       `json:"original_price"`
 	Quantity       string         `json:"quantity"` // e.g., "1kg", "100g", "pcs"
 	PhotoURL       string         `json:"photo_url"`
 	LocalPhotoPath string         `json:"local_photo_path"`
+	Categories     string         `json:"categories"` // comma-separated English categories
+	Keywords       string         `json:"keywords"`   // comma-separated English keywords
 }
