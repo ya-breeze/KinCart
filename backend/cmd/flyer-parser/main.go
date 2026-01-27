@@ -240,6 +240,9 @@ func loadTemplate() *template.Template {
 								</div>
 								<div class="quantity">{{.Quantity}}</div>
 							</div>
+							<div style="margin-top: 5px; font-size: 0.8em; color: #65676b;">
+								Validity: {{.StartDate.Format "2006-01-02"}} to {{.EndDate.Format "2006-01-02"}}
+							</div>
 							<div style="margin-top: 10px; font-size: 0.8em; color: #65676b;">
 								{{if .Categories}}<div><strong>Categories:</strong> {{.Categories}}</div>{{end}}
 								{{if .Keywords}}<div><strong>Keywords:</strong> {{.Keywords}}</div>{{end}}

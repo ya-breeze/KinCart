@@ -105,11 +105,22 @@ func (m *Manager) SaveParsedFlyer(parsed *ParsedFlyer, imageData []byte, shopNam
 			}
 		}
 
+		itemStartDate, err := time.Parse(layout, pi.StartDate)
+		if err != nil {
+			itemStartDate = startDate
+		}
+		itemEndDate, err := time.Parse(layout, pi.EndDate)
+		if err != nil {
+			itemEndDate = endDate
+		}
+
 		flyer.Items = append(flyer.Items, models.FlyerItem{
 			Name:           pi.Name,
 			Price:          pi.Price,
 			OriginalPrice:  pi.OriginalPrice,
 			Quantity:       pi.Quantity,
+			StartDate:      itemStartDate,
+			EndDate:        itemEndDate,
 			LocalPhotoPath: localPath,
 			Categories:     strings.Join(pi.Categories, ", "),
 			Keywords:       strings.Join(pi.Keywords, ", "),

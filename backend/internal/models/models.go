@@ -116,6 +116,8 @@ type FlyerItem struct {
 	Price          float64        `json:"price"`
 	OriginalPrice  *float64       `json:"original_price"`
 	Quantity       string         `json:"quantity"` // e.g., "1kg", "100g", "pcs"
+	StartDate      time.Time      `json:"start_date"`
+	EndDate        time.Time      `json:"end_date"`
 	PhotoURL       string         `json:"photo_url"`
 	LocalPhotoPath string         `json:"local_photo_path"`
 	Categories     string         `json:"categories"` // comma-separated English categories

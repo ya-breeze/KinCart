@@ -27,6 +27,8 @@ type ParsedItem struct {
 	Price         float64   `json:"price"`
 	OriginalPrice *float64  `json:"original_price"` // Pointer to handle null from LLM
 	Quantity      string    `json:"quantity"`       // kg, 100g, pcs, pack, etc.
+	StartDate     string    `json:"start_date"`     // YYYY-MM-DD
+	EndDate       string    `json:"end_date"`       // YYYY-MM-DD
 	BoundingBox   []float64 `json:"bounding_box"`   // [ymin, xmin, ymax, xmax]
 	Categories    []string  `json:"categories"`     // English categories
 	Keywords      []string  `json:"keywords"`       // English keywords
@@ -65,6 +67,7 @@ Include the following for each item:
 1. a list of "categories" (e.g., fruits, tools, selfcare, toys, meat, etc.). MUST be in English.
 2. a list of "keywords" (e.g., beer, toothpaste, cafe, meat, chicken, lego, cheese, etc.). MUST be in English.
 3. original price if available.
+4. "start_date" and "end_date" (YYYY-MM-DD) if different from the whole flyer validity; otherwise use the flyer's dates for the item too.
 
 Return JSON in the following format:
 {
@@ -76,6 +79,8 @@ Return JSON in the following format:
       "price": 12.34,
       "original_price": 15.99,
       "quantity": "kg, 100g, pcs, pack, etc.",
+      "start_date": "YYYY-MM-DD",
+      "end_date": "YYYY-MM-DD",
       "bounding_box": [ymin, xmin, ymax, xmax],
       "categories": ["category 1", "category 2"],
       "keywords": ["keyword1", "keyword2"]
