@@ -107,15 +107,16 @@ func GetFlyerItems(c *gin.Context) {
 	shop := c.Query("shop")
 	activity := c.Query("activity") // "now", "future", "all" (default "now")
 
-	db := database.DB.Model(&models.FlyerItem{}).
+	db := database.DB.Table("flyer_items").
 		Select("flyer_items.*, flyers.shop_name").
 		Joins("JOIN flyers ON flyers.id = flyer_items.flyer_id")
 
-	now := time.Now()
+	now := time.Now().Format("2006-01-02")
 
-	// 1. Exclude outdated items by default
-	// Items are valid if EndDate is today or in future
-	db = db.Where("flyer_items.end_date >= ?", now.Format("2006-01-02"))
+	// 1. Filter by shop
+	if shop != "" {
+		db = db.Where("LOWER(flyers.shop_name) = LOWER(?)", shop)
+	}
 
 	// 2. Filter by search query
 	if query != "" {
@@ -123,21 +124,20 @@ func GetFlyerItems(c *gin.Context) {
 		db = db.Where("(flyer_items.name LIKE ? OR flyer_items.categories LIKE ? OR flyer_items.keywords LIKE ?)", q, q, q)
 	}
 
-	// 3. Filter by shop
-	if shop != "" {
-		// Shop join is already done above
-		db = db.Where("flyers.shop_name = ?", shop)
-	}
-
-	// 4. Filter by activity
-	if activity == "future" {
-		db = db.Where("flyer_items.start_date > ?", now.Format("2006-01-02"))
-	} else if activity == "now" || activity == "" {
-		db = db.Where("flyer_items.start_date <= ? AND flyer_items.end_date >= ?", now.Format("2006-01-02"), now.Format("2006-01-02"))
+	// 3. Filter by activity/dates
+	switch activity {
+	case "future":
+		db = db.Where("date(flyer_items.start_date) > ?", now)
+	case "all":
+		// Show everything that is not outdated
+		db = db.Where("date(flyer_items.end_date) >= ?", now)
+	case "now", "":
+		// Default: currently active
+		db = db.Where("date(flyer_items.start_date) <= ? AND date(flyer_items.end_date) >= ?", now, now)
 	}
 
 	var items []models.FlyerItem
-	if err := db.Order("flyer_items.end_date ASC").Find(&items).Error; err != nil {
+	if err := db.Order("date(flyer_items.end_date) ASC").Find(&items).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch flyer items", "details": err.Error()})
 		return
 	}
