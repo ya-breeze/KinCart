@@ -72,12 +72,32 @@ func UpdateItem(c *gin.Context) {
 		return
 	}
 
-	if err := c.ShouldBindJSON(&item); err != nil {
+	var updateData map[string]interface{}
+	if err := c.ShouldBindJSON(&updateData); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	database.DB.Save(&item)
+	// If item is linked to a flyer, protect certain fields
+	// Unless the user is unlinking the item (by setting flyer_item_id to null)
+	if item.FlyerItemID != nil {
+		willUnlink := false
+		if val, ok := updateData["flyer_item_id"]; ok && val == nil {
+			willUnlink = true
+		}
+
+		if !willUnlink {
+			delete(updateData, "name")
+			delete(updateData, "price")
+			delete(updateData, "local_photo_path")
+		}
+	}
+
+	if err := database.DB.Model(&item).Updates(updateData).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update item"})
+		return
+	}
+
 	c.JSON(http.StatusOK, item)
 }
 
@@ -205,6 +225,11 @@ func AddItemPhoto(c *gin.Context) {
 		Where("items.id = ? AND shopping_lists.family_id = ?", itemID, familyID).
 		First(&item).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Item not found"})
+		return
+	}
+
+	if item.FlyerItemID != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Cannot change photo of a flyer-linked item"})
 		return
 	}
 

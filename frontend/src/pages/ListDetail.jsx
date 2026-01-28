@@ -84,7 +84,7 @@ const ListDetail = () => {
 
     const addItem = async (e) => {
         e.preventDefault();
-        if (!newItem.name || !newItem.category_id) return;
+        if (!newItem.name) return;
 
         const resp = await fetch(`${API_BASE_URL}/api/lists/${id}/items`, {
             method: 'POST',
@@ -93,7 +93,7 @@ const ListDetail = () => {
                 ...newItem,
                 price: parseFloat(newItem.price) || 0,
                 quantity: parseFloat(newItem.quantity) || 1,
-                category_id: parseInt(newItem.category_id)
+                category_id: newItem.category_id ? parseInt(newItem.category_id) : undefined
             })
         });
 
@@ -161,7 +161,7 @@ const ListDetail = () => {
                 ...editItemData,
                 price: parseFloat(editItemData.price) || 0,
                 quantity: parseFloat(editItemData.quantity) || 1,
-                category_id: parseInt(editItemData.category_id)
+                category_id: editItemData.category_id ? parseInt(editItemData.category_id) : undefined
             })
         });
         if (resp.ok) {
@@ -457,11 +457,54 @@ const ListDetail = () => {
 
                                     {editingItemId === item.id ? (
                                         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                            {editItemData.flyer_item_id && (
+                                                <div style={{
+                                                    display: 'flex',
+                                                    justifyContent: 'space-between',
+                                                    alignItems: 'center',
+                                                    background: 'rgba(var(--primary-rgb), 0.1)',
+                                                    padding: '0.5rem 0.75rem',
+                                                    borderRadius: '8px',
+                                                    border: '1px solid var(--primary)',
+                                                    marginBottom: '0.25rem'
+                                                }}>
+                                                    <span style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                        <ShoppingCart size={12} /> LINKED TO FLYER DEAL
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setEditItemData({ ...editItemData, flyer_item_id: null })}
+                                                        style={{
+                                                            fontSize: '0.65rem',
+                                                            fontWeight: 900,
+                                                            color: 'var(--danger)',
+                                                            background: 'white',
+                                                            border: '1px solid var(--danger)',
+                                                            padding: '4px 8px',
+                                                            borderRadius: '6px',
+                                                            cursor: 'pointer',
+                                                            textTransform: 'uppercase'
+                                                        }}
+                                                    >
+                                                        Unlink
+                                                    </button>
+                                                </div>
+                                            )}
                                             <div style={{ display: 'flex', gap: '0.5rem' }}>
                                                 <input
-                                                    style={{ flex: 2, padding: '0.5rem', borderRadius: '8px', border: '1px solid var(--border)', fontWeight: 700 }}
+                                                    disabled={!!editItemData.flyer_item_id}
+                                                    style={{
+                                                        flex: 2,
+                                                        padding: '0.5rem',
+                                                        borderRadius: '8px',
+                                                        border: '1px solid var(--border)',
+                                                        fontWeight: 700,
+                                                        background: editItemData.flyer_item_id ? 'var(--bg-secondary)' : 'white',
+                                                        cursor: editItemData.flyer_item_id ? 'not-allowed' : 'text'
+                                                    }}
                                                     value={editItemData.name}
                                                     onChange={e => setEditItemData({ ...editItemData, name: e.target.value })}
+                                                    title={editItemData.flyer_item_id ? "Cannot change name of a linked item" : ""}
                                                 />
                                                 <select
                                                     style={{ flex: 1, padding: '0.5rem', borderRadius: '8px', border: '1px solid var(--border)', background: 'white', fontWeight: 600 }}
@@ -489,11 +532,21 @@ const ListDetail = () => {
                                                     </select>
                                                 </div>
                                                 <input
+                                                    disabled={!!editItemData.flyer_item_id}
                                                     type="number"
-                                                    style={{ flex: 1, padding: '0.5rem', borderRadius: '8px', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
+                                                    style={{
+                                                        flex: 1,
+                                                        padding: '0.5rem',
+                                                        borderRadius: '8px',
+                                                        border: '1px solid var(--border)',
+                                                        color: 'var(--text-muted)',
+                                                        background: editItemData.flyer_item_id ? 'var(--bg-secondary)' : 'white',
+                                                        cursor: editItemData.flyer_item_id ? 'not-allowed' : 'text'
+                                                    }}
                                                     placeholder="Price (Opt)"
                                                     value={editItemData.price}
                                                     onChange={e => setEditItemData({ ...editItemData, price: e.target.value })}
+                                                    title={editItemData.flyer_item_id ? "Cannot change price of a linked item" : ""}
                                                 />
                                             </div>
                                             <textarea
