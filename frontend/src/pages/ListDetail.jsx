@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ArrowLeft, Check, Send, Trash2, Plus, AlertCircle, ShoppingCart, Image as ImageIcon, Store, Edit2, X } from 'lucide-react';
 import { API_BASE_URL } from '../config';
+import ImageModal from '../components/ImageModal';
 
 const ListDetail = () => {
     const { id } = useParams();
@@ -22,6 +23,7 @@ const ListDetail = () => {
     const [newCategoryName, setNewCategoryName] = useState('');
     const [isRenaming, setIsRenaming] = useState(false);
     const [renameValue, setRenameValue] = useState('');
+    const [previewImage, setPreviewImage] = useState(null);
 
     useEffect(() => {
         fetchList();
@@ -447,7 +449,8 @@ const ListDetail = () => {
                                             <img
                                                 src={`${API_BASE_URL}${item.local_photo_path}`}
                                                 alt={item.name}
-                                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                                style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'zoom-in' }}
+                                                onClick={() => setPreviewImage({ src: `${API_BASE_URL}${item.local_photo_path}`, alt: item.name })}
                                             />
                                         </div>
                                     )}
@@ -806,6 +809,11 @@ const ListDetail = () => {
                     </div>
                 </footer>
             )}
+            <ImageModal
+                src={previewImage?.src}
+                alt={previewImage?.alt}
+                onClose={() => setPreviewImage(null)}
+            />
         </div>
     );
 };

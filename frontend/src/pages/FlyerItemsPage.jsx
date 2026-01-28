@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { Search, Store, Calendar, ArrowLeft, Loader2, Filter, Plus, ShoppingCart, Check, X, Tag } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../config';
+import ImageModal from '../components/ImageModal';
 
 const FlyerItemsPage = () => {
     const { token, currency } = useAuth();
@@ -20,6 +21,7 @@ const FlyerItemsPage = () => {
     const [showListSelector, setShowListSelector] = useState(null); // flyerItemID
     const [addingTo, setAddingTo] = useState(null); // listId
     const [message, setMessage] = useState(null);
+    const [previewImage, setPreviewImage] = useState(null);
 
     // Form state for adding item
     const [addForm, setAddForm] = useState({
@@ -294,7 +296,8 @@ const FlyerItemsPage = () => {
                                     <img
                                         src={`${API_BASE_URL}${item.local_photo_path}`}
                                         alt={item.name}
-                                        style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                                        style={{ width: '100%', height: '100%', objectFit: 'contain', cursor: 'zoom-in' }}
+                                        onClick={() => setPreviewImage({ src: `${API_BASE_URL}${item.local_photo_path}`, alt: item.name })}
                                     />
                                 ) : (
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)' }}>
@@ -479,6 +482,11 @@ const FlyerItemsPage = () => {
                     ))}
                 </div>
             )}
+            <ImageModal
+                src={previewImage?.src}
+                alt={previewImage?.alt}
+                onClose={() => setPreviewImage(null)}
+            />
         </div>
     );
 };
