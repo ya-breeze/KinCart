@@ -230,8 +230,33 @@ const FlyerItemsPage = () => {
                                 value={filters.q}
                                 onChange={handleFilterChange}
                                 placeholder="Name, category, keyword..."
-                                style={{ paddingLeft: '2.5rem', width: '100%' }}
+                                style={{ paddingLeft: '2.5rem', paddingRight: '2.5rem', width: '100%' }}
                             />
+                            {filters.q && (
+                                <button
+                                    onClick={() => setFilters(prev => ({ ...prev, q: '' }))}
+                                    style={{
+                                        position: 'absolute',
+                                        right: '10px',
+                                        top: '50%',
+                                        transform: 'translateY(-50%)',
+                                        background: 'none',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        color: 'var(--text-muted)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        padding: '4px',
+                                        borderRadius: '50%',
+                                        transition: 'all 0.2s'
+                                    }}
+                                    onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-main)'}
+                                    onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                                >
+                                    <X size={16} />
+                                </button>
+                            )}
                         </div>
                     </div>
 
