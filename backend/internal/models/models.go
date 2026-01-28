@@ -100,10 +100,23 @@ type Flyer struct {
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
 	ShopName  string         `json:"shop_name"`
+	URL       string         `gorm:"index" json:"url"`
 	StartDate time.Time      `json:"start_date"`
 	EndDate   time.Time      `json:"end_date"`
 	ParsedAt  time.Time      `json:"parsed_at"`
-	Items     []FlyerItem    `gorm:"foreignKey:FlyerID" json:"items"`
+	Pages     []FlyerPage    `gorm:"foreignKey:FlyerID" json:"pages"`
+}
+
+type FlyerPage struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	FlyerID   uint      `json:"flyer_id"`
+	SourceURL string    `json:"source_url"`
+	LocalPath string    `json:"local_path"`
+	IsParsed  bool      `gorm:"default:false" json:"is_parsed"`
+	Retries   int       `gorm:"default:0" json:"retries"`
+	LastError string    `json:"last_error"`
 }
 
 type FlyerItem struct {
@@ -112,6 +125,7 @@ type FlyerItem struct {
 	UpdatedAt      time.Time      `json:"updated_at"`
 	DeletedAt      gorm.DeletedAt `gorm:"index" json:"-"`
 	FlyerID        uint           `json:"flyer_id"`
+	FlyerPageID    uint           `json:"flyer_page_id"`
 	Name           string         `json:"name"`
 	Price          float64        `json:"price"`
 	OriginalPrice  *float64       `json:"original_price"`
@@ -122,4 +136,12 @@ type FlyerItem struct {
 	LocalPhotoPath string         `json:"local_photo_path"`
 	Categories     string         `json:"categories"` // comma-separated English categories
 	Keywords       string         `json:"keywords"`   // comma-separated English keywords
+}
+
+type JobStatus struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Name      string    `gorm:"uniqueIndex" json:"name"`
+	LastRun   time.Time `json:"last_run"`
 }

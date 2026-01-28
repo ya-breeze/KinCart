@@ -130,7 +130,7 @@ func parseLocalFile(manager *flyers.Manager, parser *flyers.Parser, path string,
 		}
 
 		fmt.Printf("[%d/%d] Saving items from %s: %s...\n", i+1, total, p.Filename, shopName)
-		if err := manager.SaveParsedFlyer(parsed, p.Data, shopName); err != nil {
+		if err := manager.SaveParsedFlyer(parsed, p.Data, shopName, "", "", 0); err != nil {
 			slog.Error("failed to save page", "current", i+1, "total", total, "file", p.Filename, "err", err)
 			continue
 		}

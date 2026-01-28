@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -14,11 +15,6 @@ import (
 )
 
 func ParseFlyer(c *gin.Context) {
-	geminiKey := os.Getenv("GEMINI_API_KEY")
-	if geminiKey == "" {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gemini API key not configured"})
-		return
-	}
 
 	file, header, err := c.Request.FormFile("flyer")
 	if err != nil {
@@ -33,24 +29,10 @@ func ParseFlyer(c *gin.Context) {
 		return
 	}
 
-	parser, err := flyers.NewParser(geminiKey)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initialize parser", "details": err.Error()})
+	manager := getFlyerManager(c)
+	if manager == nil {
 		return
 	}
-
-	manager := flyers.NewManager(database.DB, parser)
-
-	// Set output directory for cropped images
-	flyerItemsPath := os.Getenv("FLYER_ITEMS_PATH")
-	if flyerItemsPath == "" {
-		uploadsPath := os.Getenv("UPLOADS_PATH")
-		if uploadsPath == "" {
-			uploadsPath = "./uploads"
-		}
-		flyerItemsPath = filepath.Join(uploadsPath, "flyer_items")
-	}
-	manager.OutputDir = flyerItemsPath
 
 	att := flyers.Attachment{
 		Filename:    header.Filename,
@@ -72,6 +54,48 @@ func ParseFlyer(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Flyer processing completed"})
 }
 
-func GetFlyers(c *gin.Context) {
-	// ... implementation ...
+func DownloadFlyers(c *gin.Context) {
+	manager := getFlyerManager(c)
+	if manager == nil {
+		return
+	}
+
+	// Start background task
+	go func() {
+		ctx := context.Background()
+		flyers.UpdateJobStatus(database.DB, flyers.FlyerDownloadJobName)
+		if err := manager.FetchAndProcessFlyers(ctx); err != nil {
+			slog.Error("Background flyer download failed", "error", err)
+		}
+	}()
+
+	c.JSON(http.StatusOK, gin.H{"message": "Flyer download task started in background"})
+}
+
+func getFlyerManager(c *gin.Context) *flyers.Manager {
+	geminiKey := os.Getenv("GEMINI_API_KEY")
+	if geminiKey == "" {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gemini API key not configured"})
+		return nil
+	}
+
+	parser, err := flyers.NewParser(geminiKey)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initialize parser", "details": err.Error()})
+		return nil
+	}
+
+	manager := flyers.NewManager(database.DB, parser)
+
+	// Set output directory for cropped images
+	flyerItemsPath := os.Getenv("FLYER_ITEMS_PATH")
+	if flyerItemsPath == "" {
+		uploadsPath := os.Getenv("UPLOADS_PATH")
+		if uploadsPath == "" {
+			uploadsPath = "./uploads"
+		}
+		flyerItemsPath = filepath.Join(uploadsPath, "flyer_items")
+	}
+	manager.OutputDir = flyerItemsPath
+	return manager
 }

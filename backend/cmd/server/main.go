@@ -3,8 +3,10 @@ package main
 import (
 	"log/slog"
 	"os"
+	"path/filepath"
 
 	"kincart/internal/database"
+	"kincart/internal/flyers"
 	"kincart/internal/handlers"
 	"kincart/internal/middleware"
 
@@ -24,6 +26,32 @@ func main() {
 
 	// Start token blacklist cleanup routine
 	middleware.CleanupBlacklist()
+
+	// Initialize Flyer Manager and start scheduler
+	geminiKey := os.Getenv("GEMINI_API_KEY")
+	if geminiKey != "" {
+		parser, err := flyers.NewParser(geminiKey)
+		if err != nil {
+			slog.Error("Failed to initialize flyer parser", "error", err)
+		} else {
+			manager := flyers.NewManager(database.DB, parser)
+
+			// Set output directory for cropped images
+			flyerItemsPath := os.Getenv("FLYER_ITEMS_PATH")
+			if flyerItemsPath == "" {
+				uploadsPath := os.Getenv("UPLOADS_PATH")
+				if uploadsPath == "" {
+					uploadsPath = "./uploads"
+				}
+				flyerItemsPath = filepath.Join(uploadsPath, "flyer_items")
+			}
+			manager.OutputDir = flyerItemsPath
+
+			flyers.StartScheduler(database.DB, manager)
+		}
+	} else {
+		slog.Warn("GEMINI_API_KEY not set, flyer download scheduler will not start")
+	}
 
 	r := gin.Default()
 
@@ -79,6 +107,7 @@ func main() {
 		internal := api.Group("/internal")
 		{
 			internal.POST("/flyers/parse", handlers.ParseFlyer)
+			internal.POST("/flyers/download", handlers.DownloadFlyers)
 		}
 	}
 

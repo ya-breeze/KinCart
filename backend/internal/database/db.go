@@ -39,7 +39,9 @@ func InitDB() {
 		&models.ShopCategoryOrder{},
 		&models.ItemFrequency{},
 		&models.Flyer{},
+		&models.FlyerPage{},
 		&models.FlyerItem{},
+		&models.JobStatus{},
 	)
 	if err != nil {
 		slog.Error("Failed to migrate database", "error", err)
