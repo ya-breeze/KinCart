@@ -3,6 +3,7 @@ package flyers
 import (
 	"context"
 	"log/slog"
+	"os"
 	"time"
 
 	"kincart/internal/models"
@@ -28,30 +29,43 @@ func StartScheduler(db *gorm.DB, manager *Manager) {
 }
 
 func checkAndRun(db *gorm.DB, manager *Manager) {
-	var status models.JobStatus
+	ctx := context.Background()
 
-	err := db.Where("name = ?", FlyerDownloadJobName).First(&status).Error
-	if err != nil && err != gorm.ErrRecordNotFound {
-		slog.Error("Failed to check job status", "error", err)
-		return
-	}
-
-	if err == nil {
-		// Check if it was started earlier than 12h ago
-		if time.Since(status.LastRun) < 12*time.Hour {
-			slog.Info("Flyer download job ran recently, skipping immediate start", "last_run", status.LastRun)
-			return
+	// 1. Try to download new flyers, but respect cooldown
+	fetchDelay := 12 * time.Hour
+	if delayEnv := os.Getenv("FLYER_FETCH_DELAY_HOURS"); delayEnv != "" {
+		if hours, err := time.ParseDuration(delayEnv + "h"); err == nil {
+			fetchDelay = hours
 		}
 	}
 
-	slog.Info("Starting scheduled flyer download job")
+	var status models.JobStatus
+	err := db.Where("name = ?", FlyerDownloadJobName).First(&status).Error
+	if err != nil && err != gorm.ErrRecordNotFound {
+		slog.Error("Failed to check job status", "error", err)
+	} else {
+		canDownload := true
+		if err == nil {
+			// Check if it was started earlier than configured delay ago
+			if time.Since(status.LastRun) < fetchDelay {
+				slog.Info("Flyer download job ran recently, skipping download", "last_run", status.LastRun, "delay", fetchDelay)
+				canDownload = false
+			}
+		}
 
-	// Update last run time immediately to prevent concurrent triggers
-	UpdateJobStatus(db, FlyerDownloadJobName)
+		if canDownload {
+			slog.Info("Starting scheduled flyer download job")
+			UpdateJobStatus(db, FlyerDownloadJobName)
+			if err := manager.DownloadNewFlyers(ctx); err != nil {
+				slog.Error("Scheduled flyer download failed", "error", err)
+			}
+		}
+	}
 
-	ctx := context.Background()
-	if err := manager.FetchAndProcessFlyers(ctx); err != nil {
-		slog.Error("Scheduled flyer download failed", "error", err)
+	// 2. Always process pending pages (no cooldown for parsing)
+	slog.Info("Checking for pending flyer pages to process")
+	if err := manager.ProcessPendingPages(ctx); err != nil {
+		slog.Error("Scheduled flyer processing failed", "error", err)
 	}
 }
 

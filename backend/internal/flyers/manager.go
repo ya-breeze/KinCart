@@ -91,6 +91,8 @@ func (m *Manager) DownloadNewFlyers(ctx context.Context) error {
 	}
 	baseDir := filepath.Join(uploadsPath, "flyer_pages")
 
+	delay := 500 * time.Millisecond
+
 	for shopName := range Retailers {
 		slog.Info("Fetching flyer URLs", "shop", shopName)
 		flyersList, err := crawler.FetchFlyerURLs(shopName)
@@ -127,7 +129,7 @@ func (m *Manager) DownloadNewFlyers(ctx context.Context) error {
 			}
 
 			slog.Info("Downloading pages for flyer", "shop", shopName, "url", f.URL)
-			images, err := crawler.FetchFlyerImages(f.URL, 500*time.Millisecond)
+			images, err := crawler.FetchFlyerImages(f.URL, delay)
 			if err != nil {
 				slog.Error("Failed to fetch flyer images", "url", f.URL, "error", err)
 				continue
