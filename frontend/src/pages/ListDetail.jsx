@@ -507,6 +507,23 @@ const ListDetail = () => {
                                                     <p className="text-break" style={{ fontWeight: 800, textDecoration: item.is_bought ? 'line-through' : 'none', fontSize: '1.15rem', color: 'var(--text-dark)' }}>
                                                         {item.name}
                                                     </p>
+                                                    {item.flyer_item_id && (
+                                                        <span style={{
+                                                            fontSize: '0.65rem',
+                                                            background: 'var(--primary)',
+                                                            color: 'white',
+                                                            padding: '2px 8px',
+                                                            borderRadius: '6px',
+                                                            fontWeight: 900,
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '4px',
+                                                            textTransform: 'uppercase'
+                                                        }}>
+                                                            <ShoppingCart size={10} />
+                                                            Sale Deal
+                                                        </span>
+                                                    )}
                                                     <span style={{
                                                         fontSize: '0.9rem',
                                                         background: 'var(--success)',

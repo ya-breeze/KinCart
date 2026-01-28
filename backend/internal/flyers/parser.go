@@ -126,6 +126,41 @@ The bounding box should be generous enough to capture all the mentioned elements
 
 	config := &genai.GenerateContentConfig{
 		ResponseMIMEType: "application/json",
+		ResponseSchema: &genai.Schema{
+			Type: genai.TypeObject,
+			Properties: map[string]*genai.Schema{
+				"start_date": {Type: genai.TypeString, Description: "YYYY-MM-DD or empty if not found"},
+				"end_date":   {Type: genai.TypeString, Description: "YYYY-MM-DD or empty if not found"},
+				"items": {
+					Type: genai.TypeArray,
+					Items: &genai.Schema{
+						Type: genai.TypeObject,
+						Properties: map[string]*genai.Schema{
+							"name":           {Type: genai.TypeString},
+							"price":          {Type: genai.TypeNumber},
+							"original_price": {Type: genai.TypeNumber, Nullable: ptrBool(true)},
+							"quantity":       {Type: genai.TypeString},
+							"start_date":     {Type: genai.TypeString},
+							"end_date":       {Type: genai.TypeString},
+							"bounding_box": {
+								Type:  genai.TypeArray,
+								Items: &genai.Schema{Type: genai.TypeNumber},
+							},
+							"categories": {
+								Type:  genai.TypeArray,
+								Items: &genai.Schema{Type: genai.TypeString},
+							},
+							"keywords": {
+								Type:  genai.TypeArray,
+								Items: &genai.Schema{Type: genai.TypeString},
+							},
+						},
+						Required: []string{"name", "price", "quantity", "start_date", "end_date", "bounding_box", "categories", "keywords"},
+					},
+				},
+			},
+			Required: []string{"start_date", "end_date", "items"},
+		},
 	}
 
 	resp, err := p.client.Models.GenerateContent(ctx, "gemini-3-flash-preview", []*genai.Content{content}, config)
@@ -166,4 +201,8 @@ func (p *Parser) cleanJSON(s string) string {
 		s = strings.TrimSuffix(s, "```")
 	}
 	return strings.TrimSpace(s)
+}
+
+func ptrBool(b bool) *bool {
+	return &b
 }

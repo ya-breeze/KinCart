@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Search, Store, Calendar, ArrowLeft, Loader2, Filter } from 'lucide-react';
+import { Search, Store, Calendar, ArrowLeft, Loader2, Filter, Plus, ShoppingCart, Check, X, Tag } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../config';
 
@@ -9,11 +9,23 @@ const FlyerItemsPage = () => {
     const navigate = useNavigate();
     const [items, setItems] = useState([]);
     const [shops, setShops] = useState([]);
+    const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filters, setFilters] = useState({
         q: '',
         shop: '',
         activity: 'now'
+    });
+    const [activeLists, setActiveLists] = useState([]);
+    const [showListSelector, setShowListSelector] = useState(null); // flyerItemID
+    const [addingTo, setAddingTo] = useState(null); // listId
+    const [message, setMessage] = useState(null);
+
+    // Form state for adding item
+    const [addForm, setAddForm] = useState({
+        quantity: 1,
+        unit: 'pcs',
+        category_id: ''
     });
 
     const fetchShops = async () => {
@@ -26,6 +38,33 @@ const FlyerItemsPage = () => {
             }
         } catch (err) {
             console.error('Failed to fetch shops:', err);
+        }
+    };
+
+    const fetchCategories = async () => {
+        try {
+            const resp = await fetch(`${API_BASE_URL}/api/categories`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (resp.ok) {
+                setCategories(await resp.json());
+            }
+        } catch (err) {
+            console.error('Failed to fetch categories:', err);
+        }
+    };
+
+    const fetchActiveLists = async () => {
+        try {
+            const resp = await fetch(`${API_BASE_URL}/api/lists`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (resp.ok) {
+                const allLists = await resp.json();
+                setActiveLists(allLists.filter(l => l.status === 'preparing'));
+            }
+        } catch (err) {
+            console.error('Failed to fetch active lists:', err);
         }
     };
 
@@ -48,6 +87,8 @@ const FlyerItemsPage = () => {
 
     useEffect(() => {
         fetchShops();
+        fetchActiveLists();
+        fetchCategories();
     }, []);
 
     useEffect(() => {
@@ -62,9 +103,97 @@ const FlyerItemsPage = () => {
         setFilters(prev => ({ ...prev, [name]: value }));
     };
 
+    const handleAddItemToList = async (item, listId) => {
+        setAddingTo(listId);
+        try {
+            const resp = await fetch(`${API_BASE_URL}/api/lists/${listId}/items`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    name: item.name,
+                    price: item.price,
+                    description: `Deal from ${item.shop_name} (${item.quantity})`,
+                    local_photo_path: item.local_photo_path,
+                    quantity: parseFloat(addForm.quantity),
+                    unit: addForm.unit,
+                    category_id: addForm.category_id ? parseInt(addForm.category_id) : undefined,
+                    flyer_item_id: item.id
+                })
+            });
+
+            if (resp.ok) {
+                setMessage({ type: 'success', text: `Added ${item.name} to list!` });
+                setShowListSelector(null);
+                setTimeout(() => setMessage(null), 3000);
+            }
+        } catch (err) {
+            setMessage({ type: 'error', text: 'Failed to add item' });
+        } finally {
+            setAddingTo(null);
+        }
+    };
+
+    const handleCreateAndAdd = async (item) => {
+        const title = prompt('Enter new list title:', `${item.shop_name} Deals`);
+        if (!title) return;
+
+        try {
+            const resp = await fetch(`${API_BASE_URL}/api/lists`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ title })
+            });
+
+            if (resp.ok) {
+                const newList = await resp.json();
+                handleAddItemToList(item, newList.id);
+                fetchActiveLists(); // Refresh active lists
+            }
+        } catch (err) {
+            setMessage({ type: 'error', text: 'Failed to create list' });
+        }
+    };
+
     return (
-        <div className="container">
-            <header style={{ marginBottom: '2rem', paddingTop: '1rem' }}>
+        <div className="container" style={{ paddingBottom: '5rem' }}>
+            {showListSelector && (
+                <div
+                    onClick={() => setShowListSelector(null)}
+                    style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        zIndex: 15,
+                        background: 'transparent'
+                    }}
+                />
+            )}
+            <header style={{ marginBottom: '2rem', paddingTop: '1rem', position: 'relative' }}>
+                {message && (
+                    <div className={`badge ${message.type === 'success' ? 'badge-success' : 'badge-error'}`} style={{
+                        position: 'fixed',
+                        top: '20px',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        zIndex: 1000,
+                        padding: '1rem 2rem',
+                        boxShadow: 'var(--shadow-lg)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem'
+                    }}>
+                        {message.type === 'success' ? <Check size={20} /> : <X size={20} />}
+                        {message.text}
+                    </div>
+                )}
                 <button
                     onClick={() => navigate('/')}
                     style={{
@@ -159,7 +288,7 @@ const FlyerItemsPage = () => {
                     gap: '1.5rem'
                 }}>
                     {items.map(item => (
-                        <div key={item.id} className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                        <div key={item.id} className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', position: 'relative' }}>
                             <div style={{ height: '200px', background: '#f8f9fa', position: 'relative', overflow: 'hidden' }}>
                                 {item.local_photo_path ? (
                                     <img
@@ -197,6 +326,7 @@ const FlyerItemsPage = () => {
                                         <span>{new Date(item.start_date).toLocaleDateString()} - {new Date(item.end_date).toLocaleDateString()}</span>
                                     </div>
                                 </div>
+
                                 {item.categories && (
                                     <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
                                         {item.categories.split(',').map(cat => (
@@ -210,38 +340,140 @@ const FlyerItemsPage = () => {
                                                     borderRadius: '4px',
                                                     border: '1px solid var(--border)',
                                                     cursor: 'pointer',
-                                                    color: 'var(--text-muted)',
-                                                    transition: 'all 0.2s'
+                                                    color: 'var(--text-muted)'
                                                 }}
-                                                className="tag-hover"
                                             >
                                                 {cat.trim()}
                                             </button>
                                         ))}
                                     </div>
                                 )}
-                                {item.keywords && (
-                                    <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
-                                        {item.keywords.split(',').map(kw => (
-                                            <button
-                                                key={kw}
-                                                onClick={() => setFilters(prev => ({ ...prev, q: kw.trim() }))}
-                                                style={{
-                                                    fontSize: '0.65rem',
-                                                    background: 'transparent',
-                                                    padding: '1px 6px',
-                                                    borderRadius: '4px',
-                                                    border: '1px dashed var(--border)',
-                                                    cursor: 'pointer',
-                                                    color: 'var(--text-muted)',
-                                                    fontStyle: 'italic'
-                                                }}
-                                            >
-                                                #{kw.trim()}
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
+
+                                <div style={{ marginTop: '1rem' }}>
+                                    <button
+                                        onClick={() => setShowListSelector(showListSelector === item.id ? null : item.id)}
+                                        className="btn-primary"
+                                        style={{ width: '100%', height: '40px', fontSize: '0.875rem' }}
+                                    >
+                                        <Plus size={16} />
+                                        Add to List
+                                    </button>
+
+                                    {showListSelector === item.id && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            bottom: '10px',
+                                            left: '10px',
+                                            right: '10px',
+                                            background: 'white',
+                                            zIndex: 20,
+                                            boxShadow: '0 -10px 25px rgba(0,0,0,0.15), var(--shadow-lg)',
+                                            borderRadius: '12px',
+                                            border: '1px solid var(--border)',
+                                            overflow: 'hidden',
+                                            display: 'flex',
+                                            flexDirection: 'column'
+                                        }}>
+                                            <div style={{ padding: '0.75rem', background: 'var(--bg-main)', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <span style={{ fontSize: '0.8rem', fontWeight: 800 }}>Add Settings</span>
+                                                <button onClick={() => setShowListSelector(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
+                                                    <X size={16} />
+                                                </button>
+                                            </div>
+
+                                            <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', background: '#fff' }}>
+                                                {/* Category Selection */}
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                                    <label style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Category</label>
+                                                    <div style={{ position: 'relative' }}>
+                                                        <Tag size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                                                        <select
+                                                            value={addForm.category_id}
+                                                            onChange={e => setAddForm(prev => ({ ...prev, category_id: e.target.value }))}
+                                                            style={{ width: '100%', padding: '0.5rem 1rem 0.5rem 2rem', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '0.875rem' }}
+                                                        >
+                                                            <option value="">No Category (Optional)</option>
+                                                            {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                                        </select>
+                                                    </div>
+                                                </div>
+
+                                                {/* Qty & Measure */}
+                                                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                                        <label style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Qty</label>
+                                                        <input
+                                                            type="number"
+                                                            step="0.1"
+                                                            value={addForm.quantity}
+                                                            onChange={e => setAddForm(prev => ({ ...prev, quantity: e.target.value }))}
+                                                            style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '0.875rem' }}
+                                                        />
+                                                    </div>
+                                                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                                        <label style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Unit</label>
+                                                        <select
+                                                            value={addForm.unit}
+                                                            onChange={e => setAddForm(prev => ({ ...prev, unit: e.target.value }))}
+                                                            style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '0.875rem' }}
+                                                        >
+                                                            {['pcs', 'kg', 'g', '100g', 'l', 'pack'].map(u => <option key={u} value={u}>{u}</option>)}
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div style={{ background: '#f8f9fa', borderTop: '1px solid var(--border)' }}>
+                                                <div style={{ padding: '0.5rem', fontSize: '0.7rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', textAlign: 'center' }}>To List</div>
+                                                <div style={{ maxHeight: '120px', overflowY: 'auto' }}>
+                                                    {activeLists.map(list => (
+                                                        <button
+                                                            key={list.id}
+                                                            onClick={() => handleAddItemToList(item, list.id)}
+                                                            disabled={addingTo === list.id}
+                                                            style={{
+                                                                width: '100%',
+                                                                padding: '0.75rem',
+                                                                textAlign: 'left',
+                                                                background: 'none',
+                                                                border: 'none',
+                                                                borderBottom: '1px solid var(--border)',
+                                                                fontSize: '0.875rem',
+                                                                display: 'flex',
+                                                                justifyContent: 'space-between',
+                                                                alignItems: 'center',
+                                                                cursor: 'pointer'
+                                                            }}
+                                                        >
+                                                            <span>{list.title}</span>
+                                                            {addingTo === list.id ? <Loader2 className="spin" size={14} /> : <ShoppingCart size={14} style={{ opacity: 0.5 }} />}
+                                                        </button>
+                                                    ))}
+                                                    <button
+                                                        onClick={() => handleCreateAndAdd(item)}
+                                                        style={{
+                                                            width: '100%',
+                                                            padding: '0.75rem',
+                                                            textAlign: 'left',
+                                                            background: 'var(--bg-main)',
+                                                            border: 'none',
+                                                            fontSize: '0.875rem',
+                                                            color: 'var(--primary)',
+                                                            fontWeight: 700,
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '0.5rem',
+                                                            cursor: 'pointer'
+                                                        }}
+                                                    >
+                                                        <Plus size={14} />
+                                                        Create New List
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     ))}

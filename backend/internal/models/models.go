@@ -58,6 +58,7 @@ type Item struct {
 	IsUrgent       bool           `gorm:"default:false" json:"is_urgent"`
 	ListID         uint           `json:"list_id"`
 	CategoryID     uint           `json:"category_id"`
+	FlyerItemID    *uint          `json:"flyer_item_id"`
 }
 
 type Category struct {
