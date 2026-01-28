@@ -5,6 +5,7 @@ import LoginPage from './pages/LoginPage';
 import Dashboard from './pages/Dashboard';
 import ListDetail from './pages/ListDetail';
 import SettingsPage from './pages/SettingsPage';
+import FlyerItemsPage from './pages/FlyerItemsPage';
 import './index.css';
 
 const ProtectedRoute = ({ children }) => {
@@ -43,6 +44,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <SettingsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/flyers"
+            element={
+              <ProtectedRoute>
+                <FlyerItemsPage />
               </ProtectedRoute>
             }
           />

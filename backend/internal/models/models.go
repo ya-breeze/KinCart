@@ -136,6 +136,7 @@ type FlyerItem struct {
 	LocalPhotoPath string         `json:"local_photo_path"`
 	Categories     string         `json:"categories"` // comma-separated English categories
 	Keywords       string         `json:"keywords"`   // comma-separated English keywords
+	ShopName       string         `gorm:"->;column:shop_name" json:"shop_name"`
 }
 
 type JobStatus struct {

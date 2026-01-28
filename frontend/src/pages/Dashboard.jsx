@@ -134,15 +134,26 @@ const Dashboard = () => {
             </header >
 
             {isManager && (
-                <button
-                    onClick={createNewList}
-                    className="btn-primary"
-                    style={{ width: '100%', marginBottom: '2rem', height: '60px', fontSize: '1.125rem' }}
-                    title="Create a new shopping list for the family"
-                >
-                    <Plus size={24} />
-                    Create New List
-                </button>
+                <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem' }}>
+                    <button
+                        onClick={createNewList}
+                        className="btn-primary"
+                        style={{ flex: 2, height: '60px', fontSize: '1.125rem' }}
+                        title="Create a new shopping list for the family"
+                    >
+                        <Plus size={24} />
+                        Create New List
+                    </button>
+                    <button
+                        onClick={() => navigate('/flyers')}
+                        className="card"
+                        style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.25rem', border: '2px solid var(--primary)', color: 'var(--primary)', fontWeight: 700 }}
+                        title="View all flyer items and deals"
+                    >
+                        <ShoppingBasket size={24} />
+                        Flyer Items
+                    </button>
+                </div>
             )}
 
             <section>

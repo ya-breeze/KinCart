@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"kincart/internal/database"
 	"kincart/internal/flyers"
@@ -101,6 +102,9 @@ func main() {
 			protected.DELETE("/shops/:id", handlers.DeleteShop)
 			protected.GET("/shops/:id/order", handlers.GetShopCategoryOrder)
 			protected.PATCH("/shops/:id/order", handlers.SetShopCategoryOrder)
+
+			protected.GET("/flyers/items", handlers.GetFlyerItems)
+			protected.GET("/flyers/shops", handlers.GetFlyerShops)
 		}
 
 		// Internal routes (blocked by Nginx)
@@ -120,6 +124,24 @@ func main() {
 	uploadsGroup := r.Group("/uploads")
 	uploadsGroup.Use(middleware.UploadSecurityMiddleware())
 	uploadsGroup.Static("/", uploadsPath)
+
+	flyerItemsPath := os.Getenv("FLYER_ITEMS_PATH")
+	if flyerItemsPath == "" {
+		flyerItemsPath = filepath.Join(uploadsPath, "flyer_items")
+	}
+
+	// Also serve flyer items. If they are in /data/flyer_items, serve them there.
+	// This matches the absolute paths stored in the DB by some legacy code or docker configs.
+	if strings.HasPrefix(flyerItemsPath, "/data") {
+		dataGroup := r.Group("/data/flyer_items")
+		dataGroup.Use(middleware.UploadSecurityMiddleware())
+		dataGroup.Static("/", flyerItemsPath)
+	} else {
+		// Default to serving under /uploads/flyer_items if not specified as /data
+		flyerGroup := r.Group("/uploads/flyer_items")
+		flyerGroup.Use(middleware.UploadSecurityMiddleware())
+		flyerGroup.Static("/", flyerItemsPath)
+	}
 
 	slog.Info("Server starting", "port", 8080, "uploads_path", uploadsPath)
 	if err := r.Run(":8080"); err != nil {

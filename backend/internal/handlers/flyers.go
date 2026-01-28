@@ -10,6 +10,8 @@ import (
 
 	"kincart/internal/database"
 	"kincart/internal/flyers"
+	"kincart/internal/models"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -98,4 +100,56 @@ func getFlyerManager(c *gin.Context) *flyers.Manager {
 	}
 	manager.OutputDir = flyerItemsPath
 	return manager
+}
+
+func GetFlyerItems(c *gin.Context) {
+	query := c.Query("q")
+	shop := c.Query("shop")
+	activity := c.Query("activity") // "now", "future", "all" (default "now")
+
+	db := database.DB.Model(&models.FlyerItem{}).
+		Select("flyer_items.*, flyers.shop_name").
+		Joins("JOIN flyers ON flyers.id = flyer_items.flyer_id")
+
+	now := time.Now()
+
+	// 1. Exclude outdated items by default
+	// Items are valid if EndDate is today or in future
+	db = db.Where("flyer_items.end_date >= ?", now.Format("2006-01-02"))
+
+	// 2. Filter by search query
+	if query != "" {
+		q := "%" + query + "%"
+		db = db.Where("(flyer_items.name LIKE ? OR flyer_items.categories LIKE ? OR flyer_items.keywords LIKE ?)", q, q, q)
+	}
+
+	// 3. Filter by shop
+	if shop != "" {
+		// Shop join is already done above
+		db = db.Where("flyers.shop_name = ?", shop)
+	}
+
+	// 4. Filter by activity
+	if activity == "future" {
+		db = db.Where("flyer_items.start_date > ?", now.Format("2006-01-02"))
+	} else if activity == "now" || activity == "" {
+		db = db.Where("flyer_items.start_date <= ? AND flyer_items.end_date >= ?", now.Format("2006-01-02"), now.Format("2006-01-02"))
+	}
+
+	var items []models.FlyerItem
+	if err := db.Order("flyer_items.end_date ASC").Find(&items).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch flyer items", "details": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, items)
+}
+
+func GetFlyerShops(c *gin.Context) {
+	var shops []string
+	if err := database.DB.Model(&models.Flyer{}).Distinct().Pluck("shop_name", &shops).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch shops", "details": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, shops)
 }
