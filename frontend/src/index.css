@@ -1,5 +1,6 @@
 :root {
   --primary: #2563eb;
+  --primary-rgb: 37, 99, 235;
   --primary-hover: #1d4ed8;
   --success: #22c55e;
   --warning: #f97316;

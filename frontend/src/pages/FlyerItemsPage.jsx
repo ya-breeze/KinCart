@@ -332,7 +332,7 @@ const FlyerItemsPage = () => {
 
                                 {item.categories && (
                                     <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
-                                        {item.categories.split(',').map(cat => (
+                                        {item.categories.split(',').filter(Boolean).map(cat => (
                                             <button
                                                 key={cat}
                                                 onClick={() => setFilters(prev => ({ ...prev, q: cat.trim() }))}
@@ -347,6 +347,29 @@ const FlyerItemsPage = () => {
                                                 }}
                                             >
                                                 {cat.trim()}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {item.keywords && (
+                                    <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
+                                        {item.keywords.split(',').filter(Boolean).map(kw => (
+                                            <button
+                                                key={kw}
+                                                onClick={() => setFilters(prev => ({ ...prev, q: kw.trim() }))}
+                                                style={{
+                                                    fontSize: '0.65rem',
+                                                    background: 'rgba(var(--primary-rgb), 0.05)',
+                                                    padding: '1px 6px',
+                                                    borderRadius: '4px',
+                                                    border: '1px dashed var(--primary)',
+                                                    cursor: 'pointer',
+                                                    color: 'var(--primary)',
+                                                    opacity: 0.8
+                                                }}
+                                            >
+                                                #{kw.trim()}
                                             </button>
                                         ))}
                                     </div>
