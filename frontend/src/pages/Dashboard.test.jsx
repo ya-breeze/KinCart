@@ -21,7 +21,7 @@ vi.mock('../context/AuthContext', () => ({
 describe('Dashboard', () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        global.fetch = vi.fn(() =>
+        globalThis.fetch = vi.fn(() =>
             Promise.resolve({
                 ok: true,
                 json: () => Promise.resolve([
@@ -45,7 +45,7 @@ describe('Dashboard', () => {
     });
 
     it('shows no lists message when empty', async () => {
-        global.fetch = vi.fn(() =>
+        globalThis.fetch = vi.fn(() =>
             Promise.resolve({
                 ok: true,
                 json: () => Promise.resolve([]),

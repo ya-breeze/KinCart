@@ -115,7 +115,7 @@ func (m *Manager) DownloadNewFlyers(ctx context.Context) error {
 					URL:      f.URL,
 					ParsedAt: time.Now(), // This will be updated later when items are added
 				}
-				if err := m.db.Create(&flyer).Error; err != nil {
+				if err = m.db.Create(&flyer).Error; err != nil {
 					slog.Error("Failed to create flyer record", "error", err)
 					continue
 				}

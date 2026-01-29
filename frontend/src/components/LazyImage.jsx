@@ -8,11 +8,12 @@ const LazyImage = ({ src, alt, style, onClick }) => {
     const imgRef = useRef();
 
     useEffect(() => {
+        const currentRef = imgRef.current;
         const observer = new IntersectionObserver(
             ([entry]) => {
                 if (entry.isIntersecting) {
                     setIsVisible(true);
-                    observer.unobserve(imgRef.current);
+                    if (currentRef) observer.unobserve(currentRef);
                 }
             },
             {
@@ -20,29 +21,29 @@ const LazyImage = ({ src, alt, style, onClick }) => {
             }
         );
 
-        if (imgRef.current) {
-            observer.observe(imgRef.current);
+        if (currentRef) {
+            observer.observe(currentRef);
         }
 
         return () => {
-            if (imgRef.current) {
-                observer.unobserve(imgRef.current);
+            if (currentRef) {
+                observer.unobserve(currentRef);
             }
         };
     }, []);
 
     return (
-        <div 
+        <div
             ref={imgRef}
-            style={{ 
-                width: '100%', 
-                height: '100%', 
+            style={{
+                width: '100%',
+                height: '100%',
                 position: 'relative',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 background: 'var(--bg-secondary)',
-                ...style 
+                ...style
             }}
         >
             {isVisible && !error ? (
@@ -57,10 +58,10 @@ const LazyImage = ({ src, alt, style, onClick }) => {
                         alt={alt}
                         onLoad={() => setIsLoaded(true)}
                         onError={() => setError(true)}
-                        style={{ 
-                            width: '100%', 
-                            height: '100%', 
-                            objectFit: 'contain', 
+                        style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'contain',
                             cursor: onClick ? 'zoom-in' : 'default',
                             opacity: isLoaded ? 1 : 0,
                             transition: 'opacity 0.3s ease-in-out'

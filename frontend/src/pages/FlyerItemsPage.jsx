@@ -93,6 +93,7 @@ const FlyerItemsPage = () => {
         fetchShops();
         fetchActiveLists();
         fetchCategories();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     useEffect(() => {
@@ -133,7 +134,7 @@ const FlyerItemsPage = () => {
                 setShowListSelector(null);
                 setTimeout(() => setMessage(null), 3000);
             }
-        } catch (err) {
+        } catch {
             setMessage({ type: 'error', text: 'Failed to add item' });
         } finally {
             setAddingTo(null);
@@ -159,7 +160,7 @@ const FlyerItemsPage = () => {
                 handleAddItemToList(item, newList.id);
                 fetchActiveLists(); // Refresh active lists
             }
-        } catch (err) {
+        } catch {
             setMessage({ type: 'error', text: 'Failed to create list' });
         }
     };

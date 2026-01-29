@@ -5,9 +5,8 @@ import (
 	"fmt"
 	"image"
 	"image/draw"
-	_ "image/jpeg"
+	_ "image/jpeg" // Register JPEG decoder for image.Decode
 	"image/png"
-	_ "image/png"
 	"os"
 	"path/filepath"
 
@@ -75,7 +74,7 @@ func CropItem(imageData []byte, box []float64, outputDir string, itemName string
 	cropped := image.NewRGBA(rect)
 	draw.Draw(cropped, rect, img, image.Point{xmin, ymin}, draw.Src)
 
-	if err := os.MkdirAll(outputDir, 0755); err != nil {
+	if err = os.MkdirAll(outputDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create output directory: %w", err)
 	}
 

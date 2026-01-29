@@ -7,13 +7,13 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
+
+	"github.com/gin-gonic/gin"
 
 	"kincart/internal/database"
 	"kincart/internal/flyers"
 	"kincart/internal/models"
-	"time"
-
-	"github.com/gin-gonic/gin"
 )
 
 func ParseFlyer(c *gin.Context) {

@@ -22,7 +22,7 @@ func main() {
 	}))
 	slog.SetDefault(logger)
 
-	gotenv.Load()
+	_ = gotenv.Load() // .env file is optional
 	database.InitDB()
 
 	// Start token blacklist cleanup routine

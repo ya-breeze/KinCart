@@ -24,7 +24,9 @@ func main() {
 	case "add-family":
 		addFamilyCmd := flag.NewFlagSet("add-family", flag.ExitOnError)
 		familyName := addFamilyCmd.String("name", "", "Name of the family")
-		addFamilyCmd.Parse(os.Args[2:])
+		if err := addFamilyCmd.Parse(os.Args[2:]); err != nil {
+			log.Fatalf("Failed to parse arguments: %v", err)
+		}
 
 		if *familyName == "" {
 			log.Fatal("Family name is required")
@@ -46,7 +48,9 @@ func main() {
 		userFamily := addUserCmd.String("family", "", "Family name")
 		username := addUserCmd.String("username", "", "Username")
 		password := addUserCmd.String("password", "", "Password")
-		addUserCmd.Parse(os.Args[2:])
+		if err := addUserCmd.Parse(os.Args[2:]); err != nil {
+			log.Fatalf("Failed to parse arguments: %v", err)
+		}
 
 		if *userFamily == "" || *username == "" || *password == "" {
 			log.Fatal("Family, username, and password are required")

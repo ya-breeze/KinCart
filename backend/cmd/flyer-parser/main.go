@@ -40,7 +40,7 @@ func main() {
 	}
 
 	// Auto migrate temp db
-	if err := db.AutoMigrate(&models.Flyer{}, &models.FlyerItem{}); err != nil {
+	if err = db.AutoMigrate(&models.Flyer{}, &models.FlyerItem{}); err != nil {
 		log.Fatalf("failed to migrate temp database: %v", err)
 	}
 
@@ -98,7 +98,8 @@ func parseLocalFile(manager *flyers.Manager, parser *flyers.Parser, path string,
 		fmt.Println("Splitting PDF into pages...")
 		pageFiles, err := flyers.SplitPDF(data, tempDir)
 		if err != nil {
-			log.Fatalf("failed to split PDF: %v", err)
+			log.Printf("failed to split PDF: %v", err)
+			return
 		}
 		for _, pf := range pageFiles {
 			pData, err := os.ReadFile(pf)
@@ -174,7 +175,9 @@ func startServer(db *gorm.DB, port int) {
 	})
 
 	fmt.Printf("Web UI available at http://localhost:%d\n", port)
-	r.Run(fmt.Sprintf(":%d", port))
+	if err := r.Run(fmt.Sprintf(":%d", port)); err != nil {
+		log.Fatalf("Failed to start server: %v", err)
+	}
 }
 
 func loadTemplate() *template.Template {

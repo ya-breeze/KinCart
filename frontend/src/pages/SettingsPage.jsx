@@ -14,14 +14,7 @@ const SettingsPage = () => {
     const [newShopName, setNewShopName] = useState('');
     const [editingCat, setEditingCat] = useState(null);
     const [editName, setEditName] = useState('');
-    const [editingShop, setEditingShop] = useState(null);
-    const [editShopName, setEditShopName] = useState('');
     const [shopCategoryOrders, setShopCategoryOrders] = useState({}); // { shopId: [ { categoryId, sortOrder } ] }
-
-    useEffect(() => {
-        fetchCategories();
-        fetchShops();
-    }, []);
 
     const fetchShops = async () => {
         const resp = await fetch(`${API_BASE_URL}/api/shops`, {
@@ -29,6 +22,19 @@ const SettingsPage = () => {
         });
         if (resp.ok) setShops(await resp.json());
     };
+
+    const fetchCategories = async () => {
+        const resp = await fetch(`${API_BASE_URL}/api/categories`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (resp.ok) setCategories(await resp.json());
+    };
+
+    useEffect(() => {
+        fetchCategories();
+        fetchShops();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const fetchShopOrder = async (shopId) => {
         const resp = await fetch(`${API_BASE_URL}/api/shops/${shopId}/order`, {
@@ -38,13 +44,6 @@ const SettingsPage = () => {
             const data = await resp.json();
             setShopCategoryOrders(prev => ({ ...prev, [shopId]: data }));
         }
-    };
-
-    const fetchCategories = async () => {
-        const resp = await fetch(`${API_BASE_URL}/api/categories`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (resp.ok) setCategories(await resp.json());
     };
 
     const updateCurrency = async (newVal) => {

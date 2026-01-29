@@ -15,7 +15,7 @@ import (
 )
 
 func getJWTSecret() []byte {
-	gotenv.Load()
+	_ = gotenv.Load() // .env file is optional
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
 		return []byte("kincart-super-secret-key") // Default for development

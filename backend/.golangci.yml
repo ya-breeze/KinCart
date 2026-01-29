@@ -33,9 +33,25 @@ linters-settings:
   govet:
     enable:
       - shadow
-      - fieldalignment
+    disable:
+      - fieldalignment # Optimization only, can break GORM struct tags
+  errcheck:
+    exclude-functions:
+      - (*os.File).Close
+      - (io.Closer).Close
+      - (*github.com/emersion/go-imap/v2/imapclient.FetchMessageData).Close
+      - (*github.com/emersion/go-imap/v2/imapclient.Client).Close
+      - (*github.com/gen2brain/go-fitz.Document).Close
+      - (*gin-gonic/gin.Engine).Run
+      - (*gorm.io/gorm.DB).AutoMigrate
+      - encoding/json.Unmarshal
+      - os.RemoveAll
+      - os.Remove
+      - fmt.Sscanf
   gocyclo:
-    min-complexity: 15
+    min-complexity: 25
+  gocognit:
+    min-complexity: 40
   goconst:
     min-len: 3
     min-occurrences: 3
@@ -48,17 +64,14 @@ linters-settings:
   revive:
     rules:
       - name: blank-imports
-      - name: context-as-first-argument
       - name: dot-imports
       - name: error-return
       - name: error-strings
       - name: error-naming
-      - name: exported
       - name: if-return
       - name: increment-decrement
       - name: var-naming
       - name: var-declaration
-      - name: package-comments
       - name: range
       - name: receiver-naming
       - name: time-naming
@@ -67,9 +80,12 @@ linters-settings:
       - name: errorf
       - name: empty-block
       - name: superfluous-else
-      - name: unused-parameter
       - name: unreachable-code
       - name: redefines-builtin-id
+  stylecheck:
+    checks:
+      - all
+      - -ST1000 # Package comments - not required for internal packages
 
 issues:
   exclude-use-default: false

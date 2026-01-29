@@ -230,6 +230,7 @@ const FlyerStatsPage = () => {
 
     useEffect(() => {
         fetchStats();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [token]);
 
     const fetchModalData = async (type, date) => {

@@ -187,7 +187,7 @@ func (c *Crawler) DownloadImage(url, destPath string) error {
 		return fmt.Errorf("bad status code: %d", resp.StatusCode)
 	}
 
-	if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+	if err = os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 

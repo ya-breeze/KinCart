@@ -34,7 +34,7 @@ const LoginPage = () => {
             } else {
                 setError(data.error || 'Login failed');
             }
-        } catch (err) {
+        } catch {
             setError('Connection error');
         }
     };

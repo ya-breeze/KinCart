@@ -3,8 +3,6 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
-	"kincart/internal/database"
-	"kincart/internal/models"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -14,6 +12,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+
+	"kincart/internal/database"
+	"kincart/internal/models"
 )
 
 func setupTestDB() {

@@ -5,8 +5,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"kincart/internal/database"
-	"kincart/internal/models"
 	"log/slog"
 	"mime/multipart"
 	"net/http"
@@ -16,6 +14,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+
+	"kincart/internal/database"
+	"kincart/internal/models"
 )
 
 func AddItemToList(c *gin.Context) {
@@ -266,7 +267,7 @@ func AddItemPhoto(c *gin.Context) {
 	}
 
 	// Validate file
-	if err := validateImageFile(file); err != nil {
+	if err = validateImageFile(file); err != nil {
 		slog.Warn("Invalid file upload attempt", "ip", c.ClientIP(), "error", err.Error())
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -300,7 +301,7 @@ func AddItemPhoto(c *gin.Context) {
 	}
 
 	itemsDir := filepath.Join(uploadsPath, "items")
-	if err := os.MkdirAll(itemsDir, 0755); err != nil {
+	if err = os.MkdirAll(itemsDir, 0755); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create upload directory"})
 		return
 	}

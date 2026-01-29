@@ -1,13 +1,14 @@
 package database
 
 import (
-	"kincart/internal/models"
 	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+
+	"kincart/internal/models"
 )
 
 func TestSeedFromEnv(t *testing.T) {
@@ -65,7 +66,7 @@ func TestSeedFromEnv(t *testing.T) {
 			DB.Exec("DELETE FROM users")
 			DB.Exec("DELETE FROM families")
 
-			os.Setenv("KINCART_SEED_USERS", tt.envValue)
+			_ = os.Setenv("KINCART_SEED_USERS", tt.envValue)
 			// Call the private function directly since we are in the same package
 			seedFromEnv()
 

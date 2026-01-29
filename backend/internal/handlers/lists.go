@@ -148,10 +148,7 @@ func DeleteList(c *gin.Context) {
 		}
 
 		// Delete the list
-		if err := tx.Delete(&list).Error; err != nil {
-			return err
-		}
-		return nil
+		return tx.Delete(&list).Error
 	})
 
 	if err != nil {

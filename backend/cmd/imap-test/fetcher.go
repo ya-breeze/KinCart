@@ -45,11 +45,11 @@ func (f *Fetcher) FetchRecentFlyers(folder string, fetchAttachments bool, subjec
 	}
 	defer c.Close()
 
-	if err := f.login(c); err != nil {
+	if err = f.login(c); err != nil {
 		return nil, err
 	}
 
-	if _, err := f.selectInbox(c, folder); err != nil {
+	if _, err = f.selectInbox(c, folder); err != nil {
 		return nil, err
 	}
 
@@ -142,7 +142,7 @@ func (f *Fetcher) fetchMessages(c *imapclient.Client, uids []uint32, fetchAttach
 		imapUIDs[i] = imap.UID(uid)
 	}
 	fetchCmd := c.Fetch(imap.UIDSetNum(imapUIDs...), fetchOptions)
-	defer fetchCmd.Close()
+	defer func() { _ = fetchCmd.Close() }()
 
 	var flyers []EmailFlyer
 	for {
@@ -191,7 +191,7 @@ func (f *Fetcher) fetchMessagesBySeq(c *imapclient.Client, count uint32, fetchAt
 	}
 
 	fetchCmd := c.Fetch(imap.SeqSetNum(seqs...), fetchOptions)
-	defer fetchCmd.Close()
+	defer func() { _ = fetchCmd.Close() }()
 
 	var flyers []EmailFlyer
 	for {
@@ -257,7 +257,7 @@ func (f *Fetcher) processMessage(c *imapclient.Client, msg *imapclient.FetchMess
 
 	if fetchAttachments && bodyStructure != nil {
 		for _, part := range f.findAttachmentParts(bodyStructure, "") {
-			data, err := f.fetchPart(c, uint32(msg.SeqNum), part.PartID)
+			data, err := f.fetchPart(c, msg.SeqNum, part.PartID)
 			if err != nil {
 				slog.Error("Failed to fetch part", "seq", msg.SeqNum, "part", part.PartID, "error", err)
 				continue
@@ -322,7 +322,7 @@ func (f *Fetcher) fetchPart(c *imapclient.Client, seq uint32, partID string) ([]
 	fetchCmd := c.Fetch(imap.SeqSetNum(seq), &imap.FetchOptions{
 		BodySection: []*imap.FetchItemBodySection{section},
 	})
-	defer fetchCmd.Close()
+	defer func() { _ = fetchCmd.Close() }()
 
 	msg := fetchCmd.Next()
 	if msg == nil {

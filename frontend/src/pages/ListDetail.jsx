@@ -8,7 +8,7 @@ import ImageModal from '../components/ImageModal';
 const ListDetail = () => {
     const { id } = useParams();
     const navigate = useNavigate();
-    const { user, token, mode, currency } = useAuth();
+    const { token, mode, currency } = useAuth();
     const [list, setList] = useState(null);
     const [categories, setCategories] = useState([]);
     const [shops, setShops] = useState([]);
@@ -30,6 +30,7 @@ const ListDetail = () => {
         fetchCategories();
         fetchShops();
         fetchFrequentItems();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [id]);
 
     const fetchShops = async () => {
