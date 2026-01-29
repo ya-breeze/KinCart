@@ -1,0 +1,6 @@
+# E2E testing override - adds test assets for E2E tests
+services:
+  backend:
+    volumes:
+      - ${KINCART_DATA_PATH:-./kincart-data}:/data
+      - ./e2e/test_assets:/data/flyer_items:ro

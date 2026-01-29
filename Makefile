@@ -1,4 +1,4 @@
-.PHONY: build test test-e2e lint docker-up docker-down add-family add-user help
+.PHONY: build test test-e2e lint docker-up docker-down docker-up-e2e docker-down-e2e add-family add-user help
 
 # Default target
 help:
@@ -8,7 +8,9 @@ help:
 	@echo "  lint          - Run linting for backend and frontend"
 	@echo "  docker-up     - Build and start containers in background"
 	@echo "  docker-down   - Stop and remove containers"
-	@echo "  test-e2e      - Run E2E tests using Playwright"
+	@echo "  docker-up-e2e - Build and start containers with E2E test assets"
+	@echo "  docker-down-e2e - Stop E2E containers"
+	@echo "  test-e2e      - Run E2E tests using Playwright (requires docker-up-e2e)"
 	@echo "  add-family    - Add a new family (requires docker-up)"
 	@echo "                  Usage: make add-family NAME=\"The Smiths\""
 	@echo "  add-user      - Add a new user (requires docker-up)"
@@ -34,14 +36,23 @@ test-frontend:
 	cd frontend && npm test -- --passWithNoTests
 
 test-e2e:
-	@echo "Checking if Docker containers are running..."
-	@if ! docker compose ps nginx 2>/dev/null | grep -q "Up"; then \
-		echo "❌ Error: Docker containers are not running."; \
-		echo "   Please run 'make docker-up' first to start the application."; \
-		exit 1; \
-	fi
-	@echo "✅ Docker containers are running. Starting E2E tests..."
-	cd e2e && npx playwright test
+	@echo "Checking if Docker containers are running with E2E config..."
+	@STARTED_CONTAINERS=false; \
+	if ! docker compose -f docker-compose.yml -f docker-compose.e2e.yml ps nginx 2>/dev/null | grep -q "Up"; then \
+		echo "🚀 Starting Docker containers with E2E config..."; \
+		docker-compose -f docker-compose.yml -f docker-compose.e2e.yml up --build -d; \
+		echo "⏳ Waiting for containers to be healthy..."; \
+		sleep 5; \
+		STARTED_CONTAINERS=true; \
+	fi; \
+	echo "✅ Docker containers are running. Starting E2E tests..."; \
+	cd e2e && npx playwright test; \
+	TEST_EXIT_CODE=$$?; \
+	if [ "$$STARTED_CONTAINERS" = "true" ]; then \
+		echo "🧹 Stopping Docker containers..."; \
+		docker-compose -f docker-compose.yml -f docker-compose.e2e.yml down; \
+	fi; \
+	exit $$TEST_EXIT_CODE
 
 # Lint targets
 lint: lint-backend lint-frontend
@@ -59,6 +70,13 @@ docker-up:
 
 docker-down:
 	docker-compose down
+
+# E2E Docker targets (includes test assets)
+docker-up-e2e:
+	docker-compose -f docker-compose.yml -f docker-compose.e2e.yml up --build -d
+
+docker-down-e2e:
+	docker-compose -f docker-compose.yml -f docker-compose.e2e.yml down
 
 # Administrative CLI targets
 seed-test-data:

@@ -7,7 +7,6 @@ services:
       - "8080:8080"
     volumes:
       - ${KINCART_DATA_PATH:-./kincart-data}:/data
-      - ./e2e/test_assets:/data/flyer_items:ro
     environment:
       DB_PATH: /data/kincart.db
       UPLOADS_PATH: /data/uploads
