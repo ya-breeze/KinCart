@@ -1,0 +1,131 @@
+package ai
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"strings"
+
+	"google.golang.org/genai"
+)
+
+type GeminiClient struct {
+	client *genai.Client
+	model  string
+}
+
+type ParsedReceipt struct {
+	StoreName string              `json:"store_name"`
+	Date      string              `json:"date"`
+	Total     float64             `json:"total"`
+	Items     []ParsedReceiptItem `json:"items"`
+}
+
+type ParsedReceiptItem struct {
+	Name       string  `json:"name"`
+	Quantity   float64 `json:"quantity"`
+	Unit       string  `json:"unit"`
+	Price      float64 `json:"price"`
+	TotalPrice float64 `json:"total_price"`
+}
+
+func NewGeminiClient(ctx context.Context) (*GeminiClient, error) {
+	apiKey := os.Getenv("GEMINI_API_KEY")
+	if apiKey == "" {
+		return nil, fmt.Errorf("GEMINI_API_KEY not set")
+	}
+
+	client, err := genai.NewClient(ctx, &genai.ClientConfig{
+		APIKey: apiKey,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &GeminiClient{
+		client: client,
+		model:  "gemini-2.0-flash",
+	}, nil
+}
+
+func (c *GeminiClient) ParseReceipt(ctx context.Context, imagePath string, knownItems []string) (*ParsedReceipt, error) {
+	imgData, err := os.ReadFile(imagePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read receipt image: %w", err)
+	}
+
+	prompt := fmt.Sprintf(`
+You are a receipt parser. parse the following receipt image.
+Extract the store name, date (YYYY-MM-DD), total amount, and all items.
+For each item, extract the name, quantity, unit, price per unit, and total price.
+If the unit is not explicitly stated but can be inferred (e.g. kg, pieces), use pieces as default or infer from context.
+The context list of known items is: %s. Use this to help match naming conventions, but priority is what's on receipt.
+
+Return strict JSON.
+`, strings.Join(knownItems, ", "))
+
+	content := &genai.Content{
+		Parts: []*genai.Part{
+			{Text: prompt},
+			{InlineData: &genai.Blob{MIMEType: "image/jpeg", Data: imgData}},
+		},
+	}
+
+	// Define Schema
+	schema := &genai.Schema{
+		Type: genai.TypeObject,
+		Properties: map[string]*genai.Schema{
+			"store_name": {Type: genai.TypeString},
+			"date":       {Type: genai.TypeString, Description: "YYYY-MM-DD"},
+			"total":      {Type: genai.TypeNumber},
+			"items": {
+				Type: genai.TypeArray,
+				Items: &genai.Schema{
+					Type: genai.TypeObject,
+					Properties: map[string]*genai.Schema{
+						"name":        {Type: genai.TypeString},
+						"quantity":    {Type: genai.TypeNumber},
+						"unit":        {Type: genai.TypeString},
+						"price":       {Type: genai.TypeNumber},
+						"total_price": {Type: genai.TypeNumber},
+					},
+					Required: []string{"name", "price", "total_price"},
+				},
+			},
+		},
+		Required: []string{"store_name", "date", "total", "items"},
+	}
+
+	resp, err := c.client.Models.GenerateContent(ctx, c.model, []*genai.Content{content}, &genai.GenerateContentConfig{
+		ResponseMIMEType: "application/json",
+		ResponseSchema:   schema,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("gemini generation error: %w", err)
+	}
+
+	if len(resp.Candidates) == 0 || resp.Candidates[0].Content == nil || len(resp.Candidates[0].Content.Parts) == 0 {
+		return nil, fmt.Errorf("no candidates returned")
+	}
+
+	responseText := ""
+	for _, part := range resp.Candidates[0].Content.Parts {
+		if part.Text != "" {
+			responseText += part.Text
+		}
+	}
+
+	// Clean
+	responseText = strings.TrimPrefix(responseText, "```json")
+	responseText = strings.TrimPrefix(responseText, "```")
+	responseText = strings.TrimSuffix(responseText, "```")
+	responseText = strings.TrimSpace(responseText)
+
+	var parsed ParsedReceipt
+	if err := json.Unmarshal([]byte(responseText), &parsed); err != nil {
+		return nil, fmt.Errorf("failed to decode json response: %w, response: %s", err, responseText)
+	}
+
+	return &parsed, nil
+}

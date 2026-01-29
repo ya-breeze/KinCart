@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { ArrowLeft, Check, Send, Trash2, Plus, AlertCircle, ShoppingCart, Image as ImageIcon, Store, Edit2, X } from 'lucide-react';
+import { ArrowLeft, Check, Send, Trash2, Plus, AlertCircle, ShoppingCart, Image as ImageIcon, Store, Edit2, X, Receipt } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import ImageModal from '../components/ImageModal';
+import ReceiptUploadModal from '../components/ReceiptUploadModal';
 
 const ListDetail = () => {
     const { id } = useParams();
@@ -24,6 +25,7 @@ const ListDetail = () => {
     const [isRenaming, setIsRenaming] = useState(false);
     const [renameValue, setRenameValue] = useState('');
     const [previewImage, setPreviewImage] = useState(null);
+    const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
 
     useEffect(() => {
         fetchList();
@@ -379,6 +381,41 @@ const ListDetail = () => {
                         <Trash2 size={20} />
                     </button>
                 )}
+
+                <button
+                    onClick={() => setIsReceiptModalOpen(true)}
+                    className="card"
+                    style={{
+                        padding: '0.5rem',
+                        borderRadius: '50%',
+                        color: 'var(--primary)',
+                        border: '1px solid var(--border)',
+                        marginLeft: 'auto',
+                        position: 'relative'
+                    }}
+                    title="Upload Receipt"
+                >
+                    <Receipt size={20} />
+                    {list.receipts?.length > 0 && (
+                        <span style={{
+                            position: 'absolute',
+                            top: '-5px',
+                            right: '-5px',
+                            background: 'var(--primary)',
+                            color: 'white',
+                            fontSize: '0.6rem',
+                            fontWeight: 'bold',
+                            width: '16px',
+                            height: '16px',
+                            borderRadius: '50%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}>
+                            {list.receipts.length}
+                        </span>
+                    )}
+                </button>
             </header>
 
             {isShopper && list.status === 'ready for shopping' && (
@@ -579,6 +616,23 @@ const ListDetail = () => {
                                                         }}>
                                                             <ShoppingCart size={10} />
                                                             Sale Deal
+                                                        </span>
+                                                    )}
+                                                    {item.receipt_item_id && (
+                                                        <span style={{
+                                                            fontSize: '0.65rem',
+                                                            background: 'var(--text-dark)',
+                                                            color: 'white',
+                                                            padding: '2px 8px',
+                                                            borderRadius: '6px',
+                                                            fontWeight: 900,
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '4px',
+                                                            textTransform: 'uppercase'
+                                                        }}>
+                                                            <Receipt size={10} />
+                                                            Found in Receipt
                                                         </span>
                                                     )}
                                                     <span style={{
@@ -867,6 +921,17 @@ const ListDetail = () => {
                 src={previewImage?.src}
                 alt={previewImage?.alt}
                 onClose={() => setPreviewImage(null)}
+            />
+
+            <ReceiptUploadModal
+                isOpen={isReceiptModalOpen}
+                onClose={() => setIsReceiptModalOpen(false)}
+                listId={id}
+                token={token}
+                onUploadSuccess={() => {
+                    fetchList();
+                    fetchFrequentItems();
+                }}
             />
         </div>
     );

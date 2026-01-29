@@ -41,6 +41,7 @@ type ShoppingList struct {
 	CompletedAt     *time.Time     `json:"completed_at"`
 	FamilyID        uint           `json:"family_id"`
 	Items           []Item         `gorm:"foreignKey:ListID" json:"items"`
+	Receipts        []Receipt      `gorm:"foreignKey:ListID" json:"receipts"`
 }
 
 type Item struct {
@@ -59,6 +60,7 @@ type Item struct {
 	ListID         uint           `json:"list_id"`
 	CategoryID     uint           `json:"category_id"`
 	FlyerItemID    *uint          `json:"flyer_item_id"`
+	ReceiptItemID  *uint          `json:"receipt_item_id"`
 }
 
 type Category struct {
@@ -89,10 +91,11 @@ type ShopCategoryOrder struct {
 }
 
 type ItemFrequency struct {
-	ID        uint   `gorm:"primaryKey" json:"id"`
-	FamilyID  uint   `json:"family_id"`
-	ItemName  string `gorm:"not null" json:"item_name"`
-	Frequency int    `gorm:"default:1" json:"frequency"`
+	ID        uint    `gorm:"primaryKey" json:"id"`
+	FamilyID  uint    `json:"family_id"`
+	ItemName  string  `gorm:"not null" json:"item_name"`
+	Frequency int     `gorm:"default:1" json:"frequency"`
+	LastPrice float64 `json:"last_price"`
 }
 
 type Flyer struct {
@@ -147,4 +150,29 @@ type JobStatus struct {
 	UpdatedAt time.Time `json:"updated_at"`
 	Name      string    `gorm:"uniqueIndex" json:"name"`
 	LastRun   time.Time `json:"last_run"`
+}
+
+type Receipt struct {
+	ID        uint           `gorm:"primaryKey" json:"id"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+	FamilyID  uint           `json:"family_id"`
+	ListID    *uint          `json:"list_id"`
+	ShopID    *uint          `json:"shop_id"` // Optional, if matched to a shop
+	Date      time.Time      `json:"date"`
+	Total     float64        `json:"total"`
+	ImagePath string         `json:"image_path"`                  // Path relative to kincart-data
+	Status    string         `gorm:"default:'new'" json:"status"` // "new", "parsed", "error"
+	Items     []ReceiptItem  `gorm:"foreignKey:ReceiptID" json:"items"`
+}
+
+type ReceiptItem struct {
+	ID         uint    `gorm:"primaryKey" json:"id"`
+	ReceiptID  uint    `json:"receipt_id"`
+	Name       string  `json:"name"`
+	Quantity   float64 `json:"quantity"`
+	Unit       string  `json:"unit"` // e.g., "pcs", "kg"
+	Price      float64 `json:"price"`
+	TotalPrice float64 `json:"total_price"`
 }

@@ -15,7 +15,7 @@ func GetLists(c *gin.Context) {
 	familyID := c.MustGet("family_id").(uint)
 
 	var lists []models.ShoppingList
-	if err := database.DB.Where("family_id = ?", familyID).Order("created_at desc").Find(&lists).Error; err != nil {
+	if err := database.DB.Preload("Receipts").Where("family_id = ?", familyID).Order("created_at desc").Find(&lists).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch lists"})
 		return
 	}
@@ -28,7 +28,7 @@ func GetList(c *gin.Context) {
 	listID := c.Param("id")
 
 	var list models.ShoppingList
-	if err := database.DB.Preload("Items").Where("id = ? AND family_id = ?", listID, familyID).First(&list).Error; err != nil {
+	if err := database.DB.Preload("Items").Preload("Receipts").Where("id = ? AND family_id = ?", listID, familyID).First(&list).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "List not found"})
 		return
 	}
@@ -124,6 +124,8 @@ func DuplicateList(c *gin.Context) {
 			ListID:      newList.ID,
 			IsBought:    false,
 			IsUrgent:    item.IsUrgent,
+			FlyerItemID: item.FlyerItemID, // Copy flyer link
+			// ReceiptItemID is skipped (set to nil) as per requirement
 		}
 		database.DB.Create(&newItem)
 	}
@@ -144,6 +146,12 @@ func DeleteList(c *gin.Context) {
 	err := database.DB.Transaction(func(tx *gorm.DB) error {
 		// Delete list items first
 		if err := tx.Where("list_id = ?", list.ID).Delete(&models.Item{}).Error; err != nil {
+			return err
+		}
+
+		// Unlink receipts (set list_id to NULL)
+		// Receipts are NOT deleted, but become orphans (can be viewed in history later)
+		if err := tx.Model(&models.Receipt{}).Where("list_id = ?", list.ID).Update("list_id", nil).Error; err != nil {
 			return err
 		}
 

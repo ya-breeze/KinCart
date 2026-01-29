@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Plus, ShoppingBasket, CheckCircle2, Clock, Copy, Settings } from 'lucide-react';
+import { Plus, ShoppingBasket, CheckCircle2, Clock, Copy, Settings, Scroll } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../config';
 
@@ -197,6 +197,12 @@ const Dashboard = () => {
                                                     <h3 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '0.25rem' }}>{list.title}</h3>
                                                     <div style={{ display: 'flex', gap: '1rem', fontSize: '0.875rem', color: 'var(--text-muted)' }}>
                                                         <span>{list.items?.length || 0} items</span>
+                                                        {list.receipts?.length > 0 && (
+                                                            <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--text-dark)' }}>
+                                                                <Scroll size={14} />
+                                                                {list.receipts.length}
+                                                            </span>
+                                                        )}
                                                         <span>≈ {list.estimated_amount || 0} {currency}</span>
                                                     </div>
                                                 </div>
@@ -237,6 +243,12 @@ const Dashboard = () => {
                                     <h3 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '0.25rem' }}>{list.title}</h3>
                                     <div style={{ display: 'flex', gap: '1rem', fontSize: '0.875rem', color: 'var(--text-muted)' }}>
                                         <span>{list.items?.length || 0} items</span>
+                                        {list.receipts?.length > 0 && (
+                                            <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--text-dark)' }}>
+                                                <Scroll size={14} />
+                                                {list.receipts.length}
+                                            </span>
+                                        )}
                                         <span>≈ {list.estimated_amount || 0} {currency}</span>
                                     </div>
                                 </div>

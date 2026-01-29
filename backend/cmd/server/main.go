@@ -1,15 +1,19 @@
 package main
 
 import (
+	"context"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"kincart/internal/ai"
 	"kincart/internal/database"
 	"kincart/internal/flyers"
 	"kincart/internal/handlers"
 	"kincart/internal/middleware"
+	"kincart/internal/services"
 
 	"github.com/gin-gonic/gin"
 	"github.com/subosito/gotenv"
@@ -54,6 +58,43 @@ func main() {
 		slog.Warn("GEMINI_API_KEY not set, flyer download scheduler will not start")
 	}
 
+	// Start Receipt Processing Scheduler (every 10 minutes)
+	go func() {
+		ticker := time.NewTicker(10 * time.Minute)
+		defer ticker.Stop()
+
+		ctx := context.Background()
+
+		for range ticker.C {
+			// Re-init service each run to check if ENV changed or just usage
+			// Ideally we reuse, but here we need to check if Key became available?
+			// Actually, env vars don't change without restart usually.
+			// But if we want to run it, we need a service instance.
+
+			geminiKey := os.Getenv("GEMINI_API_KEY")
+			if geminiKey == "" {
+				continue
+			}
+
+			gemClient, err := ai.NewGeminiClient(ctx)
+			if err != nil {
+				slog.Error("Failed to init Gemini for background receipts", "error", err)
+				continue
+			}
+
+			dataPath := os.Getenv("KINCART_DATA_PATH")
+			if dataPath == "" {
+				dataPath = "./kincart-data"
+			}
+			fileStorage := services.NewFileStorageService(dataPath)
+			svc := services.NewReceiptService(database.DB, gemClient, fileStorage, dataPath)
+
+			if err := svc.ProcessPendingReceipts(ctx); err != nil {
+				slog.Error("Background receipt processing error", "error", err)
+			}
+		}
+	}()
+
 	r := gin.Default()
 
 	// Limit multipart form memory to 10MB (matches our file size limit)
@@ -81,6 +122,7 @@ func main() {
 			protected.DELETE("/lists/:id", handlers.DeleteList)
 
 			protected.POST("/lists/:id/items", handlers.AddItemToList)
+			protected.POST("/lists/:id/receipts", handlers.UploadReceipt)
 			protected.PATCH("/items/:id", handlers.UpdateItem)
 			protected.DELETE("/items/:id", handlers.DeleteItem)
 

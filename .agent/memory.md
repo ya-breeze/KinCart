@@ -107,3 +107,24 @@ This file tracks key project updates, logic decisions, and user preferences disc
     3. `make lint` - Run linting for code quality
 - **Action Required**: If any of these fail, fix the issues before considering the work complete.
 - **Purpose**: Ensures code quality, prevents regressions, and validates that all changes integrate properly with the existing codebase.
+
+## Session: 2026-01-29 - Offline Receipt Parsing & Background Processing
+
+### 1. Offline-First Architecture
+- **Fact**: The application supports receipt uploads even without a configured `GEMINI_API_KEY`.
+- **Logic**: Receipts are saved with `Status="new"` and queued. Immediate feedback ("Queued") is given to the user.
+- **Implementation**: `backend/internal/handlers/receipts.go` handles optional service initialization.
+
+### 2. Background Processing Pattern
+- **Fact**: A background goroutine in `main.go` runs every 10 minutes to process queued receipts.
+- **Logic**: It continually checks for availability of the API key and processes "new" receipts when possible.
+- **Lesson**: Background tasks require independent service instances and contexts.
+
+### 3. List Duplication Strategy
+- **Preference**: When duplicating a list:
+    - **Keep** context of *deals* (`FlyerItemID`) because deals are relevant to future trips.
+    - **Drop** context of *past purchases* (`ReceiptItemID`) because receipts are specific to the completed history.
+
+### 4. Testing Strategy
+- **Fact**: `ReceiptService` dependencies (Gemini client) are mocked using a `ReceiptParser` interface.
+- **Implementation**: `internal/services/receipt_service_test.go` uses `MockParser` for unit testing logic without external API calls.
