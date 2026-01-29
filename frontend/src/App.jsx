@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import ListDetail from './pages/ListDetail';
 import SettingsPage from './pages/SettingsPage';
 import FlyerItemsPage from './pages/FlyerItemsPage';
+import FlyerStatsPage from './pages/FlyerStatsPage';
 import './index.css';
 
 const ProtectedRoute = ({ children }) => {
@@ -52,6 +53,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <FlyerItemsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings/flyer-stats"
+            element={
+              <ProtectedRoute>
+                <FlyerStatsPage />
               </ProtectedRoute>
             }
           />

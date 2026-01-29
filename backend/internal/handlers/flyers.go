@@ -153,3 +153,45 @@ func GetFlyerShops(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, shops)
 }
+
+func GetFlyerStats(c *gin.Context) {
+	var stats struct {
+		TotalFlyers int64 `json:"total_flyers"`
+		TotalPages  int64 `json:"total_pages"`
+		ParsedPages int64 `json:"parsed_pages"`
+		ErrorPages  int64 `json:"error_pages"`
+		TotalItems  int64 `json:"total_items"`
+		History     []struct {
+			Date   string `json:"date"`
+			Total  int64  `json:"total"`
+			Parsed int64  `json:"parsed"`
+			Errors int64  `json:"errors"`
+		} `json:"history"`
+	}
+
+	database.DB.Model(&models.Flyer{}).Count(&stats.TotalFlyers)
+	database.DB.Model(&models.FlyerPage{}).Count(&stats.TotalPages)
+	database.DB.Model(&models.FlyerPage{}).Where("is_parsed = ?", true).Count(&stats.ParsedPages)
+	database.DB.Model(&models.FlyerPage{}).Where("last_error != ?", "").Count(&stats.ErrorPages)
+	database.DB.Model(&models.FlyerItem{}).Count(&stats.TotalItems)
+
+	// Fetch last 14 days of history
+	// We use COALESCE/MAX to get the date. We group by date of updated_at for parsed/errors,
+	// but discovered/downloaded is really about created_at.
+	// For simplicity and matching daily activity, let's use a subquery or join if we want perfection,
+	// but a single table scan on flyer_pages with different CASEs for different dates is tricky.
+	// Let's just use updated_at for all to show "Activity on this day".
+	database.DB.Raw(`
+		SELECT 
+			DATE(updated_at) as date,
+			COUNT(*) as total,
+			SUM(CASE WHEN is_parsed = 1 THEN 1 ELSE 0 END) as parsed,
+			SUM(CASE WHEN last_error != '' THEN 1 ELSE 0 END) as errors
+		FROM flyer_pages
+		WHERE updated_at > ?
+		GROUP BY DATE(updated_at)
+		ORDER BY DATE(updated_at) ASC
+	`, time.Now().AddDate(0, 0, -14)).Scan(&stats.History)
+
+	c.JSON(http.StatusOK, stats)
+}

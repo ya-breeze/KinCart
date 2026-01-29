@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { ArrowLeft, Plus, Trash2, Edit2, Check, X, GripVertical, Store, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Edit2, Check, X, GripVertical, Store, ChevronRight, BarChart3 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../config';
 
@@ -206,6 +206,7 @@ const SettingsPage = () => {
                 </div>
             </section>
 
+
             <section style={{ marginBottom: '3rem' }}>
                 <h2 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem' }}>Shops Management</h2>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.5rem' }}>
@@ -343,6 +344,23 @@ const SettingsPage = () => {
                         </button>
                     </div>
 
+                </div>
+            </section>
+
+            <section className="card" style={{ marginTop: '3rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+                    <div>
+                        <h2 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '0.25rem' }}>Flyer Statistics</h2>
+                        <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>View detailed metrics about flyer downloads, parsing status, and errors.</p>
+                    </div>
+                    <button
+                        onClick={() => navigate('/settings/flyer-stats')}
+                        className="btn-primary"
+                        style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.25rem' }}
+                    >
+                        <BarChart3 size={20} />
+                        View Execution Stats
+                    </button>
                 </div>
             </section>
         </div>
