@@ -109,8 +109,10 @@ func DeleteCategory(c *gin.Context) {
 		return
 	}
 
-	// Set items that use this category to null or uncategorized
-	database.DB.Model(&models.Item{}).Where("category_id = ?", uint(catID)).Update("category_id", 0)
+	// Set items that use this category to null or uncategorized, scoped by family
+	database.DB.Model(&models.Item{}).
+		Where("category_id = ? AND list_id IN (SELECT id FROM shopping_lists WHERE family_id = ?)", uint(catID), familyID).
+		Update("category_id", 0)
 
 	if err := database.DB.Where("id = ? AND family_id = ?", uint(catID), familyID).Delete(&models.Category{}).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete category"})

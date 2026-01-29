@@ -47,6 +47,12 @@ func CreateList(c *gin.Context) {
 
 	list.FamilyID = familyID
 	list.Status = "preparing"
+
+	if err := validateItemsFamily(list.Items, familyID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
 	if err := database.DB.Create(&list).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create list"})
 		return
@@ -66,6 +72,11 @@ func UpdateList(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&list); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := validateItemsFamily(list.Items, familyID); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}

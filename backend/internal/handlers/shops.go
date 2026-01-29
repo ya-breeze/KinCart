@@ -96,7 +96,15 @@ func DeleteShop(c *gin.Context) {
 }
 
 func GetShopCategoryOrder(c *gin.Context) {
+	familyID := c.MustGet("family_id").(uint)
 	shopID := c.Param("id")
+
+	// Verify shop ownership
+	var shop models.Shop
+	if err := database.DB.Where("id = ? AND family_id = ?", shopID, familyID).First(&shop).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Shop not found"})
+		return
+	}
 
 	var orders []models.ShopCategoryOrder
 	database.DB.Where("shop_id = ?", shopID).Order("sort_order ASC").Find(&orders)
@@ -105,7 +113,15 @@ func GetShopCategoryOrder(c *gin.Context) {
 }
 
 func SetShopCategoryOrder(c *gin.Context) {
+	familyID := c.MustGet("family_id").(uint)
 	shopID := c.Param("id")
+
+	// Verify shop ownership
+	var shop models.Shop
+	if err := database.DB.Where("id = ? AND family_id = ?", shopID, familyID).First(&shop).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Shop not found"})
+		return
+	}
 
 	var req []struct {
 		CategoryID uint `json:"category_id"`
@@ -115,6 +131,15 @@ func SetShopCategoryOrder(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Verify all category IDs belong to this family
+	for _, item := range req {
+		var category models.Category
+		if err := database.DB.Where("id = ? AND family_id = ?", item.CategoryID, familyID).First(&category).Error; err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Invalid category ID: %d", item.CategoryID)})
+			return
+		}
 	}
 
 	database.DB.Where("shop_id = ?", shopID).Delete(&models.ShopCategoryOrder{})

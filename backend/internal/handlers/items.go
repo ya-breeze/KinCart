@@ -36,6 +36,13 @@ func AddItemToList(c *gin.Context) {
 	}
 
 	item.ListID = list.ID
+
+	// Verify category ownership if provided
+	if err := validateItemsFamily([]models.Item{item}, familyID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
 	if err := database.DB.Create(&item).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add item"})
 		return
@@ -76,6 +83,25 @@ func UpdateItem(c *gin.Context) {
 	if err := c.ShouldBindJSON(&updateData); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Validate CategoryID if present in update
+	if val, ok := updateData["category_id"]; ok && val != nil {
+		catID := uint(0)
+		switch v := val.(type) {
+		case float64:
+			catID = uint(v)
+		case int:
+			catID = uint(v)
+		}
+
+		if catID != 0 {
+			var cat models.Category
+			if err := database.DB.Where("id = ? AND family_id = ?", catID, familyID).First(&cat).Error; err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid category ID"})
+				return
+			}
+		}
 	}
 
 	// If item is linked to a flyer, protect certain fields

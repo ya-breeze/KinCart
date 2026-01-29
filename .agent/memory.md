@@ -39,3 +39,18 @@ This file tracks key project updates, logic decisions, and user preferences disc
 - **Logic**: The button is conditionally rendered only when the filter query is not empty.
 - **UX Rule**: Providing quick "reset" actions for search/filters is preferred for high-interaction pages.
 
+
+## Session: 2026-01-29 - Data Isolation & Security
+
+### 1. Multi-Family Data Isolation
+- **Fact**: KinCart is designed with strict isolation between different families. Personal data (Lists, Items, Categories, Shops) must NOT be accessible or modifiable by members of other families.
+- **Logic**: All personal data queries and mutations must be scoped by `family_id` retrieved from the JWT context.
+- **Implementation**: 
+    - Created `validateItemsFamily` helper in `internal/handlers/utils.go` to verify category ownership.
+    - Added nested item validation in `CreateList` and `UpdateList` to prevent cross-family category injection.
+    - Scoped `DeleteCategory` to ensure item resets only affect the current family.
+    - Enforced shop ownership checks for category ordering.
+
+### 2. Testing Framework
+- **Fact**: Handlers are validated using `internal/handlers/isolation_test.go` which uses a shared in-memory SQLite database (`file::memory:?cache=shared`).
+- **Preference**: Use specific test cases to verify security boundaries (e.g., cross-family category linking attempts).
