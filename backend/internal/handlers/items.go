@@ -17,6 +17,7 @@ import (
 
 	"kincart/internal/database"
 	"kincart/internal/models"
+	"kincart/internal/utils"
 )
 
 func AddItemToList(c *gin.Context) {
@@ -300,7 +301,9 @@ func AddItemPhoto(c *gin.Context) {
 		uploadsPath = "uploads"
 	}
 
-	itemsDir := filepath.Join(uploadsPath, "items")
+	// 3-level sharding
+	itemsBaseDir := filepath.Join(uploadsPath, "items")
+	itemsDir := utils.GetShardDir(itemsBaseDir, filename)
 	if err = os.MkdirAll(itemsDir, 0755); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create upload directory"})
 		return
@@ -324,8 +327,8 @@ func AddItemPhoto(c *gin.Context) {
 		os.Remove(oldPath) // Ignore errors, file might not exist
 	}
 
-	// Use relative path for storage
-	item.LocalPhotoPath = "/uploads/items/" + filename
+	// Store path with sharding
+	item.LocalPhotoPath = utils.GetShardedPath("/uploads/items", filename)
 	database.DB.Save(&item)
 
 	c.JSON(http.StatusOK, item)

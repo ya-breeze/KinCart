@@ -10,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"kincart/internal/utils"
+
 	"github.com/google/uuid"
 )
 
@@ -74,12 +76,14 @@ func CropItem(imageData []byte, box []float64, outputDir string, itemName string
 	cropped := image.NewRGBA(rect)
 	draw.Draw(cropped, rect, img, image.Point{xmin, ymin}, draw.Src)
 
-	if err = os.MkdirAll(outputDir, 0755); err != nil {
+	filename := fmt.Sprintf("%s.png", uuid.New().String())
+	shardDir := utils.GetShardDir(outputDir, filename)
+
+	if err = os.MkdirAll(shardDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create output directory: %w", err)
 	}
 
-	filename := fmt.Sprintf("%s.png", uuid.New().String())
-	outputPath := filepath.Join(outputDir, filename)
+	outputPath := filepath.Join(shardDir, filename)
 
 	outFile, err := os.Create(outputPath)
 	if err != nil {

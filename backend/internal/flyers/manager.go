@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"kincart/internal/models"
+	"kincart/internal/utils"
 
 	"gorm.io/gorm"
 )
@@ -137,7 +138,7 @@ func (m *Manager) DownloadNewFlyers(ctx context.Context) error {
 
 			for i, imgURL := range images {
 				localFilename := fmt.Sprintf("%d_page_%d.jpg", flyer.ID, i+1)
-				shopDir := filepath.Join(baseDir, shopName)
+				shopDir := utils.GetShardDirFromID(filepath.Join(baseDir, shopName), flyer.ID)
 				localPath := filepath.Join(shopDir, localFilename)
 
 				if err := os.MkdirAll(shopDir, 0755); err != nil {
