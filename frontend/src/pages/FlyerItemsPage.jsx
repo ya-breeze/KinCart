@@ -4,6 +4,8 @@ import { Search, Store, Calendar, ArrowLeft, Loader2, Filter, Plus, ShoppingCart
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../config';
 import ImageModal from '../components/ImageModal';
+import LazyImage from '../components/LazyImage';
+
 
 const FlyerItemsPage = () => {
     const { token, currency } = useAuth();
@@ -318,10 +320,9 @@ const FlyerItemsPage = () => {
                         <div key={item.id} className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', position: 'relative' }}>
                             <div style={{ height: '200px', background: '#f8f9fa', position: 'relative', overflow: 'hidden' }}>
                                 {item.local_photo_path ? (
-                                    <img
+                                    <LazyImage
                                         src={`${API_BASE_URL}${item.local_photo_path}`}
                                         alt={item.name}
-                                        style={{ width: '100%', height: '100%', objectFit: 'contain', cursor: 'zoom-in' }}
                                         onClick={() => setPreviewImage({ src: `${API_BASE_URL}${item.local_photo_path}`, alt: item.name })}
                                     />
                                 ) : (

@@ -23,3 +23,19 @@ This file tracks key project updates, logic decisions, and user preferences disc
 ### 4. Technical Configuration
 - **Retailer Crawling**: Supports Albert, Billa, Tesco, Kaufland, Globus, and Lidl via `akcniceny.cz`.
 - **Parser**: Uses Gemini 3.0 Flash for multi-modal parsing of flyer images/PDFs.
+
+## Session: 2026-01-29 - Flyer UX & Performance Optimization
+
+### 1. Performance: On-Demand Image Loading
+- **Fact**: The `FlyerItemsPage` can contain hundreds of items depending on active flyers.
+- **Preference**: Images should be loaded on demand rather than all at once to maintain fast initial page loads.
+- **Implementation**: 
+    - Created `LazyImage.jsx` component using the `IntersectionObserver` API.
+    - Set a `200px` root margin to trigger loading slightly before the image becomes visible.
+    - Added a fade-in animation and loading indicators for a premium feel.
+
+### 2. UI/UX: Filter Reset
+- **Feature**: Added a clear (X) button to the search input in `FlyerItemsPage.jsx`.
+- **Logic**: The button is conditionally rendered only when the filter query is not empty.
+- **UX Rule**: Providing quick "reset" actions for search/filters is preferred for high-interaction pages.
+
