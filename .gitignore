@@ -8,3 +8,4 @@ backend/imap-test
 .DS_Store
 kincart-data/*
 e2e/node_modules
+e2e/playwright-report/*

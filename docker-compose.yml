@@ -12,8 +12,8 @@ services:
       UPLOADS_PATH: /data/uploads
       JWT_SECRET: ${JWT_SECRET:-kincart-super-secret-key}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
-      KINCART_SEED_USERS: ${KINCART_SEED_USERS:-Smith:dad:pass1,Smith:mom:pass2}
-      KINCART_SEED_FLYERS: ${KINCART_SEED_FLYERS:-Lidl:Milk|1.50,Bread|2.00;Tesco:Apples|3.00,Oranges|4.00}
+      KINCART_SEED_USERS: ${KINCART_SEED_USERS:-}
+      KINCART_SEED_FLYERS: ${KINCART_SEED_FLYERS:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       FLYER_ITEMS_PATH: /data/flyer_items
     networks:

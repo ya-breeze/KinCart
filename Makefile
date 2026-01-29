@@ -46,7 +46,7 @@ test-e2e:
 		STARTED_CONTAINERS=true; \
 	fi; \
 	echo "✅ Docker containers are running. Starting E2E tests..."; \
-	cd e2e && npx playwright test; \
+	(cd e2e && npx playwright test); \
 	TEST_EXIT_CODE=$$?; \
 	if [ "$$STARTED_CONTAINERS" = "true" ]; then \
 		echo "🧹 Stopping Docker containers..."; \
