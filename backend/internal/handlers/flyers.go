@@ -176,11 +176,6 @@ func GetFlyerStats(c *gin.Context) {
 	database.DB.Model(&models.FlyerItem{}).Count(&stats.TotalItems)
 
 	// Fetch last 14 days of history
-	// We use COALESCE/MAX to get the date. We group by date of updated_at for parsed/errors,
-	// but discovered/downloaded is really about created_at.
-	// For simplicity and matching daily activity, let's use a subquery or join if we want perfection,
-	// but a single table scan on flyer_pages with different CASEs for different dates is tricky.
-	// Let's just use updated_at for all to show "Activity on this day".
 	database.DB.Raw(`
 		SELECT 
 			DATE(updated_at) as date,
@@ -194,4 +189,109 @@ func GetFlyerStats(c *gin.Context) {
 	`, time.Now().AddDate(0, 0, -14)).Scan(&stats.History)
 
 	c.JSON(http.StatusOK, stats)
+}
+
+func GetFlyers(c *gin.Context) {
+	var flyers []models.Flyer
+	if err := database.DB.Order("created_at DESC").Find(&flyers).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch flyers", "details": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, flyers)
+}
+
+func GetFlyerPages(c *gin.Context) {
+	flyerID := c.Query("flyer_id")
+	isParsed := c.Query("is_parsed")
+	hasError := c.Query("has_error")
+	date := c.Query("date")
+
+	db := database.DB.Table("flyer_pages").
+		Select("flyer_pages.*, flyers.shop_name").
+		Joins("JOIN flyers ON flyers.id = flyer_pages.flyer_id")
+
+	if date != "" {
+		db = db.Where("DATE(flyer_pages.updated_at) = ?", date)
+	}
+	if flyerID != "" {
+		db = db.Where("flyer_pages.flyer_id = ?", flyerID)
+	}
+	if isParsed == "true" {
+		db = db.Where("flyer_pages.is_parsed = ?", true)
+	} else if isParsed == "false" {
+		db = db.Where("flyer_pages.is_parsed = ?", false)
+	}
+	if hasError == "true" {
+		db = db.Where("flyer_pages.last_error != ?", "")
+	}
+
+	var pages []models.FlyerPage
+	if err := db.Order("flyer_pages.updated_at DESC").Find(&pages).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch flyer pages", "details": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, pages)
+}
+
+func GetFlyerItemsDetailed(c *gin.Context) {
+	date := c.Query("date")
+	db := database.DB.Model(&models.FlyerItem{})
+
+	if date != "" {
+		db = db.Where("DATE(created_at) = ?", date)
+	}
+
+	var items []models.FlyerItem
+	if err := db.Order("created_at DESC").Find(&items).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch items", "details": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, items)
+}
+
+func GetFlyerActivityStats(c *gin.Context) {
+	var activityStats struct {
+		LatestDate string `json:"latest_date"`
+	}
+
+	database.DB.Raw(`
+		SELECT MAX(date_raw) FROM (
+			SELECT DATE(updated_at) as date_raw FROM flyer_pages
+			UNION
+			SELECT DATE(created_at) as date_raw FROM flyer_items
+		) t
+	`).Scan(&activityStats.LatestDate)
+
+	c.JSON(http.StatusOK, activityStats)
+}
+
+func GetFlyerActivity(c *gin.Context) {
+	date := c.Query("date")
+	if date == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "date parameter is required"})
+		return
+	}
+
+	var activity struct {
+		Pages []models.FlyerPage `json:"pages"`
+		Items []models.FlyerItem `json:"items"`
+	}
+
+	if err := database.DB.Table("flyer_pages").
+		Select("flyer_pages.*, flyers.shop_name").
+		Joins("JOIN flyers ON flyers.id = flyer_pages.flyer_id").
+		Where("DATE(flyer_pages.updated_at) = ?", date).
+		Order("flyer_pages.updated_at DESC").
+		Find(&activity.Pages).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch daily activity", "details": err.Error()})
+		return
+	}
+
+	// Also items created on that day
+	if err := database.DB.Where("DATE(created_at) = ?", date).Order("created_at DESC").Find(&activity.Items).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch daily items", "details": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, activity)
 }

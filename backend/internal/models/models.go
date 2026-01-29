@@ -118,6 +118,7 @@ type FlyerPage struct {
 	IsParsed  bool      `gorm:"default:false" json:"is_parsed"`
 	Retries   int       `gorm:"default:0" json:"retries"`
 	LastError string    `json:"last_error"`
+	ShopName  string    `gorm:"->;column:shop_name" json:"shop_name"`
 }
 
 type FlyerItem struct {

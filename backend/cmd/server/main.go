@@ -106,6 +106,11 @@ func main() {
 			protected.GET("/flyers/items", handlers.GetFlyerItems)
 			protected.GET("/flyers/shops", handlers.GetFlyerShops)
 			protected.GET("/flyers/stats", handlers.GetFlyerStats)
+			protected.GET("/flyers/activity-stats", handlers.GetFlyerActivityStats)
+			protected.GET("/flyers", handlers.GetFlyers)
+			protected.GET("/flyers/pages", handlers.GetFlyerPages)
+			protected.GET("/flyers/activity", handlers.GetFlyerActivity)
+			protected.GET("/flyers/items-detailed", handlers.GetFlyerItemsDetailed)
 		}
 
 		// Internal routes (blocked by Nginx)
