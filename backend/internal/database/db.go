@@ -3,7 +3,9 @@ package database
 import (
 	"log/slog"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"kincart/internal/models"
 
@@ -51,6 +53,7 @@ func InitDB() {
 	slog.Info("Database initialized and migrated")
 
 	seedFromEnv()
+	seedFlyersFromEnv()
 }
 
 func seedFromEnv() {
@@ -122,5 +125,72 @@ func seedFromEnv() {
 			}
 			slog.Info("Updated seed user from env", "username", username, "family", familyName)
 		}
+	}
+}
+
+func seedFlyersFromEnv() {
+	seedFlyers := os.Getenv("KINCART_SEED_FLYERS")
+	if seedFlyers == "" {
+		return
+	}
+
+	// Format: ShopName:Item1|Price1,Item2|Price2;ShopName2:Item3|Price3
+	flyerBlocks := strings.Split(seedFlyers, ";")
+	for _, block := range flyerBlocks {
+		parts := strings.Split(strings.TrimSpace(block), ":")
+		if len(parts) < 2 {
+			continue
+		}
+
+		shopName := strings.TrimSpace(parts[0])
+		itemsStr := parts[1]
+
+		// Create Flyer
+		now := time.Now()
+		flyer := models.Flyer{
+			ShopName:  shopName,
+			StartDate: now.AddDate(0, 0, -7),
+			EndDate:   now.AddDate(0, 0, 7),
+			ParsedAt:  now,
+		}
+
+		if err := DB.Create(&flyer).Error; err != nil {
+			slog.Error("Failed to seed flyer", "shop", shopName, "error", err)
+			continue
+		}
+
+		// Create a mock page
+		page := models.FlyerPage{
+			FlyerID:   flyer.ID,
+			IsParsed:  true,
+			LocalPath: "placeholder.jpg",
+		}
+		DB.Create(&page)
+
+		// Parse Items
+		itemParts := strings.Split(itemsStr, ",")
+		for _, itemPart := range itemParts {
+			details := strings.Split(strings.TrimSpace(itemPart), "|")
+			itemName := details[0]
+			price := 0.0
+			if len(details) > 1 {
+				price, _ = strconv.ParseFloat(details[1], 64)
+			}
+
+			flyerItem := models.FlyerItem{
+				FlyerID:     flyer.ID,
+				FlyerPageID: page.ID,
+				Name:        itemName,
+				Price:       price,
+				StartDate:   flyer.StartDate,
+				EndDate:     flyer.EndDate,
+				ShopName:    shopName,
+			}
+
+			if err := DB.Create(&flyerItem).Error; err != nil {
+				slog.Error("Failed to seed flyer item", "item", itemName, "error", err)
+			}
+		}
+		slog.Info("Seeded flyer and items", "shop", shopName, "count", len(itemParts))
 	}
 }

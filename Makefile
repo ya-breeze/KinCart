@@ -1,4 +1,4 @@
-.PHONY: build test lint docker-up docker-down add-family add-user help
+.PHONY: build test test-e2e lint docker-up docker-down add-family add-user help
 
 # Default target
 help:
@@ -8,6 +8,7 @@ help:
 	@echo "  lint          - Run linting for backend and frontend"
 	@echo "  docker-up     - Build and start containers in background"
 	@echo "  docker-down   - Stop and remove containers"
+	@echo "  test-e2e      - Run E2E tests using Playwright"
 	@echo "  add-family    - Add a new family (requires docker-up)"
 	@echo "                  Usage: make add-family NAME=\"The Smiths\""
 	@echo "  add-user      - Add a new user (requires docker-up)"
@@ -24,13 +25,23 @@ build-frontend:
 	cd frontend && npm install && npm run build
 
 # Test targets
-test: test-backend test-frontend
+test: test-backend test-frontend test-e2e
 
 test-backend:
 	cd backend && go test ./...
 
 test-frontend:
 	cd frontend && npm test -- --passWithNoTests
+
+test-e2e:
+	@echo "Checking if Docker containers are running..."
+	@if ! docker compose ps nginx 2>/dev/null | grep -q "Up"; then \
+		echo "❌ Error: Docker containers are not running."; \
+		echo "   Please run 'make docker-up' first to start the application."; \
+		exit 1; \
+	fi
+	@echo "✅ Docker containers are running. Starting E2E tests..."
+	cd e2e && npx playwright test
 
 # Lint targets
 lint: lint-backend lint-frontend

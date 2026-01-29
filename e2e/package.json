@@ -1,0 +1,9 @@
+{
+    "name": "kincart-e2e",
+    "version": "1.0.0",
+    "description": "E2E tests for KinCart",
+    "devDependencies": {
+        "@playwright/test": "^1.49.0",
+        "@types/node": "^25.1.0"
+    }
+}
