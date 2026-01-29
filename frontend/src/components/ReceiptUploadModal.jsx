@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Upload, Check, Loader } from 'lucide-react';
+import { X, Upload, Check, Loader, FileText } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 
 const ReceiptUploadModal = ({ isOpen, onClose, listId, token, onUploadSuccess }) => {
@@ -104,7 +104,7 @@ const ReceiptUploadModal = ({ isOpen, onClose, listId, token, onUploadSuccess })
                 <div style={{ textAlign: 'center' }}>
                     <h2 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: '0.5rem' }}>Upload Receipt</h2>
                     <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                        Upload a photo of your receipt to automatically check off items and track prices.
+                        Upload a photo or PDF of your receipt to automatically check off items and track prices.
                     </p>
                 </div>
 
@@ -129,14 +129,18 @@ const ReceiptUploadModal = ({ isOpen, onClose, listId, token, onUploadSuccess })
                             <input
                                 id="receipt-input"
                                 type="file"
-                                accept="image/*"
+                                accept="image/*,application/pdf"
                                 onChange={handleFileChange}
                                 style={{ display: 'none' }}
                             />
                             {file ? (
                                 <div style={{ textAlign: 'center' }}>
-                                    <div style={{ width: '64px', height: '64px', margin: '0 auto 1rem', borderRadius: '8px', overflow: 'hidden' }}>
-                                        <img src={URL.createObjectURL(file)} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                    <div style={{ width: '64px', height: '64px', margin: '0 auto 1rem', borderRadius: '8px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f3f4f6' }}>
+                                        {file.type === 'application/pdf' ? (
+                                            <FileText size={32} color="var(--text-muted)" />
+                                        ) : (
+                                            <img src={URL.createObjectURL(file)} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                        )}
                                     </div>
                                     <p style={{ fontWeight: 600 }}>{file.name}</p>
                                     <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{(file.size / 1024 / 1024).toFixed(2)} MB</p>

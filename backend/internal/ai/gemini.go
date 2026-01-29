@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 
@@ -65,10 +66,19 @@ The context list of known items is: %s. Use this to help match naming convention
 Return strict JSON.
 `, strings.Join(knownItems, ", "))
 
+	// Detect MIME type
+	mimeType := http.DetectContentType(imgData)
+	// http.DetectContentType returns "application/pdf" for PDFs, but for images it might return "image/jpeg" etc.
+	// Gemini supports specific mime types.
+	// Use explicit override if extension is pdf, just to be safe, or trust detection.
+	if strings.HasSuffix(strings.ToLower(imagePath), ".pdf") {
+		mimeType = "application/pdf"
+	}
+
 	content := &genai.Content{
 		Parts: []*genai.Part{
 			{Text: prompt},
-			{InlineData: &genai.Blob{MIMEType: "image/jpeg", Data: imgData}},
+			{InlineData: &genai.Blob{MIMEType: mimeType, Data: imgData}},
 		},
 	}
 
