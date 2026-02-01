@@ -3,84 +3,59 @@ package models
 import (
 	"time"
 
+	coremodels "github.com/ya-breeze/kin-core/models"
 	"gorm.io/gorm"
 )
 
 type Family struct {
-	ID        uint           `gorm:"primaryKey" json:"id"`
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
-	Name      string         `gorm:"not null" json:"name"`
-	Currency  string         `gorm:"default:'₽'" json:"currency"`
-	Users     []User         `gorm:"foreignKey:FamilyID" json:"users"`
-	Lists     []ShoppingList `gorm:"foreignKey:FamilyID" json:"lists"`
-	Shops     []Shop         `gorm:"foreignKey:FamilyID" json:"shops"`
+	coremodels.Family
+	Currency string         `gorm:"default:'₽'" json:"currency"`
+	Users    []User         `gorm:"foreignKey:FamilyID" json:"users"`
+	Lists    []ShoppingList `gorm:"foreignKey:FamilyID" json:"lists"`
+	Shops    []Shop         `gorm:"foreignKey:FamilyID" json:"shops"`
 }
 
 type User struct {
-	ID           uint           `gorm:"primaryKey" json:"id"`
-	CreatedAt    time.Time      `json:"created_at"`
-	UpdatedAt    time.Time      `json:"updated_at"`
-	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`
-	Username     string         `gorm:"unique;not null" json:"username"`
-	PasswordHash string         `json:"-"`
-	FamilyID     uint           `json:"family_id"`
-	Family       Family         `gorm:"foreignKey:FamilyID" json:"family,omitempty"`
+	coremodels.User
 }
 
 type ShoppingList struct {
-	ID              uint           `gorm:"primaryKey" json:"id"`
-	CreatedAt       time.Time      `json:"created_at"`
-	UpdatedAt       time.Time      `json:"updated_at"`
-	DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"`
-	Title           string         `gorm:"not null" json:"title"`
-	Status          string         `json:"status"` // "planning", "in-progress", "completed"
-	EstimatedAmount float64        `json:"estimated_amount"`
-	ActualAmount    float64        `json:"actual_amount"`
-	CompletedAt     *time.Time     `json:"completed_at"`
-	FamilyID        uint           `json:"family_id"`
-	Items           []Item         `gorm:"foreignKey:ListID" json:"items"`
-	Receipts        []Receipt      `gorm:"foreignKey:ListID" json:"receipts"`
+	coremodels.TenantModel
+	Title           string     `gorm:"not null" json:"title"`
+	Status          string     `json:"status"` // "planning", "in-progress", "completed"
+	EstimatedAmount float64    `json:"estimated_amount"`
+	ActualAmount    float64    `json:"actual_amount"`
+	CompletedAt     *time.Time `json:"completed_at"`
+	Items           []Item     `gorm:"foreignKey:ListID" json:"items"`
+	Receipts        []Receipt  `gorm:"foreignKey:ListID" json:"receipts"`
 }
 
 type Item struct {
-	ID             uint           `gorm:"primaryKey" json:"id"`
-	CreatedAt      time.Time      `json:"created_at"`
-	UpdatedAt      time.Time      `json:"updated_at"`
-	DeletedAt      gorm.DeletedAt `gorm:"index" json:"-"`
-	Name           string         `gorm:"not null" json:"name"`
-	Description    string         `json:"description"`
-	Quantity       float64        `gorm:"default:1" json:"quantity"`
-	Unit           string         `gorm:"default:'pcs'" json:"unit"` // "pcs", "kg", "100g", etc.
-	IsBought       bool           `gorm:"default:false" json:"is_bought"`
-	Price          float64        `json:"price"`
-	LocalPhotoPath string         `json:"local_photo_path"`
-	IsUrgent       bool           `gorm:"default:false" json:"is_urgent"`
-	ListID         uint           `json:"list_id"`
-	CategoryID     uint           `json:"category_id"`
-	FlyerItemID    *uint          `json:"flyer_item_id"`
-	ReceiptItemID  *uint          `json:"receipt_item_id"`
+	coremodels.TenantModel
+	Name           string  `gorm:"not null" json:"name"`
+	Description    string  `json:"description"`
+	Quantity       float64 `gorm:"default:1" json:"quantity"`
+	Unit           string  `gorm:"default:'pcs'" json:"unit"` // "pcs", "kg", "100g", etc.
+	IsBought       bool    `gorm:"default:false" json:"is_bought"`
+	Price          float64 `json:"price"`
+	LocalPhotoPath string  `json:"local_photo_path"`
+	IsUrgent       bool    `gorm:"default:false" json:"is_urgent"`
+	ListID         uint    `json:"list_id"`
+	CategoryID     uint    `json:"category_id"`
+	FlyerItemID    *uint   `json:"flyer_item_id"`
+	ReceiptItemID  *uint   `json:"receipt_item_id"`
 }
 
 type Category struct {
-	ID        uint           `gorm:"primaryKey" json:"id"`
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
-	Name      string         `gorm:"not null" json:"name"`
-	Icon      string         `json:"icon"`
-	SortOrder int            `json:"sort_order"`
-	FamilyID  uint           `json:"family_id"`
+	coremodels.TenantModel
+	Name      string `gorm:"not null" json:"name"`
+	Icon      string `json:"icon"`
+	SortOrder int    `json:"sort_order"`
 }
 
 type Shop struct {
-	ID        uint           `gorm:"primaryKey" json:"id"`
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
-	Name      string         `gorm:"not null" json:"name"`
-	FamilyID  uint           `json:"family_id"`
+	coremodels.TenantModel
+	Name string `gorm:"not null" json:"name"`
 }
 
 type ShopCategoryOrder struct {
@@ -153,18 +128,14 @@ type JobStatus struct {
 }
 
 type Receipt struct {
-	ID        uint           `gorm:"primaryKey" json:"id"`
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
-	FamilyID  uint           `json:"family_id"`
-	ListID    *uint          `json:"list_id"`
-	ShopID    *uint          `json:"shop_id"` // Optional, if matched to a shop
-	Date      time.Time      `json:"date"`
-	Total     float64        `json:"total"`
-	ImagePath string         `json:"image_path"`                  // Path relative to kincart-data
-	Status    string         `gorm:"default:'new'" json:"status"` // "new", "parsed", "error"
-	Items     []ReceiptItem  `gorm:"foreignKey:ReceiptID" json:"items"`
+	coremodels.TenantModel
+	ListID    *uint         `json:"list_id"`
+	ShopID    *uint         `json:"shop_id"` // Optional, if matched to a shop
+	Date      time.Time     `json:"date"`
+	Total     float64       `json:"total"`
+	ImagePath string        `json:"image_path"`                  // Path relative to kincart-data
+	Status    string        `gorm:"default:'new'" json:"status"` // "new", "parsed", "error"
+	Items     []ReceiptItem `gorm:"foreignKey:ReceiptID" json:"items"`
 }
 
 type ReceiptItem struct {

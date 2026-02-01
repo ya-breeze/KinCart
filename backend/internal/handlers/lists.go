@@ -7,6 +7,9 @@ import (
 	"kincart/internal/database"
 	"kincart/internal/models"
 
+	"github.com/ya-breeze/kin-core/db"
+	coremodels "github.com/ya-breeze/kin-core/models"
+
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -15,7 +18,7 @@ func GetLists(c *gin.Context) {
 	familyID := c.MustGet("family_id").(uint)
 
 	var lists []models.ShoppingList
-	if err := database.DB.Preload("Receipts").Where("family_id = ?", familyID).Order("created_at desc").Find(&lists).Error; err != nil {
+	if err := database.DB.Preload("Receipts").Scopes(db.Scope(familyID)).Order("created_at desc").Find(&lists).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch lists"})
 		return
 	}
@@ -104,10 +107,10 @@ func DuplicateList(c *gin.Context) {
 	}
 
 	newList := models.ShoppingList{
+		TenantModel:     coremodels.TenantModel{FamilyID: familyID},
 		Title:           originalList.Title + " (Copy)",
 		Status:          "preparing",
 		EstimatedAmount: originalList.EstimatedAmount,
-		FamilyID:        familyID,
 	}
 
 	if err := database.DB.Create(&newList).Error; err != nil {

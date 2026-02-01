@@ -9,6 +9,8 @@ import (
 
 	"kincart/internal/models"
 
+	coremodels "github.com/ya-breeze/kin-core/models"
+
 	"golang.org/x/crypto/bcrypt"
 
 	"gorm.io/driver/sqlite"
@@ -85,7 +87,7 @@ func seedFromEnv() {
 		// Find or create family
 		var family models.Family
 		if err := DB.Where("name = ?", familyName).First(&family).Error; err != nil {
-			family = models.Family{Name: familyName}
+			family = models.Family{Family: coremodels.Family{Name: familyName}}
 			if err := DB.Create(&family).Error; err != nil {
 				slog.Error("Failed to seed family from env", "family", familyName, "error", err)
 				continue
@@ -103,9 +105,11 @@ func seedFromEnv() {
 				continue
 			}
 			user = models.User{
-				Username:     username,
-				PasswordHash: string(hash),
-				FamilyID:     family.ID,
+				User: coremodels.User{
+					Username:     username,
+					PasswordHash: string(hash),
+					FamilyID:     family.ID,
+				},
 			}
 			if err := DB.Create(&user).Error; err != nil {
 				slog.Error("Failed to seed user from env", "username", username, "error", err)
@@ -119,8 +123,8 @@ func seedFromEnv() {
 				slog.Error("Failed to hash seed user password", "username", username, "error", err)
 				continue
 			}
-			user.PasswordHash = string(hash)
-			user.FamilyID = family.ID
+			user.User.PasswordHash = string(hash)
+			user.User.FamilyID = family.ID
 			if err := DB.Save(&user).Error; err != nil {
 				slog.Error("Failed to update seed user from env", "username", username, "error", err)
 				continue

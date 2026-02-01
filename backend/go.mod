@@ -1,16 +1,17 @@
 module kincart
 
-go 1.25.0
+go 1.25.4
 
 require (
 	github.com/emersion/go-imap/v2 v2.0.0-beta.7
 	github.com/gen2brain/go-fitz v1.24.15
 	github.com/gin-gonic/gin v1.11.0
-	github.com/golang-jwt/jwt/v5 v5.3.0
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
 	github.com/stretchr/testify v1.11.1
 	github.com/subosito/gotenv v1.4.1
 	github.com/ulule/limiter/v3 v3.11.2
+	github.com/ya-breeze/kin-core v0.0.1
 	golang.org/x/crypto v0.47.0
 	google.golang.org/genai v1.43.0
 	gorm.io/driver/sqlite v1.6.0
