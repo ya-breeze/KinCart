@@ -15,6 +15,8 @@ import (
 
 	"kincart/internal/database"
 	"kincart/internal/models"
+
+	coremodels "github.com/ya-breeze/kin-core/models"
 )
 
 func setupTestDB() {
@@ -40,27 +42,36 @@ func TestDataIsolation(t *testing.T) {
 	setupTestDB()
 
 	// 1. Create two families
-	familyA := models.Family{Name: "FamilyA"}
-	familyB := models.Family{Name: "FamilyB"}
+	familyA := models.Family{Family: coremodels.Family{Name: "FamilyA"}}
+	familyB := models.Family{Family: coremodels.Family{Name: "FamilyB"}}
 	database.DB.Create(&familyA)
 	database.DB.Create(&familyB)
 
 	// 2. Create users
-	userA := models.User{Username: "userA", FamilyID: familyA.ID}
-	userB := models.User{Username: "userB", FamilyID: familyB.ID}
+	userA := models.User{User: coremodels.User{Username: "userA", FamilyID: familyA.ID}}
+	userB := models.User{User: coremodels.User{Username: "userB", FamilyID: familyB.ID}}
 	database.DB.Create(&userA)
 	database.DB.Create(&userB)
 
 	// 3. Create a category in Family B
-	catB := models.Category{Name: "CatB", FamilyID: familyB.ID}
+	catB := models.Category{
+		TenantModel: coremodels.TenantModel{FamilyID: familyB.ID},
+		Name:        "CatB",
+	}
 	database.DB.Create(&catB)
 
 	// 4. Create a shop in Family B
-	shopB := models.Shop{Name: "ShopB", FamilyID: familyB.ID}
+	shopB := models.Shop{
+		TenantModel: coremodels.TenantModel{FamilyID: familyB.ID},
+		Name:        "ShopB",
+	}
 	database.DB.Create(&shopB)
 
 	// 5. Create a list in Family A
-	listA := models.ShoppingList{Title: "ListA", FamilyID: familyA.ID}
+	listA := models.ShoppingList{
+		TenantModel: coremodels.TenantModel{FamilyID: familyA.ID},
+		Title:       "ListA",
+	}
 	database.DB.Create(&listA)
 
 	t.Run("AddItemToList - Cross-family Category Leak", func(t *testing.T) {
@@ -114,7 +125,10 @@ func TestDataIsolation(t *testing.T) {
 
 	t.Run("SetShopCategoryOrder - Cross-family Category Leak", func(t *testing.T) {
 		// Create a shop in Family A
-		shopA := models.Shop{Name: "ShopA", FamilyID: familyA.ID}
+		shopA := models.Shop{
+			TenantModel: coremodels.TenantModel{FamilyID: familyA.ID},
+			Name:        "ShopA",
+		}
 		database.DB.Create(&shopA)
 
 		w := httptest.NewRecorder()

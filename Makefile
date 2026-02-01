@@ -1,4 +1,6 @@
-.PHONY: build test test-e2e lint docker-up docker-down docker-up-e2e docker-down-e2e add-family add-user help
+.PHONY: build test test-e2e lint docker-up docker-down docker-up-e2e docker-down-e2e add-family add-user help all
+
+all: build test test-e2e lint
 
 # Default target
 help:

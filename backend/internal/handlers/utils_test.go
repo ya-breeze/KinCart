@@ -6,6 +6,8 @@ import (
 	"kincart/internal/database"
 	"kincart/internal/models"
 
+	coremodels "github.com/ya-breeze/kin-core/models"
+
 	"github.com/stretchr/testify/assert"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -22,12 +24,15 @@ func TestValidateItemsFamily(t *testing.T) {
 	database.DB.AutoMigrate(&models.Category{}, &models.Family{})
 
 	// Seed data
-	family1 := models.Family{Name: "Family 1"}
+	family1 := models.Family{Family: coremodels.Family{Name: "Family 1"}}
 	database.DB.Create(&family1)
-	family2 := models.Family{Name: "Family 2"}
+	family2 := models.Family{Family: coremodels.Family{Name: "Family 2"}}
 	database.DB.Create(&family2)
 
-	cat1 := models.Category{Name: "Cat 1", FamilyID: family1.ID}
+	cat1 := models.Category{
+		TenantModel: coremodels.TenantModel{FamilyID: family1.ID},
+		Name:        "Cat 1",
+	}
 	database.DB.Create(&cat1)
 
 	tests := []struct {

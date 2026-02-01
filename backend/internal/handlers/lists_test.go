@@ -11,6 +11,8 @@ import (
 	"kincart/internal/database"
 	"kincart/internal/models"
 
+	coremodels "github.com/ya-breeze/kin-core/models"
+
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"gorm.io/driver/sqlite"
@@ -31,7 +33,7 @@ func TestListsHandlers(t *testing.T) {
 
 	t.Run("CreateList", func(t *testing.T) {
 		setupListTestDBIsolated()
-		family := models.Family{Name: "Test Family"}
+		family := models.Family{Family: coremodels.Family{Name: "Test Family"}}
 		database.DB.Create(&family)
 
 		r := gin.New()
@@ -56,9 +58,12 @@ func TestListsHandlers(t *testing.T) {
 
 	t.Run("GetLists", func(t *testing.T) {
 		setupListTestDBIsolated()
-		family := models.Family{Name: "Test Family"}
+		family := models.Family{Family: coremodels.Family{Name: "Test Family"}}
 		database.DB.Create(&family)
-		list := models.ShoppingList{Title: "List 1", FamilyID: family.ID}
+		list := models.ShoppingList{
+			TenantModel: coremodels.TenantModel{FamilyID: family.ID},
+			Title:       "List 1",
+		}
 		database.DB.Create(&list)
 
 		r := gin.New()
@@ -80,9 +85,12 @@ func TestListsHandlers(t *testing.T) {
 
 	t.Run("DeleteList", func(t *testing.T) {
 		setupListTestDBIsolated()
-		family := models.Family{Name: "Test Family"}
+		family := models.Family{Family: coremodels.Family{Name: "Test Family"}}
 		database.DB.Create(&family)
-		list := models.ShoppingList{Title: "To Delete", FamilyID: family.ID}
+		list := models.ShoppingList{
+			TenantModel: coremodels.TenantModel{FamilyID: family.ID},
+			Title:       "To Delete",
+		}
 		database.DB.Create(&list)
 
 		r := gin.New()

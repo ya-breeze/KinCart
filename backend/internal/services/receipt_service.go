@@ -13,6 +13,8 @@ import (
 
 	"kincart/internal/ai"
 	"kincart/internal/models"
+
+	coremodels "github.com/ya-breeze/kin-core/models"
 )
 
 type ReceiptParser interface {
@@ -43,9 +45,9 @@ func (s *ReceiptService) CreateReceipt(familyID uint, file *multipart.FileHeader
 	}
 
 	receipt := models.Receipt{
-		FamilyID:  familyID,
-		ImagePath: path,
-		Date:      time.Now(), // Default to now, will be updated by parser
+		TenantModel: coremodels.TenantModel{FamilyID: familyID},
+		ImagePath:   path,
+		Date:        time.Now(), // Default to now, will be updated by parser
 	}
 
 	if err := s.db.Create(&receipt).Error; err != nil {
@@ -126,8 +128,8 @@ func (s *ReceiptService) findOrCreateShop(tx *gorm.DB, familyID uint, storeName 
 	if err := tx.Where("LOWER(name) = ? AND family_id = ?", strings.ToLower(storeName), familyID).First(&shop).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			shop = models.Shop{
-				Name:     storeName,
-				FamilyID: familyID,
+				TenantModel: coremodels.TenantModel{FamilyID: familyID},
+				Name:        storeName,
 			}
 			if createErr := tx.Create(&shop).Error; createErr != nil {
 				return nil, createErr

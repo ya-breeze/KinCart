@@ -9,3 +9,5 @@ backend/imap-test
 kincart-data/*
 e2e/node_modules
 e2e/playwright-report/*
+bin/admin
+bin/server

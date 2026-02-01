@@ -10,6 +10,8 @@ import (
 	"kincart/internal/database"
 	"kincart/internal/models"
 
+	coremodels "github.com/ya-breeze/kin-core/models"
+
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/crypto/bcrypt"
@@ -33,15 +35,17 @@ func TestLogin(t *testing.T) {
 	}
 
 	// Create a test user
-	family := models.Family{Name: "Test Family"}
+	family := models.Family{Family: coremodels.Family{Name: "Test Family"}}
 	database.DB.Create(&family)
 
 	password := "password123"
 	hash, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	user := models.User{
-		Username:     "testuser",
-		PasswordHash: string(hash),
-		FamilyID:     family.ID,
+		User: coremodels.User{
+			Username:     "testuser",
+			PasswordHash: string(hash),
+			FamilyID:     family.ID,
+		},
 	}
 	database.DB.Create(&user)
 

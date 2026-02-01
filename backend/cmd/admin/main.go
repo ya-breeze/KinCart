@@ -9,6 +9,7 @@ import (
 	"kincart/internal/database"
 	"kincart/internal/models"
 
+	coremodels "github.com/ya-breeze/kin-core/models"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -36,7 +37,7 @@ func main() {
 		if err := database.DB.Where("name = ?", *familyName).First(&family).Error; err == nil {
 			fmt.Printf("Family '%s' already exists (ID: %d)\n", family.Name, family.ID)
 		} else {
-			family = models.Family{Name: *familyName}
+			family = models.Family{Family: coremodels.Family{Name: *familyName}}
 			if err := database.DB.Create(&family).Error; err != nil {
 				log.Fatalf("Failed to create family: %v", err)
 			}
@@ -78,9 +79,11 @@ func main() {
 		} else {
 			// Create new user
 			user = models.User{
-				Username:     *username,
-				PasswordHash: string(hash),
-				FamilyID:     family.ID,
+				User: coremodels.User{
+					Username:     *username,
+					PasswordHash: string(hash),
+					FamilyID:     family.ID,
+				},
 			}
 			if err := database.DB.Create(&user).Error; err != nil {
 				log.Fatalf("Failed to create user: %v", err)
@@ -112,7 +115,10 @@ func main() {
 
 		for _, cat := range categories {
 			cat.FamilyID = family.ID
-			database.DB.FirstOrCreate(&cat, models.Category{Name: cat.Name, FamilyID: family.ID})
+			database.DB.FirstOrCreate(&cat, models.Category{
+				TenantModel: coremodels.TenantModel{FamilyID: family.ID},
+				Name:        cat.Name,
+			})
 		}
 		fmt.Printf("Seeded %d categories for family '%s'\n", len(categories), family.Name)
 

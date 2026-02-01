@@ -8,6 +8,8 @@ import (
 	"kincart/internal/ai"
 	"kincart/internal/models"
 
+	coremodels "github.com/ya-breeze/kin-core/models"
+
 	"github.com/stretchr/testify/assert"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -35,16 +37,24 @@ func TestProcessReceipt_Success(t *testing.T) {
 	db := setupTestDB()
 
 	// Setup Data
-	family := models.Family{Name: "TestFam"}
+	family := models.Family{Family: coremodels.Family{Name: "TestFam"}}
 	db.Create(&family)
 
-	list := models.ShoppingList{Title: "Weekly", FamilyID: family.ID}
+	list := models.ShoppingList{
+		TenantModel: coremodels.TenantModel{FamilyID: family.ID},
+		Title:       "Weekly",
+	}
 	db.Create(&list)
 
 	item1 := models.Item{Name: "Milk", ListID: list.ID, IsBought: false}
 	db.Create(&item1)
 
-	receipt := models.Receipt{FamilyID: family.ID, ListID: &list.ID, ImagePath: "test.jpg", Status: "new"}
+	receipt := models.Receipt{
+		TenantModel: coremodels.TenantModel{FamilyID: family.ID},
+		ListID:      &list.ID,
+		ImagePath:   "test.jpg",
+		Status:      "new",
+	}
 	db.Create(&receipt)
 
 	// Setup Mock
@@ -106,13 +116,26 @@ func TestProcessPendingReceipts(t *testing.T) {
 	db := setupTestDB()
 
 	// Setup
-	family := models.Family{Name: "TestFam"}
+	family := models.Family{Family: coremodels.Family{Name: "TestFam"}}
 	db.Create(&family)
-	list := models.ShoppingList{Title: "List", FamilyID: family.ID}
+	list := models.ShoppingList{
+		TenantModel: coremodels.TenantModel{FamilyID: family.ID},
+		Title:       "List",
+	}
 	db.Create(&list)
 
-	receipt1 := models.Receipt{FamilyID: family.ID, ListID: &list.ID, ImagePath: "r1.jpg", Status: "new"}
-	receipt2 := models.Receipt{FamilyID: family.ID, ListID: &list.ID, ImagePath: "r2.jpg", Status: "parsed"}
+	receipt1 := models.Receipt{
+		TenantModel: coremodels.TenantModel{FamilyID: family.ID},
+		ListID:      &list.ID,
+		ImagePath:   "r1.jpg",
+		Status:      "new",
+	}
+	receipt2 := models.Receipt{
+		TenantModel: coremodels.TenantModel{FamilyID: family.ID},
+		ListID:      &list.ID,
+		ImagePath:   "r2.jpg",
+		Status:      "parsed",
+	}
 	db.Create(&receipt1)
 	db.Create(&receipt2)
 

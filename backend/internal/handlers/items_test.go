@@ -11,6 +11,8 @@ import (
 	"kincart/internal/database"
 	"kincart/internal/models"
 
+	coremodels "github.com/ya-breeze/kin-core/models"
+
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"gorm.io/driver/sqlite"
@@ -31,9 +33,12 @@ func TestItemsHandlers(t *testing.T) {
 
 	t.Run("AddItemToList", func(t *testing.T) {
 		setupItemTestDBIsolated()
-		family := models.Family{Name: "Test Family"}
+		family := models.Family{Family: coremodels.Family{Name: "Test Family"}}
 		database.DB.Create(&family)
-		list := models.ShoppingList{Title: "Test List", FamilyID: family.ID}
+		list := models.ShoppingList{
+			TenantModel: coremodels.TenantModel{FamilyID: family.ID},
+			Title:       "Test List",
+		}
 		database.DB.Create(&list)
 
 		r := gin.New()
@@ -63,9 +68,12 @@ func TestItemsHandlers(t *testing.T) {
 
 	t.Run("UpdateItem", func(t *testing.T) {
 		setupItemTestDBIsolated()
-		family := models.Family{Name: "Test Family"}
+		family := models.Family{Family: coremodels.Family{Name: "Test Family"}}
 		database.DB.Create(&family)
-		list := models.ShoppingList{Title: "Test List", FamilyID: family.ID}
+		list := models.ShoppingList{
+			TenantModel: coremodels.TenantModel{FamilyID: family.ID},
+			Title:       "Test List",
+		}
 		database.DB.Create(&list)
 		item := models.Item{Name: "Milk", ListID: list.ID}
 		database.DB.Create(&item)
