@@ -1,6 +1,7 @@
 package database
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"strconv"
@@ -30,6 +31,21 @@ func InitDB() {
 	if err != nil {
 		slog.Error("Failed to connect to database", "error", err)
 		os.Exit(1)
+	}
+
+	// Handle SQLite NOT NULL column migration for existing tables
+	if DB.Dialector.Name() == "sqlite" {
+		tables := []string{"users", "items", "categories", "shops", "shopping_lists", "receipts", "item_frequencies"}
+		for _, table := range tables {
+			if DB.Migrator().HasTable(table) && !DB.Migrator().HasColumn(table, "family_id") {
+				slog.Info("Adding family_id column with default value to existing table", "table", table)
+				// Add column with default 1 to satisfy NOT NULL on existing rows
+				err := DB.Exec(fmt.Sprintf("ALTER TABLE `%s` ADD COLUMN family_id INTEGER NOT NULL DEFAULT 1", table)).Error
+				if err != nil {
+					slog.Warn("Failed to manually add family_id column", "table", table, "error", err)
+				}
+			}
+		}
 	}
 
 	// Auto Migration
