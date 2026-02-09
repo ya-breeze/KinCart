@@ -40,7 +40,7 @@ func InitDB() {
 			if DB.Migrator().HasTable(table) && !DB.Migrator().HasColumn(table, "family_id") {
 				slog.Info("Adding family_id column with default value to existing table", "table", table)
 				// Add column with default 1 to satisfy NOT NULL on existing rows
-				err := DB.Exec(fmt.Sprintf("ALTER TABLE `%s` ADD COLUMN family_id INTEGER NOT NULL DEFAULT 1", table)).Error
+				err = DB.Exec(fmt.Sprintf("ALTER TABLE `%s` ADD COLUMN family_id INTEGER NOT NULL DEFAULT 1", table)).Error
 				if err != nil {
 					slog.Warn("Failed to manually add family_id column", "table", table, "error", err)
 				}

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -107,6 +108,20 @@ func GetFlyerItems(c *gin.Context) {
 	shop := c.Query("shop")
 	activity := c.Query("activity") // "now", "future", "all" (default "now")
 
+	// Pagination parameters
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "24"))
+
+	// Validate and cap pagination parameters
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = 24
+	}
+
+	offset := (page - 1) * limit
+
 	db := database.DB.Table("flyer_items").
 		Select("flyer_items.*, flyers.shop_name").
 		Joins("JOIN flyers ON flyers.id = flyer_items.flyer_id")
@@ -136,13 +151,38 @@ func GetFlyerItems(c *gin.Context) {
 		db = db.Where("date(flyer_items.start_date) <= ? AND date(flyer_items.end_date) >= ?", now, now)
 	}
 
+	// Get total count before applying pagination
+	var totalCount int64
+	if err := db.Count(&totalCount).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count items", "details": err.Error()})
+		return
+	}
+
+	// Apply pagination
 	var items []models.FlyerItem
-	if err := db.Order("date(flyer_items.end_date) ASC").Find(&items).Error; err != nil {
+	if err := db.Order("date(flyer_items.end_date) ASC").Limit(limit).Offset(offset).Find(&items).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch flyer items", "details": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, items)
+	// Calculate pagination metadata
+	totalPages := (totalCount + int64(limit) - 1) / int64(limit)
+	hasMore := offset+len(items) < int(totalCount)
+
+	// Add cache headers (5 minutes)
+	c.Header("Cache-Control", "public, max-age=300")
+	c.Header("Vary", "Authorization")
+
+	c.JSON(http.StatusOK, gin.H{
+		"items": items,
+		"pagination": gin.H{
+			"page":        page,
+			"limit":       limit,
+			"total":       totalCount,
+			"total_pages": totalPages,
+			"has_more":    hasMore,
+		},
+	})
 }
 
 func GetFlyerShops(c *gin.Context) {
