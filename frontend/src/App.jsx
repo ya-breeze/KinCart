@@ -7,6 +7,7 @@ import ListDetail from './pages/ListDetail';
 import SettingsPage from './pages/SettingsPage';
 import FlyerItemsPage from './pages/FlyerItemsPage';
 import FlyerStatsPage from './pages/FlyerStatsPage';
+import ImportReceipt from './pages/ImportReceipt';
 import './index.css';
 
 const ProtectedRoute = ({ children }) => {
@@ -61,6 +62,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <FlyerStatsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/import-receipt"
+            element={
+              <ProtectedRoute>
+                <ImportReceipt />
               </ProtectedRoute>
             }
           />
