@@ -13,28 +13,40 @@ export default defineConfig({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
       manifest: {
-        id: '/',
         name: 'KinCart',
         short_name: 'KinCart',
-        description: 'KinCart - Family Shopping & Receipts',
         start_url: '/',
+        scope: '/',
+        display: 'standalone',
+        description: 'KinCart - Family Shopping & Receipts',
         categories: ['shopping', 'productivity', 'lifestyle'],
         theme_color: '#2563eb',
         background_color: '#ffffff',
-        display: 'standalone',
         prefer_related_applications: false,
         icons: [
           {
             src: '/pwa-192x192.png',
             sizes: '192x192',
             type: 'image/png',
-            purpose: 'any maskable'
+            purpose: 'any'
           },
           {
             src: '/pwa-512x512.png',
             sizes: '512x512',
             type: 'image/png',
-            purpose: 'any maskable'
+            purpose: 'any'
+          },
+          {
+            src: '/pwa-192x192.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'maskable'
+          },
+          {
+            src: '/pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable'
           }
         ],
         share_target: {
