@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Plus, ShoppingBasket, CheckCircle2, Clock, Copy, Settings, Scroll } from 'lucide-react';
+import { Plus, ShoppingBasket, CheckCircle2, Clock, Copy, Settings, Scroll, AlertCircle, ChevronDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../config';
 import Modal from '../components/Modal';
@@ -11,6 +11,7 @@ const Dashboard = () => {
     const [lists, setLists] = useState([]);
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [newListTitle, setNewListTitle] = useState('');
+    const [isPendingPanelOpen, setIsPendingPanelOpen] = useState(false);
 
 
 
@@ -29,6 +30,16 @@ const Dashboard = () => {
     };
 
     const isManager = mode === 'manager';
+
+    // Pending receipts: status="new" means not yet processed by AI
+    const pendingReceiptsByList = lists
+        .map(list => ({
+            listId: list.id,
+            listTitle: list.title,
+            pending: (list.receipts || []).filter(r => r.status === 'new'),
+        }))
+        .filter(entry => entry.pending.length > 0);
+    const totalPendingReceipts = pendingReceiptsByList.reduce((sum, e) => sum + e.pending.length, 0);
 
     const visibleLists = [...lists]
         .filter(list => isManager || list.status === 'ready for shopping')
@@ -160,6 +171,69 @@ const Dashboard = () => {
                         <ShoppingBasket size={24} />
                         <span>Flyer Items</span>
                     </button>
+                </div>
+            )}
+
+            {isManager && totalPendingReceipts > 0 && (
+                <div style={{
+                    marginBottom: '1.5rem',
+                    borderRadius: '12px',
+                    border: '1px solid #fbbf24',
+                    background: '#fffbeb',
+                    overflow: 'hidden',
+                }}>
+                    <button
+                        onClick={() => setIsPendingPanelOpen(prev => !prev)}
+                        data-testid="pending-receipts-banner"
+                        style={{
+                            width: '100%',
+                            padding: '0.75rem 1rem',
+                            background: 'transparent',
+                            border: 'none',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.75rem',
+                            textAlign: 'left',
+                        }}
+                    >
+                        <AlertCircle size={20} color="#d97706" />
+                        <span style={{ flex: 1, fontWeight: 600, color: '#92400e', fontSize: '0.9rem' }}>
+                            {totalPendingReceipts} receipt{totalPendingReceipts !== 1 ? 's' : ''} pending AI processing
+                        </span>
+                        <ChevronDown
+                            size={16}
+                            color="#d97706"
+                            style={{ transform: isPendingPanelOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}
+                        />
+                    </button>
+                    {isPendingPanelOpen && (
+                        <div style={{ borderTop: '1px solid #fde68a', padding: '0.75rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                            {pendingReceiptsByList.map(entry => (
+                                <div
+                                    key={entry.listId}
+                                    onClick={() => navigate(`/list/${entry.listId}`)}
+                                    style={{
+                                        cursor: 'pointer',
+                                        padding: '0.5rem 0.75rem',
+                                        borderRadius: '8px',
+                                        background: '#fef3c7',
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                    }}
+                                >
+                                    <span style={{ fontWeight: 600, fontSize: '0.875rem', color: '#92400e' }}>{entry.listTitle}</span>
+                                    <span style={{ fontSize: '0.8rem', color: '#b45309' }}>
+                                        {entry.pending.length} receipt{entry.pending.length !== 1 ? 's' : ''}
+                                    </span>
+                                </div>
+                            ))}
+                            <p style={{ fontSize: '0.8rem', color: '#92400e', marginTop: '0.25rem', lineHeight: 1.4 }}>
+                                Items will appear automatically once AI processing completes — usually within 10 minutes.
+                            </p>
+                        </div>
+                    )}
                 </div>
             )}
 

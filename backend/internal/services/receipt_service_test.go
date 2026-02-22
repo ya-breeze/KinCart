@@ -2,6 +2,8 @@ package services
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -17,12 +19,20 @@ import (
 
 // MockParser implements ReceiptParser
 type MockParser struct {
-	ParseFunc func(ctx context.Context, imagePath string, knownItems []string) (*ai.ParsedReceipt, error)
+	ParseFunc     func(ctx context.Context, imagePath string, knownItems []string) (*ai.ParsedReceipt, error)
+	ParseTextFunc func(ctx context.Context, receiptText string, knownItems []string) (*ai.ParsedReceipt, error)
 }
 
 func (m *MockParser) ParseReceipt(ctx context.Context, imagePath string, knownItems []string) (*ai.ParsedReceipt, error) {
 	if m.ParseFunc != nil {
 		return m.ParseFunc(ctx, imagePath, knownItems)
+	}
+	return nil, nil
+}
+
+func (m *MockParser) ParseReceiptText(ctx context.Context, receiptText string, knownItems []string) (*ai.ParsedReceipt, error) {
+	if m.ParseTextFunc != nil {
+		return m.ParseTextFunc(ctx, receiptText, knownItems)
 	}
 	return nil, nil
 }
@@ -155,4 +165,137 @@ func TestProcessPendingReceipts(t *testing.T) {
 	var r1 models.Receipt
 	db.First(&r1, receipt1.ID)
 	assert.Equal(t, "parsed", r1.Status)
+}
+
+// TestProcessReceipt_TextFile verifies that .txt receipts are routed to ParseReceiptText.
+func TestProcessReceipt_TextFile(t *testing.T) {
+	db := setupTestDB()
+	tmpDir := t.TempDir()
+
+	family := models.Family{Family: coremodels.Family{Name: "TestFam"}}
+	db.Create(&family)
+
+	list := models.ShoppingList{
+		TenantModel: coremodels.TenantModel{FamilyID: family.ID},
+		Title:       "Weekly",
+	}
+	db.Create(&list)
+
+	// Write a real .txt file to the temp directory
+	textContent := "Store: Lidl\nMilk 1,99\nBread 2,49\nTotal 4,48"
+	relPath := filepath.Join("families", "1", "receipts", "2024", "01", "test_receipt.txt")
+	fullPath := filepath.Join(tmpDir, relPath)
+	assert.NoError(t, os.MkdirAll(filepath.Dir(fullPath), 0755))
+	assert.NoError(t, os.WriteFile(fullPath, []byte(textContent), 0644))
+
+	receipt := models.Receipt{
+		TenantModel: coremodels.TenantModel{FamilyID: family.ID},
+		ListID:      &list.ID,
+		ImagePath:   relPath,
+		Status:      "new",
+	}
+	db.Create(&receipt)
+
+	var parseTextCalled bool
+	var receivedText string
+	mock := &MockParser{
+		ParseTextFunc: func(ctx context.Context, receiptText string, knownItems []string) (*ai.ParsedReceipt, error) {
+			parseTextCalled = true
+			receivedText = receiptText
+			return &ai.ParsedReceipt{
+				StoreName: "Lidl",
+				Date:      "2024-01-30",
+				Total:     4.48,
+				Items: []ai.ParsedReceiptItem{
+					{Name: "Milk", Price: 1.99, Quantity: 1, TotalPrice: 1.99},
+				},
+			}, nil
+		},
+	}
+
+	svc := NewReceiptService(db, mock, nil, tmpDir)
+	err := svc.ProcessReceipt(context.Background(), receipt.ID, list.ID)
+
+	assert.NoError(t, err)
+	assert.True(t, parseTextCalled, "ParseReceiptText should be called for .txt files")
+	assert.Equal(t, textContent, receivedText)
+
+	var updated models.Receipt
+	db.First(&updated, receipt.ID)
+	assert.Equal(t, "parsed", updated.Status)
+}
+
+// TestCreateReceiptFromText verifies text is saved to filesystem and receipt record created.
+func TestCreateReceiptFromText(t *testing.T) {
+	db := setupTestDB()
+	tmpDir := t.TempDir()
+
+	family := models.Family{Family: coremodels.Family{Name: "TestFam"}}
+	db.Create(&family)
+
+	storage := NewFileStorageService(tmpDir)
+	svc := NewReceiptService(db, nil, storage, tmpDir)
+
+	text := "Store: TestMart\nTotal: 10.50\nMilk 2.50\nBread 8.00"
+	receipt, err := svc.CreateReceiptFromText(family.ID, text)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, receipt)
+	assert.NotZero(t, receipt.ID)
+	assert.True(t, strings.HasSuffix(receipt.ImagePath, ".txt"), "ImagePath should end with .txt")
+
+	// Verify file was written with correct content
+	fullPath := filepath.Join(tmpDir, receipt.ImagePath)
+	content, readErr := os.ReadFile(fullPath)
+	assert.NoError(t, readErr)
+	assert.Equal(t, text, string(content))
+
+	// Verify DB record exists
+	var dbReceipt models.Receipt
+	db.First(&dbReceipt, receipt.ID)
+	assert.Equal(t, receipt.ImagePath, dbReceipt.ImagePath)
+	assert.Equal(t, family.ID, dbReceipt.FamilyID)
+}
+
+// TestProcessReceipt_TextFile_ParseError verifies error path sets status to "error".
+func TestProcessReceipt_TextFile_ParseError(t *testing.T) {
+	db := setupTestDB()
+	tmpDir := t.TempDir()
+
+	family := models.Family{Family: coremodels.Family{Name: "TestFam"}}
+	db.Create(&family)
+
+	list := models.ShoppingList{
+		TenantModel: coremodels.TenantModel{FamilyID: family.ID},
+		Title:       "List",
+	}
+	db.Create(&list)
+
+	relPath := filepath.Join("families", "1", "receipts", "2024", "01", "bad.txt")
+	fullPath := filepath.Join(tmpDir, relPath)
+	assert.NoError(t, os.MkdirAll(filepath.Dir(fullPath), 0755))
+	assert.NoError(t, os.WriteFile(fullPath, []byte("garbage text"), 0644))
+
+	receipt := models.Receipt{
+		TenantModel: coremodels.TenantModel{FamilyID: family.ID},
+		ListID:      &list.ID,
+		ImagePath:   relPath,
+		Status:      "new",
+	}
+	db.Create(&receipt)
+
+	mock := &MockParser{
+		ParseTextFunc: func(ctx context.Context, receiptText string, knownItems []string) (*ai.ParsedReceipt, error) {
+			return nil, assert.AnError
+		},
+	}
+
+	svc := NewReceiptService(db, mock, nil, tmpDir)
+	err := svc.ProcessReceipt(context.Background(), receipt.ID, list.ID)
+
+	assert.Error(t, err)
+
+	var updated models.Receipt
+	db.First(&updated, receipt.ID)
+	assert.Equal(t, "error", updated.Status)
 }

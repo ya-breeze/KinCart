@@ -1,6 +1,7 @@
 .PHONY: build test test-e2e lint docker-up docker-down docker-up-e2e docker-down-e2e add-family add-user help all
 
 all: build test test-e2e lint
+	@echo "✅ All done!"
 
 # Default target
 help:
@@ -40,7 +41,7 @@ test-frontend:
 test-e2e:
 	@echo "Checking if Docker containers are running with E2E config..."
 	@STARTED_CONTAINERS=false; \
-	if ! docker compose -f docker-compose.yml -f docker-compose.e2e.yml ps nginx 2>/dev/null | grep -q "Up"; then \
+	if ! docker inspect kincart-backend-1 --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | grep -q "E2E_MODE=true"; then \
 		echo "🚀 Starting Docker containers with E2E config..."; \
 		docker-compose -f docker-compose.yml -f docker-compose.e2e.yml up --build -d; \
 		echo "⏳ Waiting for containers to be healthy..."; \

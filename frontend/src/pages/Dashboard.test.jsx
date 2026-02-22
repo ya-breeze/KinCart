@@ -1,5 +1,5 @@
 /** @vitest-environment happy-dom */
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import Dashboard from './Dashboard';
 import { BrowserRouter } from 'react-router-dom';
@@ -59,5 +59,77 @@ describe('Dashboard', () => {
         );
 
         expect(await screen.findByText(/No lists yet/i)).toBeInTheDocument();
+    });
+
+    it('does not show pending banner when no receipts are pending', async () => {
+        globalThis.fetch = vi.fn(() =>
+            Promise.resolve({
+                ok: true,
+                json: () => Promise.resolve([
+                    { id: 1, title: 'List 1', status: 'preparing', items: [], receipts: [{ id: 10, status: 'parsed' }] },
+                ]),
+            })
+        );
+
+        render(<BrowserRouter><Dashboard /></BrowserRouter>);
+
+        await screen.findByText('List 1');
+        expect(screen.queryByTestId('pending-receipts-banner')).not.toBeInTheDocument();
+    });
+
+    it('shows pending receipts banner with correct count', async () => {
+        globalThis.fetch = vi.fn(() =>
+            Promise.resolve({
+                ok: true,
+                json: () => Promise.resolve([
+                    { id: 1, title: 'Groceries', status: 'preparing', items: [], receipts: [{ id: 10, status: 'new' }, { id: 11, status: 'new' }] },
+                    { id: 2, title: 'Hardware', status: 'preparing', items: [], receipts: [{ id: 12, status: 'parsed' }] },
+                ]),
+            })
+        );
+
+        render(<BrowserRouter><Dashboard /></BrowserRouter>);
+
+        const banner = await screen.findByTestId('pending-receipts-banner');
+        expect(banner).toBeInTheDocument();
+        expect(banner.textContent).toMatch(/2 receipts pending AI processing/i);
+    });
+
+    it('expands pending receipts panel on click and shows list names', async () => {
+        globalThis.fetch = vi.fn(() =>
+            Promise.resolve({
+                ok: true,
+                json: () => Promise.resolve([
+                    { id: 1, title: 'Groceries', status: 'preparing', items: [], receipts: [{ id: 10, status: 'new' }] },
+                    { id: 2, title: 'Hardware', status: 'preparing', items: [], receipts: [{ id: 11, status: 'new' }] },
+                ]),
+            })
+        );
+
+        render(<BrowserRouter><Dashboard /></BrowserRouter>);
+
+        const banner = await screen.findByTestId('pending-receipts-banner');
+        fireEvent.click(banner);
+
+        // List names appear in both the pending panel and the list cards
+        expect(screen.getAllByText('Groceries').length).toBeGreaterThanOrEqual(1);
+        expect(screen.getAllByText('Hardware').length).toBeGreaterThanOrEqual(1);
+        expect(screen.getByText(/Items will appear automatically/i)).toBeInTheDocument();
+    });
+
+    it('shows singular receipt label for exactly 1 pending receipt', async () => {
+        globalThis.fetch = vi.fn(() =>
+            Promise.resolve({
+                ok: true,
+                json: () => Promise.resolve([
+                    { id: 1, title: 'My List', status: 'preparing', items: [], receipts: [{ id: 10, status: 'new' }] },
+                ]),
+            })
+        );
+
+        render(<BrowserRouter><Dashboard /></BrowserRouter>);
+
+        const banner = await screen.findByTestId('pending-receipts-banner');
+        expect(banner.textContent).toMatch(/1 receipt pending AI processing/i);
     });
 });

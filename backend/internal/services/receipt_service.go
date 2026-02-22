@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"mime/multipart"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -19,6 +20,7 @@ import (
 
 type ReceiptParser interface {
 	ParseReceipt(ctx context.Context, imagePath string, knownItems []string) (*ai.ParsedReceipt, error)
+	ParseReceiptText(ctx context.Context, receiptText string, knownItems []string) (*ai.ParsedReceipt, error)
 }
 
 type ReceiptService struct {
@@ -57,6 +59,27 @@ func (s *ReceiptService) CreateReceipt(familyID uint, file *multipart.FileHeader
 	return &receipt, nil
 }
 
+// CreateReceiptFromText saves the plain text as a .txt file and creates a Receipt DB record.
+// The ImagePath field holds the relative .txt path so ProcessReceipt can detect and handle it.
+func (s *ReceiptService) CreateReceiptFromText(familyID uint, text string) (*models.Receipt, error) {
+	path, err := s.fileStorage.SaveReceiptText(familyID, text)
+	if err != nil {
+		return nil, fmt.Errorf("storage error: %w", err)
+	}
+
+	receipt := models.Receipt{
+		TenantModel: coremodels.TenantModel{FamilyID: familyID},
+		ImagePath:   path,
+		Date:        time.Now(),
+	}
+
+	if err := s.db.Create(&receipt).Error; err != nil {
+		return nil, err
+	}
+
+	return &receipt, nil
+}
+
 func (s *ReceiptService) ProcessReceipt(ctx context.Context, receiptID uint, listID uint) error {
 	var receipt models.Receipt
 	if err := s.db.Preload("Items").First(&receipt, receiptID).Error; err != nil {
@@ -79,14 +102,26 @@ func (s *ReceiptService) ProcessReceipt(ctx context.Context, receiptID uint, lis
 		knownItemNames[i] = item.Name
 	}
 
-	// 2. Parse with Gemini
-	// Construct full path for Gemini
-	fullPath := filepath.Join(s.receiptsPath, receipt.ImagePath)
-	parsed, err := s.gemini.ParseReceipt(ctx, fullPath, knownItemNames)
-	if err != nil {
-		// Update status to error
+	// 2. Parse with Gemini — branch on .txt vs image/PDF
+	var parsed *ai.ParsedReceipt
+	var parseErr error
+
+	if strings.HasSuffix(strings.ToLower(receipt.ImagePath), ".txt") {
+		fullPath := filepath.Join(s.receiptsPath, receipt.ImagePath)
+		textContent, err := os.ReadFile(fullPath)
+		if err != nil {
+			s.db.Model(&receipt).Update("status", "error")
+			return fmt.Errorf("failed to read text receipt: %w", err)
+		}
+		parsed, parseErr = s.gemini.ParseReceiptText(ctx, string(textContent), knownItemNames)
+	} else {
+		fullPath := filepath.Join(s.receiptsPath, receipt.ImagePath)
+		parsed, parseErr = s.gemini.ParseReceipt(ctx, fullPath, knownItemNames)
+	}
+
+	if parseErr != nil {
 		s.db.Model(&receipt).Update("status", "error")
-		return fmt.Errorf("gemini parsing failed: %w", err)
+		return fmt.Errorf("gemini parsing failed: %w", parseErr)
 	}
 
 	// 3. Transaction to update DB

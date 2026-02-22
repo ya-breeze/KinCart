@@ -5,5 +5,6 @@ services:
       - ${KINCART_DATA_PATH:-./kincart-data}:/data
       - ./e2e/test_assets:/data/flyer_items:ro
     environment:
+      E2E_MODE: "true"
       KINCART_SEED_USERS: Smith:dad:pass1,Smith:mom:pass2
       KINCART_SEED_FLYERS: Lidl:Milk|1.50,Bread|2.00;Tesco:Apples|3.00,Oranges|4.00

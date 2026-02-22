@@ -16,17 +16,20 @@ test.describe('Shopping Lists Flow', () => {
         if ((await modeLabel.textContent())?.includes('Shopper')) {
             await page.click('button:has-text("Switch to Manager")');
         }
-        await expect(page.locator('p', { hasText: /Manager Mode/i })).toBeVisible();
+        await expect(page.locator('p:has-text("Manager Mode")')).toBeVisible();
     });
 
     test('Manager flows: create, add items, and prepare for shopper', async ({ page }) => {
         const listTitle = `Weekly ${Date.now()}`;
 
-        // 1. Create List
-        page.on('dialog', async dialog => {
-            await dialog.accept(listTitle);
-        });
-        await page.click('button:has-text("Create New List")');
+        // 1. Create List via modal ("New List" button opens a custom modal — not a browser dialog)
+        await page.click('button:has-text("New List")');
+
+        // Fill in the modal input and submit
+        const titleInput = page.locator('input[placeholder*="Weekly Groceries"]');
+        await expect(titleInput).toBeVisible({ timeout: 5000 });
+        await titleInput.fill(listTitle);
+        await page.click('button:has-text("Create List")');
 
         const listCard = page.locator('.card', { hasText: listTitle });
         await expect(listCard).toBeVisible({ timeout: 10000 });
@@ -43,7 +46,7 @@ test.describe('Shopping Lists Flow', () => {
         await expect(unitSelect).toBeVisible();
         await unitSelect.selectOption('kg');
 
-        await page.fill('input[placeholder*="Price per"]', '2.50');
+        await page.fill('input[placeholder="$"]', '2.50');
         await page.click('button:has-text("Add Item to List")');
 
         // Verify item added

@@ -31,19 +31,20 @@ test.describe('Flyer Interactions', () => {
         await expect(itemNameLocator).toBeVisible();
         const itemName = await itemNameLocator.textContent();
 
-        // Add to list
+        // Open the list selector for this flyer card
         console.log('Opening list selector...');
         await flyerCard.locator('button:has-text("Add to List")').click();
 
-        const newListTitle = `Flyer List ${Date.now()}`;
-        console.log('Setting up dialog handler...');
-        page.on('dialog', async dialog => {
-            console.log('Dialog detected, accepting with:', newListTitle);
-            await dialog.accept(newListTitle);
-        });
-
+        // Click "Create New List" inside the dropdown (not a browser dialog — opens a custom Modal)
         console.log('Clicking Create New List...');
         await page.locator('button:has-text("Create New List")').last().click();
+
+        // Fill the custom modal input (pre-filled with shop name but we set a unique title)
+        const newListTitle = `Flyer List ${Date.now()}`;
+        const titleInput = page.locator('input[placeholder*="Weekly Groceries"]');
+        await expect(titleInput).toBeVisible({ timeout: 5000 });
+        await titleInput.fill(newListTitle);
+        await page.click('button:has-text("Create & Add")');
 
         // Success message
         console.log('Waiting for success message...');
