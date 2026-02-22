@@ -16,6 +16,8 @@ export default defineConfig({
         name: 'KinCart',
         short_name: 'KinCart',
         description: 'KinCart - Family Shopping & Receipts',
+        start_url: '/',
+        categories: ['shopping', 'productivity', 'lifestyle'],
         theme_color: '#2563eb',
         background_color: '#ffffff',
         display: 'standalone',
