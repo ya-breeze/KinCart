@@ -50,10 +50,16 @@ export default defineConfig({
           method: 'POST',
           enctype: 'multipart/form-data',
           params: {
+            title: 'title',
+            text: 'text',
+            url: 'url',
             files: [
               {
                 name: 'receipts',
-                accept: ['image/*', 'application/pdf']
+                accept: [
+                  'image/*', '.jpg', '.jpeg', '.png', '.webp',
+                  'application/pdf', '.pdf'
+                ]
               }
             ]
           }
