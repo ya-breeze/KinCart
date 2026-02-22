@@ -1,5 +1,4 @@
 *.db
-*.png
 backend/server
 backend/main
 backend/flyer-parser
@@ -11,3 +10,4 @@ e2e/node_modules
 e2e/playwright-report/*
 bin/admin
 bin/server
+backend/data/flyer_items/*.png
