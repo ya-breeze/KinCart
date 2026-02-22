@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { ArrowLeft, Plus, Trash2, Edit2, Check, X, GripVertical, Store, ChevronRight, BarChart3 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../config';
+import Modal from '../components/Modal';
 
 const SettingsPage = () => {
     const { token, currency, setCurrency } = useAuth();
@@ -15,6 +16,7 @@ const SettingsPage = () => {
     const [editingCat, setEditingCat] = useState(null);
     const [editName, setEditName] = useState('');
     const [shopCategoryOrders, setShopCategoryOrders] = useState({}); // { shopId: [ { categoryId, sortOrder } ] }
+    const [deleteConfirm, setDeleteConfirm] = useState(null); // { type: 'category'|'shop', id, name }
 
     const fetchShops = async () => {
         const resp = await fetch(`${API_BASE_URL}/api/shops`, {
@@ -71,12 +73,28 @@ const SettingsPage = () => {
     };
 
     const deleteCategory = async (id) => {
-        if (!confirm('Are you sure? Items in this category will be uncategorized.')) return;
-        const resp = await fetch(`${API_BASE_URL}/api/categories/${id}`, {
+        const cat = categories.find(c => c.id === id);
+        setDeleteConfirm({ type: 'category', id, name: cat?.name });
+    };
+
+    const confirmDelete = async () => {
+        if (!deleteConfirm) return;
+
+        const endpoint = deleteConfirm.type === 'category' ? `categories/${deleteConfirm.id}` : `shops/${deleteConfirm.id}`;
+        const resp = await fetch(`${API_BASE_URL}/api/${endpoint}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        if (resp.ok) fetchCategories();
+
+        if (resp.ok) {
+            if (deleteConfirm.type === 'category') {
+                fetchCategories();
+            } else {
+                if (selectedShop?.id === deleteConfirm.id) setSelectedShop(null);
+                fetchShops();
+            }
+        }
+        setDeleteConfirm(null);
     };
 
     const startEdit = (cat) => {
@@ -110,15 +128,8 @@ const SettingsPage = () => {
     };
 
     const deleteShop = async (id) => {
-        if (!confirm('Are you sure you want to delete this shop?')) return;
-        const resp = await fetch(`${API_BASE_URL}/api/shops/${id}`, {
-            method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (resp.ok) {
-            if (selectedShop?.id === id) setSelectedShop(null);
-            fetchShops();
-        }
+        const shop = shops.find(s => s.id === id);
+        setDeleteConfirm({ type: 'shop', id, name: shop?.name });
     };
 
     const moveCategory = async (catId, direction, isShopSpecific = false) => {
@@ -362,6 +373,25 @@ const SettingsPage = () => {
                     </button>
                 </div>
             </section>
+
+            {/* Deletion Confirmation Modal */}
+            <Modal
+                isOpen={!!deleteConfirm}
+                onClose={() => setDeleteConfirm(null)}
+                title={`Delete ${deleteConfirm?.type === 'category' ? 'Category' : 'Shop'}?`}
+                footer={(
+                    <>
+                        <button onClick={() => setDeleteConfirm(null)} className="btn-secondary" style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid var(--border)', background: 'white' }}>Cancel</button>
+                        <button onClick={confirmDelete} className="btn-primary" style={{ padding: '0.5rem 1.5rem', borderRadius: '8px', background: 'var(--danger)' }}>Confirm Delete</button>
+                    </>
+                )}
+            >
+                <p style={{ fontWeight: 600, color: 'var(--text-main)' }}>
+                    Are you sure you want to delete <strong>{deleteConfirm?.name}</strong>?
+                    {deleteConfirm?.type === 'category' && " Items in this category will be uncategorized."}
+                    {deleteConfirm?.type === 'shop' && " This action cannot be undone."}
+                </p>
+            </Modal>
         </div>
     );
 };

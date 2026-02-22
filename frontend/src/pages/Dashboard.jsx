@@ -3,11 +3,14 @@ import { useAuth } from '../context/AuthContext';
 import { Plus, ShoppingBasket, CheckCircle2, Clock, Copy, Settings, Scroll } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../config';
+import Modal from '../components/Modal';
 
 const Dashboard = () => {
     const { user, token, mode, currency, toggleMode } = useAuth();
     const navigate = useNavigate();
     const [lists, setLists] = useState([]);
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [newListTitle, setNewListTitle] = useState('');
 
 
 
@@ -53,9 +56,8 @@ const Dashboard = () => {
             return a.title.localeCompare(b.title);
         });
 
-    const createNewList = async () => {
-        const title = prompt('Enter list title:');
-        if (!title) return;
+    const handleCreateList = async () => {
+        if (!newListTitle.trim()) return;
 
         const resp = await fetch(`${API_BASE_URL}/api/lists`, {
             method: 'POST',
@@ -63,10 +65,12 @@ const Dashboard = () => {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ title })
+            body: JSON.stringify({ title: newListTitle.trim() })
         });
 
         if (resp.ok) {
+            setNewListTitle('');
+            setIsCreateModalOpen(false);
             fetchLists();
         }
     };
@@ -119,40 +123,42 @@ const Dashboard = () => {
                     </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', gap: '0.75rem' }}>
                     <button
                         onClick={() => navigate('/settings')}
                         className="card"
-                        style={{ padding: '0.5rem', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        style={{ padding: '0.4rem', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 'unset' }}
                         title="Family and Application Settings"
                     >
-                        <Settings size={20} />
+                        <Settings size={18} />
                     </button>
-                    <button className="card" style={{ padding: '0.5rem', borderRadius: '50%' }} title="User Profile">
-                        {/* User Icon Placeholder */}
+                    <button className="card" style={{ padding: '0.4rem', borderRadius: '50%', minHeight: 'unset' }} title="User Profile">
+                        <div style={{ width: '18px', height: '18px', background: 'var(--primary)', borderRadius: '50%', fontSize: '0.6rem', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
+                            {user?.username?.charAt(0).toUpperCase()}
+                        </div>
                     </button>
                 </div>
             </header >
 
             {isManager && (
-                <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '0.75rem', marginBottom: '2rem' }}>
                     <button
-                        onClick={createNewList}
+                        onClick={() => setIsCreateModalOpen(true)}
                         className="btn-primary"
-                        style={{ flex: 2, height: '60px', fontSize: '1.125rem' }}
+                        style={{ height: '70px', fontSize: '1rem', display: 'flex', flexDirection: 'column', padding: '0.5rem' }}
                         title="Create a new shopping list for the family"
                     >
                         <Plus size={24} />
-                        Create New List
+                        <span>New List</span>
                     </button>
                     <button
                         onClick={() => navigate('/flyers')}
                         className="card"
-                        style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.25rem', border: '2px solid var(--primary)', color: 'var(--primary)', fontWeight: 700 }}
+                        style={{ height: '70px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.1rem', border: '2px solid var(--primary)', color: 'var(--primary)', fontWeight: 700, padding: '0.5rem' }}
                         title="View all flyer items and deals"
                     >
                         <ShoppingBasket size={24} />
-                        Flyer Items
+                        <span>Flyer Items</span>
                     </button>
                 </div>
             )}
@@ -280,6 +286,29 @@ const Dashboard = () => {
                     )}
                 </div>
             </section>
+            <Modal
+                isOpen={isCreateModalOpen}
+                onClose={() => setIsCreateModalOpen(false)}
+                title="Create New List"
+                footer={(
+                    <>
+                        <button onClick={() => setIsCreateModalOpen(false)} className="btn-secondary" style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid var(--border)', background: 'white' }}>Cancel</button>
+                        <button onClick={handleCreateList} className="btn-primary" style={{ padding: '0.5rem 1.5rem', borderRadius: '8px' }}>Create List</button>
+                    </>
+                )}
+            >
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    <label className="input-label">List Title</label>
+                    <input
+                        placeholder="e.g. Weekly Groceries"
+                        value={newListTitle}
+                        onChange={e => setNewListTitle(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && handleCreateList()}
+                        autoFocus
+                        style={{ padding: '0.75rem', borderRadius: '12px', border: '1px solid var(--border)', fontWeight: 700, width: '100%' }}
+                    />
+                </div>
+            </Modal>
         </div >
     );
 };

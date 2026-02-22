@@ -5,6 +5,7 @@ import { ArrowLeft, Check, Send, Trash2, Plus, AlertCircle, ShoppingCart, Image 
 import { API_BASE_URL } from '../config';
 import ImageModal from '../components/ImageModal';
 import ReceiptUploadModal from '../components/ReceiptUploadModal';
+import Modal from '../components/Modal';
 
 const ListDetail = () => {
     const { id } = useParams();
@@ -26,6 +27,8 @@ const ListDetail = () => {
     const [renameValue, setRenameValue] = useState('');
     const [previewImage, setPreviewImage] = useState(null);
     const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [itemToDelete, setItemToDelete] = useState(null);
 
     useEffect(() => {
         fetchList();
@@ -131,11 +134,19 @@ const ListDetail = () => {
     };
 
     const deleteItem = async (itemId) => {
-        const resp = await fetch(`${API_BASE_URL}/api/items/${itemId}`, {
+        setItemToDelete(list.items.find(i => i.id === itemId));
+    };
+
+    const confirmDeleteItem = async () => {
+        if (!itemToDelete) return;
+        const resp = await fetch(`${API_BASE_URL}/api/items/${itemToDelete.id}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        if (resp.ok) fetchList();
+        if (resp.ok) {
+            fetchList();
+            setItemToDelete(null);
+        }
     };
 
     const updateStatus = async (status) => {
@@ -208,8 +219,10 @@ const ListDetail = () => {
     };
 
     const handleDeleteList = async () => {
-        if (!window.confirm('Are you sure you want to delete this list? This action cannot be undone.')) return;
+        setIsDeleteModalOpen(true);
+    };
 
+    const confirmDeleteList = async () => {
         const resp = await fetch(`${API_BASE_URL}/api/lists/${id}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
@@ -218,6 +231,7 @@ const ListDetail = () => {
         if (resp.ok) {
             navigate('/');
         }
+        setIsDeleteModalOpen(false);
     };
 
     if (!list) return <div className="container">Loading...</div>;
@@ -264,17 +278,20 @@ const ListDetail = () => {
             <header style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '1rem',
-                marginBottom: '2rem',
-                paddingTop: '1rem',
-                flexWrap: 'wrap'
+                gap: '0.75rem',
+                marginBottom: '1rem',
+                paddingTop: '0.5rem',
+                flexWrap: 'wrap',
+                background: 'var(--surface)',
+                borderRadius: 'var(--radius)',
+                padding: '0.75rem'
             }}>
-                <button onClick={() => navigate('/')} className="card" style={{ padding: '0.5rem', borderRadius: '50%', flexShrink: 0 }} title="Back to Dashboard">
-                    <ArrowLeft size={20} />
+                <button onClick={() => navigate('/')} className="card" style={{ padding: '0.4rem', borderRadius: '50%', flexShrink: 0, minHeight: 'unset' }} title="Back to Dashboard">
+                    <ArrowLeft size={18} />
                 </button>
-                <div style={{ flex: '1 1 200px', minWidth: '200px' }}>
+                <div style={{ flex: '1 1 150px', minWidth: 0 }}>
                     {isRenaming ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                             <input
                                 value={renameValue}
                                 onChange={(e) => setRenameValue(e.target.value)}
@@ -282,40 +299,41 @@ const ListDetail = () => {
                                 onKeyDown={(e) => e.key === 'Enter' && handleRenameList()}
                                 autoFocus
                                 style={{
-                                    fontSize: '1.25rem',
+                                    fontSize: '1rem',
                                     fontWeight: 800,
-                                    padding: '0.25rem',
+                                    padding: '0.2rem 0.5rem',
                                     borderRadius: '8px',
                                     border: '1px solid var(--border)',
-                                    width: '100%'
+                                    width: '100%',
+                                    minHeight: 'unset'
                                 }}
                             />
                         </div>
                     ) : (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                            <h1 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0 }}>{list.title}</h1>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'nowrap' }}>
+                            <h1 style={{ fontSize: '1.1rem', fontWeight: 800, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{list.title}</h1>
                             {isManager && (
                                 <button
                                     onClick={() => { setIsRenaming(true); setRenameValue(list.title); }}
-                                    style={{ padding: '4px', color: 'var(--text-muted)', cursor: 'pointer', background: 'transparent', border: 'none' }}
+                                    style={{ padding: '2px', color: 'var(--text-muted)', cursor: 'pointer', background: 'transparent', border: 'none', minHeight: 'unset' }}
                                     title="Rename List"
                                 >
-                                    <Edit2 size={16} />
+                                    <Edit2 size={14} />
                                 </button>
                             )}
                         </div>
                     )}
-                    <div style={{ display: 'flex', gap: '0.8rem', marginTop: '0.25rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.15rem', flexWrap: 'wrap', alignItems: 'center' }}>
                         {isManager ? (
-                            <div style={{ display: 'flex', gap: '0.25rem', background: 'var(--bg-secondary)', padding: '2px', borderRadius: '8px', flexWrap: 'wrap' }}>
+                            <div style={{ display: 'flex', gap: '2px', background: 'var(--bg-secondary)', padding: '2px', borderRadius: '6px' }}>
                                 {['preparing', 'ready for shopping', 'completed'].map(status => (
                                     <button
                                         key={status}
                                         onClick={() => updateStatus(status)}
                                         style={{
-                                            padding: '4px 8px',
-                                            borderRadius: '6px',
-                                            fontSize: '0.65rem',
+                                            padding: '2px 6px',
+                                            borderRadius: '4px',
+                                            fontSize: '0.6rem',
                                             fontWeight: 700,
                                             textTransform: 'uppercase',
                                             cursor: 'pointer',
@@ -323,24 +341,23 @@ const ListDetail = () => {
                                             background: list.status === status ? 'var(--primary)' : 'transparent',
                                             color: list.status === status ? 'white' : 'var(--text-muted)',
                                             transition: 'all 0.2s',
-                                            whiteSpace: 'nowrap'
+                                            whiteSpace: 'nowrap',
+                                            minHeight: 'unset'
                                         }}
                                         title={`Mark list as ${status}`}
                                     >
-                                        {status.replace('ready for shopping', 'ready')}
+                                        {status === 'ready for shopping' ? 'READY' : status.toUpperCase()}
                                     </button>
                                 ))}
                             </div>
                         ) : (
-                            <span className={`badge ${list.status === 'completed' ? 'badge-success' : list.status === 'ready for shopping' ? 'badge-warning' : 'badge-neutral'}`} style={{ fontSize: '0.65rem' }}>
+                            <span className={`badge ${list.status === 'completed' ? 'badge-success' : list.status === 'ready for shopping' ? 'badge-warning' : 'badge-neutral'}`} style={{ fontSize: '0.6rem', padding: '2px 6px' }}>
                                 {list.status}
                             </span>
                         )}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 600, flexWrap: 'wrap' }}>
-                            <span>{list.items?.length || 0} items</span>
-                            <span>•</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: 'var(--text-muted)', fontSize: '0.7rem', fontWeight: 600 }}>
                             <span style={{ color: 'var(--success)' }}>
-                                Total: {list.items?.reduce((h, i) => h + (i.price * (i.quantity || 1)), 0).toFixed(2)} {currency}
+                                {list.items?.reduce((h, i) => h + (i.price * (i.quantity || 1)), 0).toFixed(2)} {currency}
                             </span>
                         </div>
                     </div>
@@ -386,27 +403,28 @@ const ListDetail = () => {
                     onClick={() => setIsReceiptModalOpen(true)}
                     className="card"
                     style={{
-                        padding: '0.5rem',
+                        padding: '0.4rem',
                         borderRadius: '50%',
                         color: 'var(--primary)',
                         border: '1px solid var(--border)',
                         marginLeft: 'auto',
-                        position: 'relative'
+                        position: 'relative',
+                        minHeight: 'unset'
                     }}
                     title="Upload Receipt"
                 >
-                    <Receipt size={20} />
+                    <Receipt size={18} />
                     {list.receipts?.length > 0 && (
                         <span style={{
                             position: 'absolute',
-                            top: '-5px',
-                            right: '-5px',
+                            top: '-3px',
+                            right: '-3px',
                             background: 'var(--primary)',
                             color: 'white',
-                            fontSize: '0.6rem',
+                            fontSize: '0.55rem',
                             fontWeight: 'bold',
-                            width: '16px',
-                            height: '16px',
+                            width: '14px',
+                            height: '14px',
                             borderRadius: '50%',
                             display: 'flex',
                             alignItems: 'center',
@@ -493,108 +511,7 @@ const ListDetail = () => {
                                         </div>
                                     )}
 
-                                    {editingItemId === item.id ? (
-                                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                            {editItemData.flyer_item_id && (
-                                                <div style={{
-                                                    display: 'flex',
-                                                    justifyContent: 'space-between',
-                                                    alignItems: 'center',
-                                                    background: 'rgba(var(--primary-rgb), 0.1)',
-                                                    padding: '0.5rem 0.75rem',
-                                                    borderRadius: '8px',
-                                                    border: '1px solid var(--primary)',
-                                                    marginBottom: '0.25rem'
-                                                }}>
-                                                    <span style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                        <ShoppingCart size={12} /> LINKED TO FLYER DEAL
-                                                    </span>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setEditItemData({ ...editItemData, flyer_item_id: null })}
-                                                        style={{
-                                                            fontSize: '0.65rem',
-                                                            fontWeight: 900,
-                                                            color: 'var(--danger)',
-                                                            background: 'white',
-                                                            border: '1px solid var(--danger)',
-                                                            padding: '4px 8px',
-                                                            borderRadius: '6px',
-                                                            cursor: 'pointer',
-                                                            textTransform: 'uppercase'
-                                                        }}
-                                                    >
-                                                        Unlink
-                                                    </button>
-                                                </div>
-                                            )}
-                                            <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                                <input
-                                                    disabled={!!editItemData.flyer_item_id}
-                                                    style={{
-                                                        flex: 2,
-                                                        padding: '0.5rem',
-                                                        borderRadius: '8px',
-                                                        border: '1px solid var(--border)',
-                                                        fontWeight: 700,
-                                                        background: editItemData.flyer_item_id ? 'var(--bg-secondary)' : 'white',
-                                                        cursor: editItemData.flyer_item_id ? 'not-allowed' : 'text'
-                                                    }}
-                                                    value={editItemData.name}
-                                                    onChange={e => setEditItemData({ ...editItemData, name: e.target.value })}
-                                                    title={editItemData.flyer_item_id ? "Cannot change name of a linked item" : ""}
-                                                />
-                                                <select
-                                                    style={{ flex: 1, padding: '0.5rem', borderRadius: '8px', border: '1px solid var(--border)', background: 'white', fontWeight: 600 }}
-                                                    value={editItemData.category_id}
-                                                    onChange={e => setEditItemData({ ...editItemData, category_id: e.target.value })}
-                                                >
-                                                    {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                                                </select>
-                                            </div>
-                                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                                                <div style={{ display: 'flex', flex: 1, gap: '0.25rem' }}>
-                                                    <input
-                                                        type="number"
-                                                        step="0.1"
-                                                        style={{ width: '70px', padding: '0.5rem', borderRadius: '8px', border: '1px solid var(--border)', fontWeight: 700 }}
-                                                        value={editItemData.quantity}
-                                                        onChange={e => setEditItemData({ ...editItemData, quantity: e.target.value })}
-                                                    />
-                                                    <select
-                                                        style={{ width: '80px', padding: '0.5rem', borderRadius: '8px', border: '1px solid var(--border)', background: 'white', fontWeight: 600 }}
-                                                        value={editItemData.unit}
-                                                        onChange={e => setEditItemData({ ...editItemData, unit: e.target.value })}
-                                                    >
-                                                        {['pcs', 'kg', 'g', '100g', 'l', 'pack'].map(u => <option key={u} value={u}>{u}</option>)}
-                                                    </select>
-                                                </div>
-                                                <input
-                                                    disabled={!!editItemData.flyer_item_id}
-                                                    type="number"
-                                                    style={{
-                                                        flex: 1,
-                                                        padding: '0.5rem',
-                                                        borderRadius: '8px',
-                                                        border: '1px solid var(--border)',
-                                                        color: 'var(--text-muted)',
-                                                        background: editItemData.flyer_item_id ? 'var(--bg-secondary)' : 'white',
-                                                        cursor: editItemData.flyer_item_id ? 'not-allowed' : 'text'
-                                                    }}
-                                                    placeholder="Price (Opt)"
-                                                    value={editItemData.price}
-                                                    onChange={e => setEditItemData({ ...editItemData, price: e.target.value })}
-                                                    title={editItemData.flyer_item_id ? "Cannot change price of a linked item" : ""}
-                                                />
-                                            </div>
-                                            <textarea
-                                                style={{ padding: '0.5rem', borderRadius: '8px', border: '1px solid var(--border)', minHeight: '60px', fontFamily: 'inherit' }}
-                                                placeholder="Description / Instructions"
-                                                value={editItemData.description}
-                                                onChange={e => setEditItemData({ ...editItemData, description: e.target.value })}
-                                            />
-                                        </div>
-                                    ) : (
+                                    {editingItemId === item.id ? null : (
                                         <div style={{ flex: 1 }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
@@ -744,34 +661,48 @@ const ListDetail = () => {
                                 />
                             </div>
 
-                            <div className="flex-responsive" style={{ gap: '1rem', flexWrap: 'wrap' }}>
-                                <div style={{ flex: '1 1 200px', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                    <label style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Quantity & Measure</label>
-                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                        <input
-                                            type="number"
-                                            step="0.1"
-                                            style={{ flex: 1, padding: '0.75rem', borderRadius: '12px', border: '1px solid var(--border)', outline: 'none', fontWeight: 700 }}
-                                            placeholder="1.5"
-                                            value={newItem.quantity}
-                                            onChange={e => setNewItem({ ...newItem, quantity: e.target.value })}
-                                        />
-                                        <select
-                                            style={{ width: '100px', padding: '0.75rem', borderRadius: '12px', border: '1px solid var(--border)', outline: 'none', background: 'white', fontWeight: 600 }}
-                                            value={newItem.unit}
-                                            onChange={e => setNewItem({ ...newItem, unit: e.target.value })}
-                                        >
-                                            <option value="pcs">pcs</option>
-                                            <option value="kg">kg</option>
-                                            <option value="g">g</option>
-                                            <option value="100g">100g</option>
-                                            <option value="l">l</option>
-                                            <option value="pack">pack</option>
-                                        </select>
-                                    </div>
+                            <div className="form-row compact">
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                    <label className="input-label">Qty</label>
+                                    <input
+                                        type="number"
+                                        step="0.1"
+                                        style={{ padding: '0.5rem', borderRadius: '12px', border: '1px solid var(--border)', outline: 'none', fontWeight: 700 }}
+                                        placeholder="1.5"
+                                        value={newItem.quantity}
+                                        onChange={e => setNewItem({ ...newItem, quantity: e.target.value })}
+                                    />
                                 </div>
-                                <div style={{ flex: '1 1 200px', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                    <label style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Category</label>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                    <label className="input-label">Unit</label>
+                                    <select
+                                        style={{ padding: '0.5rem', borderRadius: '12px', border: '1px solid var(--border)', outline: 'none', background: 'white', fontWeight: 600 }}
+                                        value={newItem.unit}
+                                        onChange={e => setNewItem({ ...newItem, unit: e.target.value })}
+                                    >
+                                        <option value="pcs">pcs</option>
+                                        <option value="kg">kg</option>
+                                        <option value="g">g</option>
+                                        <option value="100g">100g</option>
+                                        <option value="l">l</option>
+                                        <option value="pack">pack</option>
+                                    </select>
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                    <label className="input-label">Price</label>
+                                    <input
+                                        type="number"
+                                        style={{ padding: '0.5rem', borderRadius: '12px', border: '1px solid var(--border)', outline: 'none', color: 'var(--text-muted)' }}
+                                        placeholder={`$`}
+                                        value={newItem.price}
+                                        onChange={e => setNewItem({ ...newItem, price: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="form-row">
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                    <label className="input-label">Category</label>
                                     {isCreatingCategory ? (
                                         <div style={{ display: 'flex', gap: '0.5rem' }}>
                                             <input
@@ -811,7 +742,7 @@ const ListDetail = () => {
                                                     }
                                                 }}
                                             >
-                                                <option value="">Select...</option>
+                                                <option value="">Select Category...</option>
                                                 {categories.map(c => (
                                                     <option key={c.id} value={c.id}>{c.name}</option>
                                                 ))}
@@ -820,37 +751,14 @@ const ListDetail = () => {
                                         </div>
                                     )}
                                 </div>
-                            </div>
-
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                <label style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Description / Specific Instructions</label>
-                                <textarea
-                                    style={{ padding: '1rem', borderRadius: '12px', border: '1px solid var(--border)', outline: 'none', minHeight: '80px', fontFamily: 'inherit', resize: 'vertical' }}
-                                    placeholder="e.g. Get the ripest ones, preferably with some brown spots."
-                                    value={newItem.description}
-                                    onChange={e => setNewItem({ ...newItem, description: e.target.value })}
-                                />
-                            </div>
-
-                            <div className="flex-responsive" style={{ gap: '1rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-                                <div style={{ flex: '1 1 200px', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                    <label style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Price (Optional)</label>
-                                    <input
-                                        type="number"
-                                        style={{ padding: '0.75rem', borderRadius: '12px', border: '1px solid var(--border)', outline: 'none', color: 'var(--text-muted)' }}
-                                        placeholder={`Price per ${newItem.unit}`}
-                                        value={newItem.price}
-                                        onChange={e => setNewItem({ ...newItem, price: e.target.value })}
-                                    />
-                                </div>
-                                <label style={{ flex: '1 1 200px', display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.95rem', fontWeight: 700, cursor: 'pointer', padding: '0.75rem', borderRadius: '12px', background: newItem.is_urgent ? '#fee2e2' : 'var(--bg-secondary)', border: `1px solid ${newItem.is_urgent ? 'var(--danger)' : 'var(--border)'}`, transition: 'all 0.2s', height: 'fit-content' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', padding: '0.5rem 0.75rem', borderRadius: '12px', background: newItem.is_urgent ? '#fee2e2' : 'var(--bg-secondary)', border: `1px solid ${newItem.is_urgent ? 'var(--danger)' : 'var(--border)'}`, transition: 'all 0.2s', height: 'fit-content', alignSelf: 'flex-end' }}>
                                     <input
                                         type="checkbox"
                                         checked={newItem.is_urgent}
                                         onChange={e => setNewItem({ ...newItem, is_urgent: e.target.checked })}
-                                        style={{ width: '18px', height: '18px' }}
+                                        style={{ width: '16px', height: '16px' }}
                                     />
-                                    Mark as Urgent
+                                    Urgent?
                                 </label>
                             </div>
 
@@ -917,6 +825,118 @@ const ListDetail = () => {
                     </div>
                 </footer>
             )}
+
+            {/* Edit Item Modal */}
+            <Modal
+                isOpen={!!editingItemId}
+                onClose={() => setEditingItemId(null)}
+                title="Edit Item"
+                footer={(
+                    <>
+                        <button onClick={() => setEditingItemId(null)} className="btn-secondary" style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid var(--border)', background: 'white' }}>Cancel</button>
+                        <button onClick={saveEdit} className="btn-primary" style={{ padding: '0.5rem 1.5rem', borderRadius: '8px' }}>Save Changes</button>
+                    </>
+                )}
+            >
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                        <label className="input-label">Item Name</label>
+                        <input
+                            disabled={!!editItemData.flyer_item_id}
+                            style={{ padding: '0.75rem', borderRadius: '12px', border: '1px solid var(--border)', fontWeight: 700, background: editItemData.flyer_item_id ? 'var(--bg-secondary)' : 'white' }}
+                            value={editItemData.name}
+                            onChange={e => setEditItemData({ ...editItemData, name: e.target.value })}
+                        />
+                    </div>
+
+                    <div className="form-row compact">
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                            <label className="input-label">Qty</label>
+                            <input
+                                type="number"
+                                step="0.1"
+                                style={{ padding: '0.5rem', borderRadius: '12px', border: '1px solid var(--border)', fontWeight: 700 }}
+                                value={editItemData.quantity}
+                                onChange={e => setEditItemData({ ...editItemData, quantity: e.target.value })}
+                            />
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                            <label className="input-label">Unit</label>
+                            <select
+                                style={{ padding: '0.5rem', borderRadius: '12px', border: '1px solid var(--border)', background: 'white', fontWeight: 600 }}
+                                value={editItemData.unit}
+                                onChange={e => setEditItemData({ ...editItemData, unit: e.target.value })}
+                            >
+                                {['pcs', 'kg', 'g', '100g', 'l', 'pack'].map(u => <option key={u} value={u}>{u}</option>)}
+                            </select>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                            <label className="input-label">Price</label>
+                            <input
+                                disabled={!!editItemData.flyer_item_id}
+                                type="number"
+                                style={{ padding: '0.5rem', borderRadius: '12px', border: '1px solid var(--border)', background: editItemData.flyer_item_id ? 'var(--bg-secondary)' : 'white' }}
+                                value={editItemData.price}
+                                onChange={e => setEditItemData({ ...editItemData, price: e.target.value })}
+                            />
+                        </div>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                        <label className="input-label">Category</label>
+                        <select
+                            style={{ padding: '0.75rem', borderRadius: '12px', border: '1px solid var(--border)', background: 'white', fontWeight: 600 }}
+                            value={editItemData.category_id}
+                            onChange={e => setEditItemData({ ...editItemData, category_id: e.target.value })}
+                        >
+                            {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                        <label className="input-label">Description</label>
+                        <textarea
+                            style={{ padding: '0.75rem', borderRadius: '12px', border: '1px solid var(--border)', minHeight: '80px', fontFamily: 'inherit' }}
+                            value={editItemData.description}
+                            onChange={e => setEditItemData({ ...editItemData, description: e.target.value })}
+                        />
+                    </div>
+                </div>
+            </Modal>
+
+            {/* Delete List Confirmation Modal */}
+            <Modal
+                isOpen={isDeleteModalOpen}
+                onClose={() => setIsDeleteModalOpen(false)}
+                title="Delete List?"
+                footer={(
+                    <>
+                        <button onClick={() => setIsDeleteModalOpen(false)} className="btn-secondary" style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid var(--border)', background: 'white' }}>Cancel</button>
+                        <button onClick={confirmDeleteList} className="btn-primary" style={{ padding: '0.5rem 1.5rem', borderRadius: '8px', background: 'var(--danger)' }}>Confirm Delete</button>
+                    </>
+                )}
+            >
+                <p style={{ fontWeight: 600, color: 'var(--text-main)' }}>
+                    Are you sure you want to delete <strong style={{ color: 'var(--text-dark)' }}>{list.title}</strong>? This action cannot be undone.
+                </p>
+            </Modal>
+            {/* Delete Item Confirmation Modal */}
+            <Modal
+                isOpen={!!itemToDelete}
+                onClose={() => setItemToDelete(null)}
+                title="Delete Item?"
+                footer={(
+                    <>
+                        <button onClick={() => setItemToDelete(null)} className="btn-secondary" style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid var(--border)', background: 'white' }}>Cancel</button>
+                        <button onClick={confirmDeleteItem} className="btn-primary" style={{ padding: '0.5rem 1.5rem', borderRadius: '8px', background: 'var(--danger)' }}>Confirm Delete</button>
+                    </>
+                )}
+            >
+                <p style={{ fontWeight: 600, color: 'var(--text-main)' }}>
+                    Are you sure you want to delete <strong style={{ color: 'var(--text-dark)' }}>{itemToDelete?.name}</strong>?
+                </p>
+            </Modal>
+
             <ImageModal
                 src={previewImage?.src}
                 alt={previewImage?.alt}

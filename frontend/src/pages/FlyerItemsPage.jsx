@@ -7,6 +7,7 @@ import ImageModal from '../components/ImageModal';
 import { usePaginatedFlyerItems } from '../hooks/usePaginatedFlyerItems';
 import InfiniteScrollTrigger from '../components/InfiniteScrollTrigger';
 import FlyerItemCard from '../components/FlyerItemCard';
+import Modal from '../components/Modal';
 
 
 const FlyerItemsPage = () => {
@@ -24,6 +25,9 @@ const FlyerItemsPage = () => {
     const [addingTo, setAddingTo] = useState(null); // listId
     const [message, setMessage] = useState(null);
     const [previewImage, setPreviewImage] = useState(null);
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [newListTitle, setNewListTitle] = useState('');
+    const [pendingItem, setPendingItem] = useState(null);
 
     // Form state for adding item
     const [addForm, setAddForm] = useState({
@@ -129,9 +133,14 @@ const FlyerItemsPage = () => {
         }
     };
 
-    const handleCreateAndAdd = async (item) => {
-        const title = prompt('Enter new list title:', `${item.shop_name} Deals`);
-        if (!title) return;
+    const handleCreateAndAdd = (item) => {
+        setPendingItem(item);
+        setNewListTitle(`${item.shop_name} Deals`);
+        setIsCreateModalOpen(true);
+    };
+
+    const confirmCreateAndAdd = async () => {
+        if (!newListTitle.trim() || !pendingItem) return;
 
         try {
             const resp = await fetch(`${API_BASE_URL}/api/lists`, {
@@ -140,13 +149,15 @@ const FlyerItemsPage = () => {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ title })
+                body: JSON.stringify({ title: newListTitle.trim() })
             });
 
             if (resp.ok) {
                 const newList = await resp.json();
-                handleAddItemToList(item, newList.id);
+                handleAddItemToList(pendingItem, newList.id);
                 fetchActiveLists(); // Refresh active lists
+                setIsCreateModalOpen(false);
+                setPendingItem(null);
             }
         } catch {
             setMessage({ type: 'error', text: 'Failed to create list' });
@@ -316,24 +327,24 @@ const FlyerItemsPage = () => {
                         gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
                         gap: '1.5rem'
                     }}>
-                    {items.map(item => (
-                        <FlyerItemCard
-                            key={item.id}
-                            item={item}
-                            currency={currency}
-                            showListSelector={showListSelector}
-                            onToggleListSelector={(id) => setShowListSelector(showListSelector === id ? null : id)}
-                            onImagePreview={setPreviewImage}
-                            onCategorySearch={(query) => setFilters(prev => ({ ...prev, q: query }))}
-                            addForm={addForm}
-                            onAddFormChange={setAddForm}
-                            categories={categories}
-                            activeLists={activeLists}
-                            addingTo={addingTo}
-                            onAddToList={handleAddItemToList}
-                            onCreateAndAdd={handleCreateAndAdd}
-                        />
-                    ))}
+                        {items.map(item => (
+                            <FlyerItemCard
+                                key={item.id}
+                                item={item}
+                                currency={currency}
+                                showListSelector={showListSelector}
+                                onToggleListSelector={(id) => setShowListSelector(showListSelector === id ? null : id)}
+                                onImagePreview={setPreviewImage}
+                                onCategorySearch={(query) => setFilters(prev => ({ ...prev, q: query }))}
+                                addForm={addForm}
+                                onAddFormChange={setAddForm}
+                                categories={categories}
+                                activeLists={activeLists}
+                                addingTo={addingTo}
+                                onAddToList={handleAddItemToList}
+                                onCreateAndAdd={handleCreateAndAdd}
+                            />
+                        ))}
                     </div>
 
                     {/* Infinite scroll trigger */}
@@ -372,6 +383,30 @@ const FlyerItemsPage = () => {
                     )}
                 </>
             )}
+            <Modal
+                isOpen={isCreateModalOpen}
+                onClose={() => setIsCreateModalOpen(false)}
+                title="Create New List"
+                footer={(
+                    <>
+                        <button onClick={() => setIsCreateModalOpen(false)} className="btn-secondary" style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid var(--border)', background: 'white' }}>Cancel</button>
+                        <button onClick={confirmCreateAndAdd} className="btn-primary" style={{ padding: '0.5rem 1.5rem', borderRadius: '8px' }}>Create & Add</button>
+                    </>
+                )}
+            >
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    <label className="input-label">List Title</label>
+                    <input
+                        placeholder="e.g. Weekly Groceries"
+                        value={newListTitle}
+                        onChange={e => setNewListTitle(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && confirmCreateAndAdd()}
+                        autoFocus
+                        style={{ padding: '0.75rem', borderRadius: '12px', border: '1px solid var(--border)', fontWeight: 700, width: '100%' }}
+                    />
+                </div>
+            </Modal>
+
             <ImageModal
                 src={previewImage?.src}
                 alt={previewImage?.alt}
