@@ -16,17 +16,33 @@ export default defineConfig({
         name: 'KinCart',
         short_name: 'KinCart',
         description: 'KinCart - Family Shopping & Receipts',
-        theme_color: '#ffffff',
+        theme_color: '#2563eb',
+        background_color: '#ffffff',
+        display: 'standalone',
         icons: [
           {
             src: 'pwa-192x192.png',
             sizes: '192x192',
-            type: 'image/png'
+            type: 'image/png',
+            purpose: 'any'
+          },
+          {
+            src: 'pwa-192x192.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'maskable'
           },
           {
             src: 'pwa-512x512.png',
             sizes: '512x512',
-            type: 'image/png'
+            type: 'image/png',
+            purpose: 'any'
+          },
+          {
+            src: 'pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable'
           }
         ],
         share_target: {
@@ -34,13 +50,10 @@ export default defineConfig({
           method: 'POST',
           enctype: 'multipart/form-data',
           params: {
-            title: 'title',
-            text: 'text',
-            url: 'url',
             files: [
               {
                 name: 'receipts',
-                accept: ['image/jpeg', 'image/png', 'application/pdf']
+                accept: ['image/*', 'application/pdf']
               }
             ]
           }
