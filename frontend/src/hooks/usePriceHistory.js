@@ -49,7 +49,13 @@ export const usePriceHistory = (token, q, excludeWords, period) => {
                 if (append) {
                     setItems(prev => [...prev, ...(data.items || [])]);
                 } else {
-                    setChartData(data.chart_data || []);
+                    const sorted = (data.chart_data || []).map(shop => ({
+                        ...shop,
+                        points: [...(shop.points || [])]
+                            .sort((a, b) => new Date(a.date) - new Date(b.date))
+                            .map(p => ({ ...p, ts: new Date(p.date).getTime() }))
+                    }));
+                    setChartData(sorted);
                     setItems(data.items || []);
                 }
                 setPagination(data.pagination);

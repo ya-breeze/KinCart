@@ -34,7 +34,7 @@ const CustomTooltip = ({ active, payload, label, currency }) => {
             fontSize: '0.875rem',
             maxWidth: '220px'
         }}>
-            <div style={{ fontWeight: 700, marginBottom: '0.5rem' }}>{label}</div>
+            <div style={{ fontWeight: 700, marginBottom: '0.5rem' }}>{new Date(label).toLocaleDateString()}</div>
             {payload.map((entry, i) => (
                 <div key={i} style={{ color: entry.color, marginBottom: '0.25rem' }}>
                     <strong>{entry.name}:</strong> {formatP(entry.value)}
@@ -237,9 +237,11 @@ const PriceHistoryPage = () => {
                             <LineChart margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                                 <XAxis
-                                    dataKey="date"
-                                    type="category"
-                                    allowDuplicatedCategory={false}
+                                    dataKey="ts"
+                                    type="number"
+                                    scale="time"
+                                    domain={['auto', 'auto']}
+                                    tickFormatter={ts => new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                                     tick={{ fontSize: 12, fill: 'var(--text-muted)' }}
                                 />
                                 <YAxis
