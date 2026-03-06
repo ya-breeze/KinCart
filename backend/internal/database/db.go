@@ -64,6 +64,7 @@ func InitDB() {
 		&models.JobStatus{},
 		&models.Receipt{},
 		&models.ReceiptItem{},
+		&models.RefreshToken{},
 	)
 	if err != nil {
 		slog.Error("Failed to migrate database", "error", err)

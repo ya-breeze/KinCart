@@ -106,6 +106,7 @@ func main() {
 	api := r.Group("/api")
 	{
 		api.POST("/auth/login", middleware.LoginRateLimiter(), handlers.Login)
+		api.POST("/auth/refresh", handlers.Refresh)
 
 		// Protected routes
 		protected := api.Group("/")

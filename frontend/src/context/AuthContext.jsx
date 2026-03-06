@@ -6,6 +6,7 @@ const AuthContext = createContext(null);
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(localStorage.getItem('token'));
+  const [refreshToken, setRefreshToken] = useState(localStorage.getItem('refresh_token'));
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -26,11 +27,16 @@ export const AuthProvider = ({ children }) => {
       if (resp.ok) {
         const data = await resp.json();
         setUser(data);
-      } else {
+      } else if (resp.status === 401 || resp.status === 403) {
+        // Only log out if specifically unauthorized by our backend
         logout();
+      } else {
+        // Leave token intact for 5xx errors or weird Cloudflare states
+        console.warn(`fetchProfile returned ${resp.status}, but keeping token`);
       }
     } catch (err) {
-      console.error(err);
+      // Network errors (like Cloudflare opaque redirects) shouldn't log the user out
+      console.warn('fetchProfile network error, keeping token:', err);
     } finally {
       setLoading(false);
     }
@@ -68,19 +74,25 @@ export const AuthProvider = ({ children }) => {
     setMode(prev => prev === 'manager' ? 'shopper' : 'manager');
   };
 
-  const login = (userData, userToken) => {
+  const login = (userData, userToken, userRefreshToken) => {
     setUser(userData);
     setToken(userToken);
+    setRefreshToken(userRefreshToken);
     localStorage.setItem('token', userToken);
+    localStorage.setItem('refresh_token', userRefreshToken);
   };
 
   const logout = async () => {
-    // Call backend logout endpoint to blacklist token
+    // Call backend logout endpoint to blacklist token and revoke refresh token
     if (token) {
       try {
         await fetch(`${API_BASE_URL}/api/auth/logout`, {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` }
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ refresh_token: refreshToken || localStorage.getItem('refresh_token') })
         });
       } catch (err) {
         console.error("Logout request failed:", err);
@@ -89,7 +101,9 @@ export const AuthProvider = ({ children }) => {
 
     setUser(null);
     setToken(null);
+    setRefreshToken(null);
     localStorage.removeItem('token');
+    localStorage.removeItem('refresh_token');
     localStorage.removeItem('mode');
   };
 

@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Search, Store, Calendar, ArrowLeft, Loader2, Filter, Plus, Check, X } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { API_BASE_URL } from '../config';
 import ImageModal from '../components/ImageModal';
 import { usePaginatedFlyerItems } from '../hooks/usePaginatedFlyerItems';
@@ -15,11 +15,12 @@ const FlyerItemsPage = () => {
     const navigate = useNavigate();
     const [shops, setShops] = useState([]);
     const [categories, setCategories] = useState([]);
-    const [filters, setFilters] = useState({
-        q: '',
-        shop: '',
-        activity: 'now'
-    });
+    const [searchParams, setSearchParams] = useSearchParams();
+    const filters = useMemo(() => ({
+        q: searchParams.get('q') || '',
+        shop: searchParams.get('shop') || '',
+        activity: searchParams.get('activity') || 'now'
+    }), [searchParams]);
     const [activeLists, setActiveLists] = useState([]);
     const [showListSelector, setShowListSelector] = useState(null); // flyerItemID
     const [addingTo, setAddingTo] = useState(null); // listId
@@ -96,7 +97,15 @@ const FlyerItemsPage = () => {
 
     const handleFilterChange = (e) => {
         const { name, value } = e.target;
-        setFilters(prev => ({ ...prev, [name]: value }));
+        setSearchParams(prev => {
+            const newParams = new URLSearchParams(prev);
+            if (value && !(name === 'activity' && value === 'now')) {
+                newParams.set(name, value);
+            } else {
+                newParams.delete(name);
+            }
+            return newParams;
+        }, { replace: true });
     };
 
     const handleAddItemToList = async (item, listId) => {
@@ -236,7 +245,7 @@ const FlyerItemsPage = () => {
                             />
                             {filters.q && (
                                 <button
-                                    onClick={() => setFilters(prev => ({ ...prev, q: '' }))}
+                                    onClick={() => handleFilterChange({ target: { name: 'q', value: '' } })}
                                     style={{
                                         position: 'absolute',
                                         right: '10px',
@@ -335,7 +344,7 @@ const FlyerItemsPage = () => {
                                 showListSelector={showListSelector}
                                 onToggleListSelector={(id) => setShowListSelector(showListSelector === id ? null : id)}
                                 onImagePreview={setPreviewImage}
-                                onCategorySearch={(query) => setFilters(prev => ({ ...prev, q: query }))}
+                                onCategorySearch={(query) => handleFilterChange({ target: { name: 'q', value: query } })}
                                 addForm={addForm}
                                 onAddFormChange={setAddForm}
                                 categories={categories}

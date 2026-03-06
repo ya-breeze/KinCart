@@ -19,6 +19,18 @@ type User struct {
 	coremodels.User
 }
 
+type RefreshToken struct {
+	ID        uint           `gorm:"primaryKey" json:"id"`
+	UserID    uint           `gorm:"not null" json:"user_id"`
+	Token     string         `gorm:"uniqueIndex;not null" json:"token"`
+	ExpiresAt time.Time      `json:"expires_at"`
+	IsRevoked bool           `gorm:"default:false" json:"is_revoked"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
+
 type ShoppingList struct {
 	coremodels.TenantModel
 	Title           string     `gorm:"not null" json:"title"`
