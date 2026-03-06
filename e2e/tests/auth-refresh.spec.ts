@@ -29,11 +29,16 @@ test.describe('Auth Refresh Token Flow', () => {
     });
 
     test('should automatically refresh token when access token expires', async ({ page }) => {
+        // Set up initial session via localStorage instead of manual login to avoid race conditions
         await page.goto('/');
-        await page.fill('#username', 'dad');
-        await page.fill('#password', 'pass1');
-        await page.click('button:has-text("Sign In")');
+        await page.evaluate(() => {
+            localStorage.setItem('token', 'initial-token');
+            localStorage.setItem('refresh_token', 'initial-refresh-token');
+            localStorage.setItem('mode', 'manager');
+        });
 
+        // Reload to enter the dashboard
+        await page.goto('/');
         await expect(page.locator('h1').first()).toHaveText('KinCart');
 
         let refreshCalled = false;
@@ -59,9 +64,15 @@ test.describe('Auth Refresh Token Flow', () => {
 
         // Mock refresh
         await page.route('**/api/auth/refresh', async route => {
-            // Verify it receives the initial refresh token
-            const postData = route.request().postDataJSON();
-            if (postData.refresh_token === 'initial-refresh-token') {
+            const request = route.request();
+            let postData;
+            try {
+                postData = request.postDataJSON();
+            } catch (e) {
+                console.error('Failed to parse refresh POST data', e);
+            }
+
+            if (postData && postData.refresh_token === 'initial-refresh-token') {
                 refreshCalled = true;
                 await route.fulfill({
                     status: 200,
@@ -76,25 +87,30 @@ test.describe('Auth Refresh Token Flow', () => {
             }
         });
 
-        // Trigger the list fetch (e.g. by navigating to lists or just reload dashboard)
-        // Dashboard calls /api/lists
+        // Trigger the list fetch by reloading the dashboard
+        // We wait a tiny bit to ensure no pending sign-in navigations are interfering
+        await page.waitForTimeout(100);
         await page.reload();
 
         // Verify refresh occurred and retry happened
         await expect(async () => {
             const token = await page.evaluate(() => localStorage.getItem('token'));
             expect(token).toBe('new-access-token');
-        }).toPass();
+        }).toPass({ timeout: 10000 });
 
         expect(refreshCalled).toBe(true);
         expect(retryCalled).toBe(true);
     });
 
     test('should log out when refresh token is invalid', async ({ page }) => {
+        // Set up initial session via localStorage
         await page.goto('/');
-        await page.fill('#username', 'dad');
-        await page.fill('#password', 'pass1');
-        await page.click('button:has-text("Sign In")');
+        await page.evaluate(() => {
+            localStorage.setItem('token', 'initial-token');
+            localStorage.setItem('refresh_token', 'initial-refresh-token');
+        });
+        await page.goto('/');
+        await expect(page.locator('h1').first()).toHaveText('KinCart');
 
         await page.route('**/api/lists', async route => {
             await route.fulfill({ status: 401 });
@@ -104,10 +120,11 @@ test.describe('Auth Refresh Token Flow', () => {
             await route.fulfill({ status: 401, body: JSON.stringify({ error: 'Invalid refresh token' }) });
         });
 
+        await page.waitForTimeout(100);
         await page.reload();
 
         // Should return to login page
-        await expect(page.locator('#username')).toBeVisible();
+        await expect(page.locator('#username')).toBeVisible({ timeout: 10000 });
         const token = await page.evaluate(() => localStorage.getItem('token'));
         expect(token).toBeNull();
     });

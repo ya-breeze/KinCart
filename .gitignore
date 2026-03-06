@@ -10,3 +10,4 @@ e2e/playwright-report/*
 bin/admin
 bin/server
 backend/data/flyer_items/*.png
+e2e/test-results/*

@@ -30,7 +30,6 @@ type RefreshToken struct {
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
-
 type ShoppingList struct {
 	coremodels.TenantModel
 	Title           string     `gorm:"not null" json:"title"`
@@ -128,6 +127,7 @@ type FlyerItem struct {
 	LocalPhotoPath string         `json:"local_photo_path"`
 	Categories     string         `json:"categories"` // comma-separated English categories
 	Keywords       string         `json:"keywords"`   // comma-separated English keywords
+	SearchText     string         `gorm:"index" json:"-"`
 	ShopName       string         `gorm:"->;column:shop_name" json:"shop_name"`
 }
 

@@ -297,6 +297,7 @@ func (m *Manager) SaveParsedFlyer(parsed *ParsedFlyer, imageData []byte, shopNam
 			LocalPhotoPath: localPath,
 			Categories:     strings.Join(pi.Categories, ", "),
 			Keywords:       strings.Join(pi.Keywords, ", "),
+			SearchText:     utils.NormalizeSearchText(pi.Name + " " + strings.Join(pi.Categories, " ") + " " + strings.Join(pi.Keywords, " ")),
 		}
 
 		if err := m.db.Create(&flyerItem).Error; err != nil {

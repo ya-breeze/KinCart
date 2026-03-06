@@ -15,6 +15,7 @@ import (
 	"kincart/internal/database"
 	"kincart/internal/flyers"
 	"kincart/internal/models"
+	"kincart/internal/utils"
 )
 
 func ParseFlyer(c *gin.Context) {
@@ -135,8 +136,9 @@ func GetFlyerItems(c *gin.Context) {
 
 	// 2. Filter by search query
 	if query != "" {
-		q := "%" + query + "%"
-		db = db.Where("(flyer_items.name LIKE ? OR flyer_items.categories LIKE ? OR flyer_items.keywords LIKE ?)", q, q, q)
+		normalizedQuery := utils.NormalizeSearchText(query)
+		q := "%" + normalizedQuery + "%"
+		db = db.Where("flyer_items.search_text LIKE ?", q)
 	}
 
 	// 3. Filter by activity/dates

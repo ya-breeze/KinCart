@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"kincart/internal/models"
+	"kincart/internal/utils"
 
 	coremodels "github.com/ya-breeze/kin-core/models"
 
@@ -69,6 +70,20 @@ func InitDB() {
 	if err != nil {
 		slog.Error("Failed to migrate database", "error", err)
 		os.Exit(1)
+	}
+
+	// Backfill SearchText for existing flyer items
+	var count int64
+	DB.Model(&models.FlyerItem{}).Where("search_text = ?", "").Count(&count)
+	if count > 0 {
+		slog.Info("Backfilling SearchText for flyer items", "count", count)
+		var items []models.FlyerItem
+		DB.Where("search_text = ?", "").Find(&items)
+		for _, item := range items {
+			item.SearchText = utils.NormalizeSearchText(item.Name + " " + item.Categories + " " + item.Keywords)
+			DB.Model(&item).Update("search_text", item.SearchText)
+		}
+		slog.Info("Finished backfilling SearchText")
 	}
 
 	slog.Info("Database initialized and migrated")
@@ -208,6 +223,7 @@ func seedFlyersFromEnv() {
 				StartDate:   flyer.StartDate,
 				EndDate:     flyer.EndDate,
 				ShopName:    shopName,
+				SearchText:  utils.NormalizeSearchText(itemName),
 			}
 
 			if err := DB.Create(&flyerItem).Error; err != nil {
