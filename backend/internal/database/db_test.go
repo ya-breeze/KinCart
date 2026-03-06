@@ -36,7 +36,7 @@ func TestInitDB_SearchTextBackfill(t *testing.T) {
 
 	// 2. Run InitDB pointing to the same memory DB
 	_ = os.Setenv("DB_PATH", dsn)
-	defer os.Unsetenv("DB_PATH")
+	defer func() { _ = os.Unsetenv("DB_PATH") }()
 
 	// Since InitDB uses the global DB variable, we can just call it
 	InitDB()
@@ -48,11 +48,12 @@ func TestInitDB_SearchTextBackfill(t *testing.T) {
 	assert.Equal(t, 3, len(items))
 
 	for _, item := range items {
-		if item.Name == "Milk" {
+		switch item.Name {
+		case "Milk":
 			assert.Equal(t, "milk dairy milk", item.SearchText, "NULL search text should be backfilled")
-		} else if item.Name == "Bread" {
+		case "Bread":
 			assert.Equal(t, "bread bakery bread", item.SearchText, "Empty string search text should be backfilled")
-		} else if item.Name == "Eggs" {
+		case "Eggs":
 			assert.Equal(t, "already_set", item.SearchText, "Already populated search text should not be changed")
 		}
 	}

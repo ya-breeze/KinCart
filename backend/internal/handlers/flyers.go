@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -305,6 +307,127 @@ func GetFlyerActivityStats(c *gin.Context) {
 	`).Scan(&activityStats.LatestDate)
 
 	c.JSON(http.StatusOK, activityStats)
+}
+
+func GetFlyerItemHistory(c *gin.Context) {
+	query := c.Query("q")
+	if query == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "q parameter is required"})
+		return
+	}
+
+	excludeParam := c.Query("exclude")
+	period := c.DefaultQuery("period", "6m")
+
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = 50
+	}
+	offset := (page - 1) * limit
+
+	// Calculate period start date
+	now := time.Now()
+	var periodStart time.Time
+	switch period {
+	case "3m":
+		periodStart = now.AddDate(0, -3, 0)
+	case "1y":
+		periodStart = now.AddDate(-1, 0, 0)
+	case "all":
+		// zero value = no filter
+	default: // "6m"
+		periodStart = now.AddDate(0, -6, 0)
+	}
+
+	shopColors := []string{"#2563eb", "#f59e0b", "#22c55e", "#ef4444", "#8b5cf6", "#ec4899"}
+
+	db := database.DB.Table("flyer_items").
+		Select("flyer_items.*, flyers.shop_name").
+		Joins("JOIN flyers ON flyers.id = flyer_items.flyer_id").
+		Where("flyer_items.deleted_at IS NULL")
+
+	normalizedQuery := utils.NormalizeSearchText(query)
+	db = db.Where("flyer_items.search_text LIKE ?", "%"+normalizedQuery+"%")
+
+	if !periodStart.IsZero() {
+		db = db.Where("date(flyer_items.start_date) >= ?", periodStart.Format("2006-01-02"))
+	}
+
+	if excludeParam != "" {
+		for _, word := range strings.Split(excludeParam, ",") {
+			word = strings.TrimSpace(word)
+			if word != "" {
+				normalizedWord := utils.NormalizeSearchText(word)
+				db = db.Where("flyer_items.search_text NOT LIKE ?", "%"+normalizedWord+"%")
+			}
+		}
+	}
+
+	var totalCount int64
+	if err := db.Count(&totalCount).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count items", "details": err.Error()})
+		return
+	}
+
+	var items []models.FlyerItem
+	if err := db.Order("date(flyer_items.start_date) DESC").Limit(limit).Offset(offset).Find(&items).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch items", "details": err.Error()})
+		return
+	}
+
+	var allItems []models.FlyerItem
+	if err := db.Order("date(flyer_items.start_date) ASC").Find(&allItems).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch chart data", "details": err.Error()})
+		return
+	}
+
+	// Group chart data by shop (alphabetical for consistent color assignment)
+	shopNames := []string{}
+	shopPointsMap := map[string][]gin.H{}
+	for _, item := range allItems {
+		shopName := item.ShopName
+		if _, exists := shopPointsMap[shopName]; !exists {
+			shopNames = append(shopNames, shopName)
+			shopPointsMap[shopName] = []gin.H{}
+		}
+		shopPointsMap[shopName] = append(shopPointsMap[shopName], gin.H{
+			"date":     item.StartDate.Format("2006-01-02"),
+			"price":    item.Price,
+			"name":     item.Name,
+			"quantity": item.Quantity,
+			"item_id":  item.ID,
+		})
+	}
+	sort.Strings(shopNames)
+
+	chartData := make([]gin.H, 0, len(shopNames))
+	for i, shopName := range shopNames {
+		color := shopColors[i%len(shopColors)]
+		chartData = append(chartData, gin.H{
+			"shop_name": shopName,
+			"color":     color,
+			"points":    shopPointsMap[shopName],
+		})
+	}
+
+	totalPages := (totalCount + int64(limit) - 1) / int64(limit)
+	hasMore := offset+len(items) < int(totalCount)
+
+	c.JSON(http.StatusOK, gin.H{
+		"chart_data": chartData,
+		"items":      items,
+		"pagination": gin.H{
+			"page":        page,
+			"limit":       limit,
+			"total":       totalCount,
+			"total_pages": totalPages,
+			"has_more":    hasMore,
+		},
+	})
 }
 
 func GetFlyerActivity(c *gin.Context) {

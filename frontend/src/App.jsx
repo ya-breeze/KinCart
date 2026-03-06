@@ -7,6 +7,7 @@ import ListDetail from './pages/ListDetail';
 import SettingsPage from './pages/SettingsPage';
 import FlyerItemsPage from './pages/FlyerItemsPage';
 import FlyerStatsPage from './pages/FlyerStatsPage';
+import PriceHistoryPage from './pages/PriceHistoryPage';
 import ImportReceipt from './pages/ImportReceipt';
 import './index.css';
 
@@ -62,6 +63,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <FlyerStatsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/price-history"
+            element={
+              <ProtectedRoute>
+                <PriceHistoryPage />
               </ProtectedRoute>
             }
           />

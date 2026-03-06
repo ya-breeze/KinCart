@@ -7,15 +7,17 @@ import LazyImage from './LazyImage';
 const mockObserve = vi.fn();
 const mockUnobserve = vi.fn();
 
-window.IntersectionObserver = vi.fn((callback) => ({
-    observe: (element) => {
-        mockObserve(element);
-        // Immediately trigger intersection
-        callback([{ isIntersecting: true, target: element }]);
-    },
-    unobserve: mockUnobserve,
-    disconnect: vi.fn(),
-}));
+window.IntersectionObserver = vi.fn(function(callback) {
+    return {
+        observe(element) {
+            mockObserve(element);
+            // Immediately trigger intersection
+            callback([{ isIntersecting: true, target: element }]);
+        },
+        unobserve: mockUnobserve,
+        disconnect: vi.fn(),
+    };
+});
 
 describe('LazyImage', () => {
     beforeEach(() => {

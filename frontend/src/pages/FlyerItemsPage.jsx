@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Search, Store, Calendar, ArrowLeft, Loader2, Filter, Plus, Check, X } from 'lucide-react';
+import { Search, Store, Calendar, ArrowLeft, Loader2, Filter, Plus, Check, X, TrendingUp } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { API_BASE_URL } from '../config';
 import ImageModal from '../components/ImageModal';
@@ -253,8 +253,31 @@ const FlyerItemsPage = () => {
                     <ArrowLeft size={20} />
                     Back to Dashboard
                 </button>
-                <h1 style={{ fontSize: '1.5rem', fontWeight: 800 }}>Flyer Items</h1>
-                <p style={{ color: 'var(--text-muted)' }}>Browse and filter current deals from all shops</p>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+                    <div>
+                        <h1 style={{ fontSize: '1.5rem', fontWeight: 800 }}>Flyer Items</h1>
+                        <p style={{ color: 'var(--text-muted)' }}>Browse and filter current deals from all shops</p>
+                    </div>
+                    <button
+                        onClick={() => navigate('/price-history')}
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                            padding: '0.5rem 1rem',
+                            borderRadius: '8px',
+                            border: '1px solid var(--border)',
+                            background: 'white',
+                            cursor: 'pointer',
+                            fontWeight: 600,
+                            fontSize: '0.875rem',
+                            color: 'var(--primary)'
+                        }}
+                    >
+                        <TrendingUp size={18} />
+                        Price History
+                    </button>
+                </div>
             </header>
 
             <section className="card" style={{ marginBottom: '2rem', padding: '1.5rem' }}>

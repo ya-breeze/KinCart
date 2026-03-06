@@ -147,6 +147,7 @@ func main() {
 			protected.PATCH("/shops/:id/order", handlers.SetShopCategoryOrder)
 
 			protected.GET("/flyers/items", handlers.GetFlyerItems)
+			protected.GET("/flyers/items/history", handlers.GetFlyerItemHistory)
 			protected.GET("/flyers/shops", handlers.GetFlyerShops)
 			protected.GET("/flyers/stats", handlers.GetFlyerStats)
 			protected.GET("/flyers/activity-stats", handlers.GetFlyerActivityStats)
