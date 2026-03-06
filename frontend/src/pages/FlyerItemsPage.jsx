@@ -21,6 +21,27 @@ const FlyerItemsPage = () => {
         shop: searchParams.get('shop') || '',
         activity: searchParams.get('activity') || 'now'
     }), [searchParams]);
+
+    const [searchTerm, setSearchTerm] = useState(filters.q);
+
+    // Sync URL -> Local Search State
+    useEffect(() => {
+        setSearchTerm(filters.q);
+    }, [filters.q]);
+
+    // Sync Local Search State -> URL (Debounced)
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (searchTerm === filters.q) return;
+            setSearchParams(prev => {
+                const next = new URLSearchParams(prev);
+                if (searchTerm) next.set('q', searchTerm);
+                else next.delete('q');
+                return next;
+            }, { replace: true });
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [searchTerm, filters.q, setSearchParams]);
     const [activeLists, setActiveLists] = useState([]);
     const [showListSelector, setShowListSelector] = useState(null); // flyerItemID
     const [addingTo, setAddingTo] = useState(null); // listId
@@ -97,14 +118,21 @@ const FlyerItemsPage = () => {
 
     const handleFilterChange = (e) => {
         const { name, value } = e.target;
+        if (name === 'q') {
+            setSearchTerm(value);
+            return;
+        }
+
+        if (filters[name] === value) return;
+
         setSearchParams(prev => {
-            const newParams = new URLSearchParams(prev);
+            const next = new URLSearchParams(prev);
             if (value && !(name === 'activity' && value === 'now')) {
-                newParams.set(name, value);
+                next.set(name, value);
             } else {
-                newParams.delete(name);
+                next.delete(name);
             }
-            return newParams;
+            return next;
         }, { replace: true });
     };
 
@@ -238,7 +266,7 @@ const FlyerItemsPage = () => {
                             <input
                                 type="text"
                                 name="q"
-                                value={filters.q}
+                                value={searchTerm}
                                 onChange={handleFilterChange}
                                 placeholder="Name, category, keyword..."
                                 style={{ paddingLeft: '2.5rem', paddingRight: '2.5rem', width: '100%' }}

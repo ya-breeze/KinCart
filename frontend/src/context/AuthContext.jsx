@@ -74,15 +74,15 @@ export const AuthProvider = ({ children }) => {
     setMode(prev => prev === 'manager' ? 'shopper' : 'manager');
   };
 
-  const login = (userData, userToken, userRefreshToken) => {
+  const login = React.useCallback((userData, userToken, userRefreshToken) => {
     setUser(userData);
     setToken(userToken);
     setRefreshToken(userRefreshToken);
     localStorage.setItem('token', userToken);
     localStorage.setItem('refresh_token', userRefreshToken);
-  };
+  }, []);
 
-  const logout = async () => {
+  const logout = React.useCallback(async () => {
     // Call backend logout endpoint to blacklist token and revoke refresh token
     if (token) {
       try {
@@ -105,10 +105,14 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('token');
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('mode');
-  };
+  }, [token, refreshToken]);
+
+  const contextValue = React.useMemo(() => ({
+    user, token, mode, currency, setCurrency, toggleMode, login, logout, loading
+  }), [user, token, mode, currency, login, logout, loading]);
 
   return (
-    <AuthContext.Provider value={{ user, token, mode, currency, setCurrency, toggleMode, login, logout, loading }}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );
