@@ -43,18 +43,6 @@ describe('apiInterceptor', () => {
         }));
     });
 
-    it('handles Cloudflare opaque redirects by reloading', async () => {
-        setupInterceptor();
-        fetchMock.mockResolvedValue({ type: 'opaqueredirect' });
-
-        // This call will return a never-resolving promise by design
-        window.fetch('http://localhost/api/test');
-
-        await vi.waitFor(() => {
-            expect(window.location.reload).toHaveBeenCalled();
-        });
-    });
-
     it('handles KinCart 401 by refreshing token', async () => {
         setupInterceptor();
         localStorage.getItem.mockImplementation((key) => {

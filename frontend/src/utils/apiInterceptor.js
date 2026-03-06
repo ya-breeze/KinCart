@@ -38,20 +38,7 @@ export const setupInterceptor = () => {
 
             const response = await originalFetch(resource, newConfig);
 
-            // 1. Handle Cloudflare Access Opaque Redirects
-            if (response.type === 'opaqueredirect') {
-                console.warn('Detected opaque redirect (likely Cloudflare Access session expiration). Unregistering SW and reloading...');
-                if ('serviceWorker' in navigator) {
-                    const registrations = await navigator.serviceWorker.getRegistrations();
-                    for (const registration of registrations) {
-                        await registration.unregister();
-                    }
-                }
-                window.location.reload();
-                return new Promise(() => { });
-            }
-
-            // 2. Handle KinCart 401 Unauthorized (Token Expired)
+            // Handle KinCart 401 Unauthorized (Token Expired)
             if (response.status === 401 && !isRefreshRequest) {
                 const refreshToken = localStorage.getItem('refresh_token');
                 if (!refreshToken) {

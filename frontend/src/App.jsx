@@ -8,7 +8,6 @@ import SettingsPage from './pages/SettingsPage';
 import FlyerItemsPage from './pages/FlyerItemsPage';
 import FlyerStatsPage from './pages/FlyerStatsPage';
 import PriceHistoryPage from './pages/PriceHistoryPage';
-import ImportReceipt from './pages/ImportReceipt';
 import './index.css';
 
 const ProtectedRoute = ({ children }) => {
@@ -74,15 +73,7 @@ function App() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/import-receipt"
-            element={
-              <ProtectedRoute>
-                <ImportReceipt />
-              </ProtectedRoute>
-            }
-          />
-          <Route path="*" element={<Navigate to="/" />} />
+<Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
