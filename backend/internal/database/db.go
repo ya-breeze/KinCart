@@ -74,11 +74,11 @@ func InitDB() {
 
 	// Backfill SearchText for existing flyer items
 	var count int64
-	DB.Model(&models.FlyerItem{}).Where("search_text = ?", "").Count(&count)
+	DB.Model(&models.FlyerItem{}).Where("search_text = ? OR search_text IS NULL", "").Count(&count)
 	if count > 0 {
 		slog.Info("Backfilling SearchText for flyer items", "count", count)
 		var items []models.FlyerItem
-		DB.Where("search_text = ?", "").Find(&items)
+		DB.Where("search_text = ? OR search_text IS NULL", "").Find(&items)
 		for _, item := range items {
 			item.SearchText = utils.NormalizeSearchText(item.Name + " " + item.Categories + " " + item.Keywords)
 			DB.Model(&item).Update("search_text", item.SearchText)
