@@ -39,7 +39,7 @@ Side-by-side layout within the same modal (stacked on mobile):
 - Text receipts (`.txt`): scrollable `<pre>` block with the raw text content
 - PDF receipts: rendered as an `<img>` from blob URL if possible, otherwise a "Download to view PDF" message
 
-Whether a receipt is a text receipt is determined by checking whether `receipt.imagePath` ends with `.txt`.
+Whether a receipt is a text receipt is determined by checking whether `receipt.image_path` ends with `.txt`.
 
 **Right panel — parsed data:**
 - Shown only when `status === "parsed"`
@@ -56,7 +56,7 @@ Whether a receipt is a text receipt is determined by checking whether `receipt.i
 
 ### Download Behaviour
 
-Clicking Download calls `downloadReceiptFile(receiptId, token)` which fetches `GET /api/receipts/:id/file` with the JWT bearer token, converts the response to a blob, creates a temporary `<a>` element, and triggers a browser download. The filename is derived from the receipt date and shop name where available (e.g. `receipt-2026-03-10-costco.jpg`), falling back to `receipt-{id}.{ext}`.
+Clicking Download calls `downloadReceiptFile(receiptId, token)` which fetches `GET ${API_BASE_URL}/api/receipts/:id/file` with the JWT bearer token, converts the response to a blob, creates a temporary `<a>` element, and triggers a browser download. The filename is derived from the receipt date and shop name where available (e.g. `receipt-2026-03-10-costco.jpg`), falling back to `receipt-{id}.{ext}`.
 
 ---
 
@@ -88,8 +88,8 @@ Both `GetList` and `GetLists` must be updated to preload the shop and (for `GetL
 // GetList — detail view needs shop name and parsed items
 db.Preload("Items").Preload("Receipts").Preload("Receipts.Items").Preload("Receipts.Shop")
 
-// GetLists — summary view needs shop name only
-db.Preload("Receipts").Preload("Receipts.Shop")
+// GetLists — summary view, receipt count only; no shop preload needed
+db.Preload("Receipts")
 ```
 
 ### New Endpoint: `GET /api/receipts/:id/file`
@@ -105,9 +105,9 @@ db.Preload("Receipts").Preload("Receipts.Shop")
    absDataPath, _ := filepath.Abs(dataPath)
    absFilePath, _ := filepath.Abs(filepath.Join(dataPath, receipt.ImagePath))
    ```
-4. **Path traversal check:** `strings.HasPrefix(absFilePath, absDataPath + string(os.PathSeparator))`. Return `400` if the check fails.
+4. **Path traversal check (Linux/Docker only):** `strings.HasPrefix(absFilePath, absDataPath+"/")`. Return `400` if the check fails. Note: using `"/"` directly rather than `os.PathSeparator` is intentional — the project runs on Linux in Docker.
 5. Detect content type from file extension.
-6. Derive a download filename: `receipt-{YYYY-MM-DD}-{shopname}.{ext}` (shop name lowercased, spaces → hyphens), falling back to `receipt-{id}.{ext}`. Requires preloading `Shop` on the receipt lookup — add `Preload("Shop")` to the query.
+6. Derive a download filename: `receipt-{YYYY-MM-DD}-{shopname}.{ext}` (shop name lowercased, spaces → hyphens). If `receipt.Shop` is nil (no shop matched), fall back to `receipt-{id}.{ext}` — do not dereference a nil pointer. Requires preloading `Shop` on the receipt lookup — add `Preload("Shop")` to the query.
 7. Serve using `c.FileAttachment(absFilePath, derivedFilename)`.
 
 **Error responses:**
@@ -156,11 +156,11 @@ Each `receipt` in `receipts` has the shape:
 {
   id: number,
   status: "new" | "parsed" | "error",
-  date: string,         // ISO date string
+  date: string,           // ISO date string
   total: number,
-  imagePath: string,    // relative path, used only to detect file type (.txt check)
+  image_path: string,     // relative path (snake_case from JSON); used only to detect file type (.txt check)
   shop: { id, name } | null,
-  items: [{ id, name, quantity, unit, price, totalPrice }]  // may be empty array
+  items: [{ id, name, quantity, unit, price, total_price }]  // may be empty array
 }
 ```
 
@@ -175,9 +175,9 @@ Each `receipt` in `receipts` has the shape:
 When `selectedReceiptId` changes (and is non-null), trigger a fetch:
 
 ```js
-const isTextReceipt = receipt.imagePath.endsWith('.txt')
+const isTextReceipt = receipt.image_path.endsWith('.txt')
 
-const res = await fetch(`/api/receipts/${receipt.id}/file`, {
+const res = await fetch(`${API_BASE_URL}/api/receipts/${receipt.id}/file`, {
   headers: { Authorization: `Bearer ${token}` }
 })
 
@@ -251,7 +251,7 @@ ListDetail mounts
 **Backend:**
 - `backend/internal/models/models.go` — add `Shop *Shop` association field to `Receipt`
 - `backend/internal/handlers/receipts.go` — add `GetReceiptFile` handler
-- `backend/internal/handlers/lists.go` — add `Preload("Receipts.Items")` and `Preload("Receipts.Shop")`
+- `backend/internal/handlers/lists.go` — add `Preload("Receipts.Items")` and `Preload("Receipts.Shop")` to `GetList` only
 - `backend/cmd/server/main.go` — register new route
 - `backend/internal/handlers/receipts_test.go` — tests for new endpoint
 
