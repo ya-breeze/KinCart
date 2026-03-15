@@ -11,3 +11,5 @@ bin/admin
 bin/server
 backend/data/flyer_items/*.png
 e2e/test-results/*
+.superpowers/*
+test-results/*
