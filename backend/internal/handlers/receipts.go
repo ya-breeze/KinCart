@@ -235,9 +235,14 @@ func getReceiptFileWith(c *gin.Context, dataPath string) {
 		return
 	}
 
-	if _, statErr := os.Stat(absFilePath); os.IsNotExist(statErr) {
-		slog.Error("Receipt file missing on disk", "path", absFilePath, "receipt_id", receipt.ID)
-		c.JSON(http.StatusNotFound, gin.H{"error": "Receipt file not found"})
+	if _, statErr := os.Stat(absFilePath); statErr != nil {
+		if os.IsNotExist(statErr) {
+			slog.Error("Receipt file missing on disk", "path", absFilePath, "receipt_id", receipt.ID)
+			c.JSON(http.StatusNotFound, gin.H{"error": "Receipt file not found"})
+		} else {
+			slog.Error("Failed to stat receipt file", "path", absFilePath, "error", statErr, "receipt_id", receipt.ID)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not access receipt file"})
+		}
 		return
 	}
 
@@ -249,11 +254,25 @@ func getReceiptFileWith(c *gin.Context, dataPath string) {
 	date := receipt.Date.Format("2006-01-02")
 	var filename string
 	if receipt.Shop != nil {
-		shopSlug := strings.ToLower(strings.ReplaceAll(receipt.Shop.Name, " ", "-"))
+		shopSlug := sanitizeSlug(receipt.Shop.Name)
 		filename = "receipt-" + date + "-" + shopSlug + "." + ext
 	} else {
 		filename = fmt.Sprintf("receipt-%d.%s", receipt.ID, ext)
 	}
 
 	c.FileAttachment(absFilePath, filename)
+}
+
+// sanitizeSlug converts a shop name to a safe filename slug.
+// It lowercases, replaces spaces with hyphens, and strips non-ASCII-alphanumeric characters.
+func sanitizeSlug(name string) string {
+	name = strings.ToLower(name)
+	name = strings.ReplaceAll(name, " ", "-")
+	var sb strings.Builder
+	for _, r := range name {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' {
+			sb.WriteRune(r)
+		}
+	}
+	return sb.String()
 }

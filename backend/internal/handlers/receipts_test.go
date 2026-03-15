@@ -319,7 +319,7 @@ func TestUploadReceipt_GeminiUnavailableQueues(t *testing.T) {
 
 // --- GetReceiptFile tests ---
 
-func setupReceiptFileTestDB(t *testing.T) (listID uint, familyID uint) {
+func setupReceiptFileTestDB(t *testing.T) (familyID uint) {
 	t.Helper()
 	var err error
 	database.DB, err = gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
@@ -327,20 +327,14 @@ func setupReceiptFileTestDB(t *testing.T) (listID uint, familyID uint) {
 		t.Fatal("failed to open test db")
 	}
 	database.DB.AutoMigrate(
-		&models.ShoppingList{}, &models.Item{}, &models.Family{},
+		&models.Item{}, &models.Family{},
 		&models.Receipt{}, &models.ReceiptItem{}, &models.Shop{},
 	)
 
 	family := models.Family{Family: coremodels.Family{Name: "File Test Family"}}
 	database.DB.Create(&family)
 
-	list := models.ShoppingList{
-		TenantModel: coremodels.TenantModel{FamilyID: family.ID},
-		Title:       "File Test List",
-	}
-	database.DB.Create(&list)
-
-	return list.ID, family.ID
+	return family.ID
 }
 
 func newReceiptFileRouterWithFamily(dataPath string, familyID uint) *gin.Engine {
@@ -354,7 +348,7 @@ func newReceiptFileRouterWithFamily(dataPath string, familyID uint) *gin.Engine 
 }
 
 func TestGetReceiptFile_Success(t *testing.T) {
-	_, familyID := setupReceiptFileTestDB(t)
+	familyID := setupReceiptFileTestDB(t)
 
 	tmpDir := t.TempDir()
 	imagePath := fmt.Sprintf("families/%d/receipts/2026/03/receipt.jpg", familyID)
@@ -383,7 +377,7 @@ func TestGetReceiptFile_Success(t *testing.T) {
 }
 
 func TestGetReceiptFile_NotFound(t *testing.T) {
-	_, familyID := setupReceiptFileTestDB(t)
+	familyID := setupReceiptFileTestDB(t)
 
 	tmpDir := t.TempDir()
 	r := newReceiptFileRouterWithFamily(tmpDir, familyID)
@@ -395,13 +389,17 @@ func TestGetReceiptFile_NotFound(t *testing.T) {
 }
 
 func TestGetReceiptFile_WrongFamily(t *testing.T) {
-	_, familyID := setupReceiptFileTestDB(t)
+	familyID := setupReceiptFileTestDB(t)
 
 	tmpDir := t.TempDir()
 	imagePath := fmt.Sprintf("families/%d/receipts/2026/03/receipt.jpg", familyID)
 	fullPath := filepath.Join(tmpDir, imagePath)
-	os.MkdirAll(filepath.Dir(fullPath), 0755)
-	os.WriteFile(fullPath, []byte("data"), 0644)
+	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(fullPath, []byte("data"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	receipt := models.Receipt{
 		TenantModel: coremodels.TenantModel{FamilyID: familyID},
@@ -420,7 +418,7 @@ func TestGetReceiptFile_WrongFamily(t *testing.T) {
 }
 
 func TestGetReceiptFile_MissingFile(t *testing.T) {
-	_, familyID := setupReceiptFileTestDB(t)
+	familyID := setupReceiptFileTestDB(t)
 
 	tmpDir := t.TempDir()
 	receipt := models.Receipt{
