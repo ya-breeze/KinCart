@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { ArrowLeft, Check, Send, Trash2, Plus, AlertCircle, ShoppingCart, Image as ImageIcon, Store, Edit2, X, Receipt } from 'lucide-react';
+import { ArrowLeft, Check, Send, Trash2, Plus, AlertCircle, ShoppingCart, Image as ImageIcon, Store, Edit2, X, Receipt, Upload, FileText } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import ImageModal from '../components/ImageModal';
 import ReceiptUploadModal from '../components/ReceiptUploadModal';
@@ -401,57 +401,74 @@ const ListDetail = () => {
                     </button>
                 )}
 
-                <button
-                    onClick={() => setIsReceiptModalOpen(true)}
-                    className="card"
-                    style={{
-                        padding: '0.4rem',
-                        borderRadius: '50%',
-                        color: 'var(--primary)',
-                        border: '1px solid var(--border)',
-                        marginLeft: 'auto',
-                        position: 'relative',
-                        minHeight: 'unset'
-                    }}
-                    title="Upload Receipt"
-                >
-                    <Receipt size={18} />
-                </button>
-                {list.receipts?.length > 0 && (
+                <div style={{
+                    display: 'flex',
+                    border: '1px solid var(--border)',
+                    borderRadius: '8px',
+                    overflow: 'hidden',
+                    flexShrink: 0,
+                    marginLeft: 'auto'
+                }}>
                     <button
-                        data-testid="view-receipts-btn"
-                        onClick={() => setIsReceiptViewerOpen(true)}
-                        className="card"
+                        onClick={() => setIsReceiptModalOpen(true)}
                         style={{
-                            padding: '0.4rem',
-                            borderRadius: '50%',
-                            color: 'var(--primary)',
-                            border: '1px solid var(--border)',
-                            position: 'relative',
-                            minHeight: 'unset'
-                        }}
-                        title="View Receipts"
-                    >
-                        <Receipt size={18} />
-                        <span style={{
-                            position: 'absolute',
-                            top: '-3px',
-                            right: '-3px',
-                            background: 'var(--primary)',
-                            color: 'white',
-                            fontSize: '0.55rem',
-                            fontWeight: 'bold',
-                            width: '14px',
-                            height: '14px',
-                            borderRadius: '50%',
                             display: 'flex',
                             alignItems: 'center',
-                            justifyContent: 'center'
-                        }}>
-                            {list.receipts.length}
-                        </span>
+                            gap: '4px',
+                            padding: '0.35rem 0.6rem',
+                            background: 'var(--surface)',
+                            border: 'none',
+                            borderRight: list.receipts?.length > 0 ? '1px solid var(--border)' : 'none',
+                            color: 'var(--text-muted)',
+                            cursor: 'pointer',
+                            fontSize: '0.72rem',
+                            fontWeight: 600,
+                            minHeight: 'unset'
+                        }}
+                        title="Upload Receipt"
+                    >
+                        <Upload size={14} />
+                        Upload
                     </button>
-                )}
+                    {list.receipts?.length > 0 && (
+                        <button
+                            data-testid="view-receipts-btn"
+                            onClick={() => setIsReceiptViewerOpen(true)}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                padding: '0.35rem 0.6rem',
+                                background: 'var(--surface)',
+                                border: 'none',
+                                color: 'var(--primary)',
+                                cursor: 'pointer',
+                                fontSize: '0.72rem',
+                                fontWeight: 600,
+                                minHeight: 'unset'
+                            }}
+                            title="View Receipts"
+                        >
+                            <FileText size={14} />
+                            View
+                            <span style={{
+                                background: 'var(--primary)',
+                                color: 'white',
+                                fontSize: '0.55rem',
+                                fontWeight: 700,
+                                minWidth: '14px',
+                                height: '14px',
+                                borderRadius: '7px',
+                                padding: '0 3px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                            }}>
+                                {list.receipts.length}
+                            </span>
+                        </button>
+                    )}
+                </div>
             </header>
 
             {isShopper && list.status === 'ready for shopping' && (
