@@ -27,8 +27,6 @@ const Dashboard = () => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [menuOpen]);
 
-
-
     useEffect(() => {
         fetchLists();
         // eslint-disable-next-line react-hooks/exhaustive-deps
