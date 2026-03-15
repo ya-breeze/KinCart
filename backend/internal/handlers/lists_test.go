@@ -25,7 +25,7 @@ func setupListTestDBIsolated() {
 	if err != nil {
 		panic("Failed to connect to database")
 	}
-	database.DB.AutoMigrate(&models.ShoppingList{}, &models.Item{}, &models.Family{}, &models.Category{}, &models.Receipt{}, &models.ReceiptItem{})
+	database.DB.AutoMigrate(&models.ShoppingList{}, &models.Item{}, &models.Family{}, &models.Category{}, &models.Receipt{}, &models.ReceiptItem{}, &models.Shop{})
 }
 
 func TestListsHandlers(t *testing.T) {
