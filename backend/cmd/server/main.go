@@ -124,6 +124,7 @@ func main() {
 
 			protected.POST("/lists/:id/items", handlers.AddItemToList)
 			protected.POST("/lists/:id/receipts", handlers.UploadReceipt)
+			protected.GET("/receipts/:id/file", handlers.GetReceiptFile)
 			protected.PATCH("/items/:id", handlers.UpdateItem)
 			protected.DELETE("/items/:id", handlers.DeleteItem)
 
