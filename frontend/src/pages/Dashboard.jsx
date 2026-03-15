@@ -201,9 +201,6 @@ const Dashboard = () => {
                                     <div>
                                         <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{user?.username}</div>
                                         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                            {mode === 'manager' ? 'Manager Mode' : 'Shopper Mode'}
-                                        </div>
-                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
                                             {user?.family?.name}
                                         </div>
                                     </div>
