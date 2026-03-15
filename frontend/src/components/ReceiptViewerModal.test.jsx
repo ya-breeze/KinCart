@@ -50,9 +50,9 @@ describe('ReceiptViewerModal', () => {
 
     beforeEach(() => {
         fetchMock = vi.fn();
-        global.fetch = fetchMock;
-        global.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
-        global.URL.revokeObjectURL = vi.fn();
+        globalThis.fetch = fetchMock;
+        globalThis.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
+        globalThis.URL.revokeObjectURL = vi.fn();
     });
 
     afterEach(() => {

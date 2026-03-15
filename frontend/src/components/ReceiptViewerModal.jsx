@@ -1,14 +1,31 @@
-import { useState, useEffect } from 'react';
+import { useReducer, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { API_BASE_URL } from '../config';
 import './ReceiptViewerModal.css';
 
+const initialFileState = {
+    selectedReceiptId: null,
+    blobUrl: null,
+    textContent: null,
+    isLoadingFile: false,
+};
+
+function fileReducer(state, action) {
+    switch (action.type) {
+        case 'SELECT': return { ...state, selectedReceiptId: action.id, blobUrl: null, textContent: null, isLoadingFile: true };
+        case 'LOADED_BLOB': return { ...state, blobUrl: action.url, isLoadingFile: false };
+        case 'LOADED_TEXT': return { ...state, textContent: action.text, isLoadingFile: false };
+        case 'ERROR': return { ...state, isLoadingFile: false };
+        case 'BACK': return { ...state, selectedReceiptId: null, blobUrl: null, textContent: null, isLoadingFile: false };
+        case 'CLOSE': return initialFileState;
+        default: return state;
+    }
+}
+
 export default function ReceiptViewerModal({ receipts, isOpen, onClose }) {
     const { token } = useAuth();
-    const [selectedReceiptId, setSelectedReceiptId] = useState(null);
-    const [blobUrl, setBlobUrl] = useState(null);
-    const [textContent, setTextContent] = useState(null);
-    const [isLoadingFile, setIsLoadingFile] = useState(false);
+    const [fileState, dispatch] = useReducer(fileReducer, initialFileState);
+    const { selectedReceiptId, blobUrl, textContent, isLoadingFile } = fileState;
 
     const selectedReceipt = receipts?.find(r => r.id === selectedReceiptId) || null;
 
@@ -18,10 +35,6 @@ export default function ReceiptViewerModal({ receipts, isOpen, onClose }) {
 
         let cancelled = false;
         let createdBlobUrl = null;
-
-        setIsLoadingFile(true);
-        setBlobUrl(null);
-        setTextContent(null);
 
         const isTextReceipt = selectedReceipt.image_path?.endsWith('.txt');
 
@@ -35,15 +48,15 @@ export default function ReceiptViewerModal({ receipts, isOpen, onClose }) {
             .then(data => {
                 if (cancelled) return;
                 if (isTextReceipt) {
-                    setTextContent(data);
+                    dispatch({ type: 'LOADED_TEXT', text: data });
                 } else {
                     createdBlobUrl = URL.createObjectURL(data);
-                    setBlobUrl(createdBlobUrl);
+                    dispatch({ type: 'LOADED_BLOB', url: createdBlobUrl });
                 }
             })
-            .catch(err => console.error('Receipt file load error:', err))
-            .finally(() => {
-                if (!cancelled) setIsLoadingFile(false);
+            .catch(err => {
+                console.error('Receipt file load error:', err);
+                if (!cancelled) dispatch({ type: 'ERROR' });
             });
 
         return () => {
@@ -56,17 +69,13 @@ export default function ReceiptViewerModal({ receipts, isOpen, onClose }) {
     useEffect(() => {
         if (!isOpen) {
             if (blobUrl) URL.revokeObjectURL(blobUrl);
-            setBlobUrl(null);
-            setTextContent(null);
-            setSelectedReceiptId(null);
+            dispatch({ type: 'CLOSE' });
         }
     }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const handleBack = () => {
         if (blobUrl) URL.revokeObjectURL(blobUrl);
-        setBlobUrl(null);
-        setTextContent(null);
-        setSelectedReceiptId(null);
+        dispatch({ type: 'BACK' });
     };
 
     const handleDownload = async () => {
@@ -89,7 +98,9 @@ export default function ReceiptViewerModal({ receipts, isOpen, onClose }) {
             const a = document.createElement('a');
             a.href = url;
             a.download = filename;
+            document.body.appendChild(a);
             a.click();
+            document.body.removeChild(a);
             URL.revokeObjectURL(url);
         } catch (err) {
             console.error('Download error:', err);
@@ -129,9 +140,9 @@ export default function ReceiptViewerModal({ receipts, isOpen, onClose }) {
                                     <pre className="receipt-text">{textContent}</pre>
                                 ) : selectedReceipt?.image_path?.endsWith('.pdf') ? (
                                     blobUrl ? (
-                                        <img src={blobUrl} alt="Receipt" />
+                                        <embed src={blobUrl} type="application/pdf" style={{ width: '100%', height: '400px' }} />
                                     ) : (
-                                        <div className="receipt-loading">Download to view PDF</div>
+                                        <div className="receipt-loading">Loading PDF…</div>
                                     )
                                 ) : (
                                     blobUrl && <img src={blobUrl} alt="Receipt" />
@@ -203,7 +214,7 @@ export default function ReceiptViewerModal({ receipts, isOpen, onClose }) {
                                 <div
                                     key={receipt.id}
                                     className="receipt-list-item"
-                                    onClick={() => setSelectedReceiptId(receipt.id)}
+                                    onClick={() => dispatch({ type: 'SELECT', id: receipt.id })}
                                     data-testid={`receipt-list-item-${receipt.id}`}
                                 >
                                     <div className="receipt-list-icon">
