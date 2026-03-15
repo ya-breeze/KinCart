@@ -237,6 +237,14 @@ ListDetail mounts
 
 ---
 
+## Implementation Notes
+
+- Use `receipt.items ?? []` (not `||`) when rendering the items table — `items` will be `null` when the data comes from `GetLists` (summary), which does not preload receipt items.
+- Extract the file extension for the download filename from `receipt.image_path` client-side, not from the `Content-Disposition` response header.
+- Revoke blob URLs on modal close (`isOpen` → false) in addition to on `selectedReceiptId` change, to prevent leaks across open/close cycles.
+
+---
+
 ## Out of Scope
 
 - Deleting receipts
