@@ -143,6 +143,7 @@ type Receipt struct {
 	coremodels.TenantModel
 	ListID    *uint         `json:"list_id"`
 	ShopID    *uint         `json:"shop_id"` // Optional, if matched to a shop
+	Shop      *Shop         `gorm:"foreignKey:ShopID" json:"shop"`
 	Date      time.Time     `json:"date"`
 	Total     float64       `json:"total"`
 	ImagePath string        `json:"image_path"`                  // Path relative to kincart-data

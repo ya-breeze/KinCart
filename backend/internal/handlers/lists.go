@@ -31,7 +31,7 @@ func GetList(c *gin.Context) {
 	listID := c.Param("id")
 
 	var list models.ShoppingList
-	if err := database.DB.Preload("Items").Preload("Receipts").Where("id = ? AND family_id = ?", listID, familyID).First(&list).Error; err != nil {
+	if err := database.DB.Preload("Items").Preload("Receipts").Preload("Receipts.Items").Preload("Receipts.Shop").Where("id = ? AND family_id = ?", listID, familyID).First(&list).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "List not found"})
 		return
 	}
