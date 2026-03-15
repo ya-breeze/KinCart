@@ -27,6 +27,7 @@ const ListDetail = () => {
     const [renameValue, setRenameValue] = useState('');
     const [previewImage, setPreviewImage] = useState(null);
     const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
+    const [isReceiptViewerOpen, setIsReceiptViewerOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [itemToDelete, setItemToDelete] = useState(null);
 
@@ -414,7 +415,23 @@ const ListDetail = () => {
                     title="Upload Receipt"
                 >
                     <Receipt size={18} />
-                    {list.receipts?.length > 0 && (
+                </button>
+                {list.receipts?.length > 0 && (
+                    <button
+                        data-testid="view-receipts-btn"
+                        onClick={() => setIsReceiptViewerOpen(true)}
+                        className="card"
+                        style={{
+                            padding: '0.4rem',
+                            borderRadius: '50%',
+                            color: 'var(--primary)',
+                            border: '1px solid var(--border)',
+                            position: 'relative',
+                            minHeight: 'unset'
+                        }}
+                        title="View Receipts"
+                    >
+                        <Receipt size={18} />
                         <span style={{
                             position: 'absolute',
                             top: '-3px',
@@ -432,8 +449,8 @@ const ListDetail = () => {
                         }}>
                             {list.receipts.length}
                         </span>
-                    )}
-                </button>
+                    </button>
+                )}
             </header>
 
             {isShopper && list.status === 'ready for shopping' && (
