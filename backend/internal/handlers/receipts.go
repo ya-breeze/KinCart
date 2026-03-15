@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"mime"
@@ -188,4 +189,71 @@ func uploadReceiptWith(c *gin.Context, svc receiptSvc) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Receipt processed", "receipt_id": receipt.ID, "status": "parsed"})
+}
+
+// GetReceiptFile serves the raw receipt file (image, PDF, or text).
+// GET /api/receipts/:id/file
+func GetReceiptFile(c *gin.Context) {
+	dataPath := os.Getenv("KINCART_DATA_PATH")
+	if dataPath == "" {
+		dataPath = "./kincart-data"
+	}
+	getReceiptFileWith(c, dataPath)
+}
+
+// getReceiptFileWith is the testable core of GetReceiptFile.
+func getReceiptFileWith(c *gin.Context, dataPath string) {
+	familyID := c.MustGet("family_id").(uint)
+	receiptIDStr := c.Param("id")
+	receiptID, err := strconv.ParseUint(receiptIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid receipt ID"})
+		return
+	}
+
+	var receipt models.Receipt
+	if dbErr := database.DB.Preload("Shop").
+		Where("id = ? AND family_id = ?", receiptID, familyID).
+		First(&receipt).Error; dbErr != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Receipt not found"})
+		return
+	}
+
+	rawDataPath, _ := filepath.Abs(dataPath)
+	// EvalSymlinks resolves macOS /var → /private/var etc., keeping tests green on all platforms.
+	// We resolve the data path (which always exists) and then construct the file path from it,
+	// so both share the same symlink-resolved base.
+	absDataPath, err := filepath.EvalSymlinks(rawDataPath)
+	if err != nil {
+		absDataPath = rawDataPath
+	}
+	absFilePath := filepath.Join(absDataPath, receipt.ImagePath)
+
+	// Path traversal guard (uses "/" intentionally — project runs on Linux/Docker)
+	if !strings.HasPrefix(absFilePath, absDataPath+"/") {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file path"})
+		return
+	}
+
+	if _, statErr := os.Stat(absFilePath); os.IsNotExist(statErr) {
+		slog.Error("Receipt file missing on disk", "path", absFilePath, "receipt_id", receipt.ID)
+		c.JSON(http.StatusNotFound, gin.H{"error": "Receipt file not found"})
+		return
+	}
+
+	// Derive a friendly download filename
+	ext := strings.TrimPrefix(filepath.Ext(receipt.ImagePath), ".")
+	if ext == "" {
+		ext = "bin"
+	}
+	date := receipt.Date.Format("2006-01-02")
+	var filename string
+	if receipt.Shop != nil {
+		shopSlug := strings.ToLower(strings.ReplaceAll(receipt.Shop.Name, " ", "-"))
+		filename = "receipt-" + date + "-" + shopSlug + "." + ext
+	} else {
+		filename = fmt.Sprintf("receipt-%d.%s", receipt.ID, ext)
+	}
+
+	c.FileAttachment(absFilePath, filename)
 }

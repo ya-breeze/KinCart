@@ -8,6 +8,8 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -313,4 +315,125 @@ func TestUploadReceipt_GeminiUnavailableQueues(t *testing.T) {
 	var resp map[string]interface{}
 	json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.Equal(t, "queued", resp["status"])
+}
+
+// --- GetReceiptFile tests ---
+
+func setupReceiptFileTestDB(t *testing.T) (listID uint, familyID uint) {
+	t.Helper()
+	var err error
+	database.DB, err = gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatal("failed to open test db")
+	}
+	database.DB.AutoMigrate(
+		&models.ShoppingList{}, &models.Item{}, &models.Family{},
+		&models.Receipt{}, &models.ReceiptItem{}, &models.Shop{},
+	)
+
+	family := models.Family{Family: coremodels.Family{Name: "File Test Family"}}
+	database.DB.Create(&family)
+
+	list := models.ShoppingList{
+		TenantModel: coremodels.TenantModel{FamilyID: family.ID},
+		Title:       "File Test List",
+	}
+	database.DB.Create(&list)
+
+	return list.ID, family.ID
+}
+
+func newReceiptFileRouterWithFamily(dataPath string, familyID uint) *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.GET("/receipts/:id/file", func(c *gin.Context) {
+		c.Set("family_id", familyID)
+		getReceiptFileWith(c, dataPath)
+	})
+	return r
+}
+
+func TestGetReceiptFile_Success(t *testing.T) {
+	_, familyID := setupReceiptFileTestDB(t)
+
+	tmpDir := t.TempDir()
+	imagePath := fmt.Sprintf("families/%d/receipts/2026/03/receipt.jpg", familyID)
+	fullPath := filepath.Join(tmpDir, imagePath)
+	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(fullPath, []byte("fake image data"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	receipt := models.Receipt{
+		TenantModel: coremodels.TenantModel{FamilyID: familyID},
+		ImagePath:   imagePath,
+		Status:      "parsed",
+	}
+	database.DB.Create(&receipt)
+
+	r := newReceiptFileRouterWithFamily(tmpDir, familyID)
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", fmt.Sprintf("/receipts/%d/file", receipt.ID), nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "fake image data", w.Body.String())
+}
+
+func TestGetReceiptFile_NotFound(t *testing.T) {
+	_, familyID := setupReceiptFileTestDB(t)
+
+	tmpDir := t.TempDir()
+	r := newReceiptFileRouterWithFamily(tmpDir, familyID)
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/receipts/99999/file", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestGetReceiptFile_WrongFamily(t *testing.T) {
+	_, familyID := setupReceiptFileTestDB(t)
+
+	tmpDir := t.TempDir()
+	imagePath := fmt.Sprintf("families/%d/receipts/2026/03/receipt.jpg", familyID)
+	fullPath := filepath.Join(tmpDir, imagePath)
+	os.MkdirAll(filepath.Dir(fullPath), 0755)
+	os.WriteFile(fullPath, []byte("data"), 0644)
+
+	receipt := models.Receipt{
+		TenantModel: coremodels.TenantModel{FamilyID: familyID},
+		ImagePath:   imagePath,
+		Status:      "parsed",
+	}
+	database.DB.Create(&receipt)
+
+	// Request as a different family
+	r := newReceiptFileRouterWithFamily(tmpDir, familyID+99)
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", fmt.Sprintf("/receipts/%d/file", receipt.ID), nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestGetReceiptFile_MissingFile(t *testing.T) {
+	_, familyID := setupReceiptFileTestDB(t)
+
+	tmpDir := t.TempDir()
+	receipt := models.Receipt{
+		TenantModel: coremodels.TenantModel{FamilyID: familyID},
+		ImagePath:   "families/1/receipts/2026/03/missing.jpg",
+		Status:      "parsed",
+	}
+	database.DB.Create(&receipt)
+
+	r := newReceiptFileRouterWithFamily(tmpDir, familyID)
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", fmt.Sprintf("/receipts/%d/file", receipt.ID), nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
 }
