@@ -5,6 +5,7 @@ import { ArrowLeft, Check, Send, Trash2, Plus, AlertCircle, ShoppingCart, Image 
 import { API_BASE_URL } from '../config';
 import ImageModal from '../components/ImageModal';
 import ReceiptUploadModal from '../components/ReceiptUploadModal';
+import ReceiptViewerModal from '../components/ReceiptViewerModal';
 import Modal from '../components/Modal';
 
 const ListDetail = () => {
@@ -969,6 +970,12 @@ const ListDetail = () => {
                     fetchList();
                     fetchFrequentItems();
                 }}
+            />
+
+            <ReceiptViewerModal
+                receipts={list.receipts || []}
+                isOpen={isReceiptViewerOpen}
+                onClose={() => setIsReceiptViewerOpen(false)}
             />
         </div>
     );
