@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Plus, ShoppingBasket, CheckCircle2, Clock, Copy, Settings, Scroll, AlertCircle, ChevronDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -6,12 +6,26 @@ import { API_BASE_URL } from '../config';
 import Modal from '../components/Modal';
 
 const Dashboard = () => {
-    const { user, token, mode, currency, toggleMode } = useAuth();
+    const { user, token, mode, currency, toggleMode, logout } = useAuth();
     const navigate = useNavigate();
     const [lists, setLists] = useState([]);
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [newListTitle, setNewListTitle] = useState('');
     const [isPendingPanelOpen, setIsPendingPanelOpen] = useState(false);
+    const [menuOpen, setMenuOpen] = useState(false);
+
+    const menuRef = useRef(null);
+
+    useEffect(() => {
+        if (!menuOpen) return;
+        const handleClickOutside = (e) => {
+            if (menuRef.current && !menuRef.current.contains(e.target)) {
+                setMenuOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [menuOpen]);
 
 
 
@@ -143,11 +157,83 @@ const Dashboard = () => {
                     >
                         <Settings size={18} />
                     </button>
-                    <button className="card" style={{ padding: '0.4rem', borderRadius: '50%', minHeight: 'unset' }} title="User Profile">
-                        <div style={{ width: '18px', height: '18px', background: 'var(--primary)', borderRadius: '50%', fontSize: '0.6rem', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
-                            {user?.username?.charAt(0).toUpperCase()}
-                        </div>
-                    </button>
+                    <div ref={menuRef} style={{ position: 'relative' }}>
+                        <button
+                            className="card"
+                            onClick={() => setMenuOpen(prev => !prev)}
+                            style={{ padding: '0.4rem', borderRadius: '50%', minHeight: 'unset' }}
+                            title="User Profile"
+                        >
+                            <div style={{ width: '18px', height: '18px', background: 'var(--primary)', borderRadius: '50%', fontSize: '0.6rem', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
+                                {user?.username?.charAt(0).toUpperCase()}
+                            </div>
+                        </button>
+
+                        {menuOpen && (
+                            <div style={{
+                                position: 'absolute',
+                                top: '110%',
+                                right: 0,
+                                background: 'var(--surface)',
+                                border: '1px solid var(--border)',
+                                borderRadius: 'var(--radius)',
+                                boxShadow: 'var(--shadow-lg)',
+                                minWidth: '200px',
+                                zIndex: 100,
+                                overflow: 'hidden',
+                            }}>
+                                {/* Profile header */}
+                                <div style={{
+                                    padding: '1rem',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.75rem',
+                                    borderBottom: '1px solid var(--border)',
+                                }}>
+                                    <div style={{
+                                        width: '40px', height: '40px',
+                                        background: 'var(--primary)',
+                                        borderRadius: '50%',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        color: 'white', fontWeight: 'bold', fontSize: '1.1rem',
+                                        flexShrink: 0,
+                                    }}>
+                                        {user?.username?.charAt(0).toUpperCase()}
+                                    </div>
+                                    <div>
+                                        <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{user?.username}</div>
+                                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                            {mode === 'manager' ? 'Manager Mode' : 'Shopper Mode'}
+                                        </div>
+                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                                            {user?.family?.name}
+                                        </div>
+                                    </div>
+                                </div>
+                                {/* Logout */}
+                                <button
+                                    onClick={() => { setMenuOpen(false); logout(); }}
+                                    style={{
+                                        width: '100%',
+                                        padding: '0.75rem 1rem',
+                                        background: 'none',
+                                        border: 'none',
+                                        textAlign: 'left',
+                                        cursor: 'pointer',
+                                        fontSize: '0.875rem',
+                                        color: 'var(--danger)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.5rem',
+                                    }}
+                                    onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
+                                    onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                                >
+                                    Logout
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </header >
 
