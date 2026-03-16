@@ -343,6 +343,7 @@ type frequentItemVariant struct {
 }
 
 type frequentItemResponse struct {
+	ID        uint                  `json:"id"`
 	ItemName  string                `json:"item_name"`
 	Frequency int                   `json:"frequency"`
 	LastPrice float64               `json:"last_price"`
@@ -383,6 +384,7 @@ func GetFrequentItems(c *gin.Context) {
 		}
 
 		result = append(result, frequentItemResponse{
+			ID:        fi.ID,
 			ItemName:  fi.ItemName,
 			Frequency: fi.Frequency,
 			LastPrice: fi.LastPrice,

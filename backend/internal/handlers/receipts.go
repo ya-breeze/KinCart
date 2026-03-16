@@ -247,8 +247,15 @@ func ConfirmReceiptItemMatch(c *gin.Context) {
 
 	svc := getReceiptService(c.Request.Context())
 	if err := svc.ConfirmMatch(c.Request.Context(), uint(receiptItemID), body.PlannedItemID, familyID); err != nil {
-		slog.Error("Failed to confirm receipt match", "receipt_item_id", receiptItemID, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to confirm match"})
+		switch {
+		case errors.Is(err, services.ErrReceiptItemNotFound), errors.Is(err, services.ErrReceiptNotFound), errors.Is(err, services.ErrPlannedItemNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": "Item not found"})
+		case errors.Is(err, services.ErrNoAssociatedList):
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Receipt has no associated list"})
+		default:
+			slog.Error("Failed to confirm receipt match", "receipt_item_id", receiptItemID, "error", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to confirm match"})
+		}
 		return
 	}
 

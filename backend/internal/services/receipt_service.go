@@ -25,6 +25,18 @@ const autoMatchThreshold = 90 // confidence >= this → auto-accept
 // ErrGeminiUnavailable is returned when the Gemini AI client is not configured.
 var ErrGeminiUnavailable = fmt.Errorf("gemini client not available")
 
+// ErrReceiptItemNotFound is returned when a receipt item cannot be found.
+var ErrReceiptItemNotFound = fmt.Errorf("receipt item not found")
+
+// ErrReceiptNotFound is returned when a receipt cannot be found or access is denied.
+var ErrReceiptNotFound = fmt.Errorf("receipt not found or access denied")
+
+// ErrPlannedItemNotFound is returned when a planned item cannot be found on the list.
+var ErrPlannedItemNotFound = fmt.Errorf("planned item not found or not on this list")
+
+// ErrNoAssociatedList is returned when a receipt has no linked list.
+var ErrNoAssociatedList = fmt.Errorf("receipt has no associated list")
+
 // ReceiptParser is the AI client interface used by the service.
 type ReceiptParser interface {
 	ParseReceipt(ctx context.Context, imagePath string, knownItems []string) (*ai.ParsedReceipt, error)
@@ -561,15 +573,15 @@ func (s *ReceiptService) ConfirmMatch(ctx context.Context, receiptItemID uint, p
 	// Load receipt item and verify ownership via receipt
 	var receiptItem models.ReceiptItem
 	if err := s.db.First(&receiptItem, receiptItemID).Error; err != nil {
-		return fmt.Errorf("receipt item not found: %w", err)
+		return fmt.Errorf("%w: %v", ErrReceiptItemNotFound, err)
 	}
 
 	var receipt models.Receipt
 	if err := s.db.Where("id = ? AND family_id = ?", receiptItem.ReceiptID, familyID).First(&receipt).Error; err != nil {
-		return fmt.Errorf("receipt not found or access denied: %w", err)
+		return fmt.Errorf("%w: %v", ErrReceiptNotFound, err)
 	}
 	if receipt.ListID == nil {
-		return fmt.Errorf("receipt has no associated list")
+		return ErrNoAssociatedList
 	}
 
 	wasPreviouslyMatched := receiptItem.MatchedItemID != nil
@@ -592,7 +604,7 @@ func (s *ReceiptService) ConfirmMatch(ctx context.Context, receiptItemID uint, p
 			// Link to existing planned item — verify it belongs to the receipt's list
 			var item models.Item
 			if err := tx.Where("id = ? AND family_id = ? AND list_id = ?", *plannedItemID, familyID, *receipt.ListID).First(&item).Error; err != nil {
-				return fmt.Errorf("planned item not found or not on this list: %w", err)
+				return fmt.Errorf("%w: %v", ErrPlannedItemNotFound, err)
 			}
 
 			item.ReceiptItemID = &receiptItemID
