@@ -64,22 +64,74 @@ type Receipt struct {
 
 ## AI Changes (`backend/internal/ai/gemini.go`)
 
+**All AI calls MUST use Gemini's structured output** via `ResponseMIMEType: "application/json"` + `ResponseSchema` (a `*genai.Schema`). This enforces strict typing at the API level — Gemini is constrained to return only valid JSON matching the schema. No free-form text parsing or markdown fence stripping needed.
+
+The existing `ParseReceipt` and `ParseReceiptText` already do this correctly via `buildReceiptSchema()`. The new `MatchReceiptItems` method must follow the same pattern.
+
 ### New method: `MatchReceiptItems`
 
 After parsing the receipt, make a second AI call that receives:
 - List of parsed receipt item names
 - List of planned item names
 
-Returns match suggestions:
+**Go types:**
 ```go
+type MatchResult struct {
+    Suggestions []MatchSuggestion `json:"suggestions"`
+}
+
 type MatchSuggestion struct {
-    ReceiptItemName string        `json:"receipt_item_name"`
+    ReceiptItemName string           `json:"receipt_item_name"`
     Matches         []MatchCandidate `json:"matches"` // 0 or more
 }
 
 type MatchCandidate struct {
     PlannedItemName string  `json:"planned_item_name"`
-    Confidence      float64 `json:"confidence"` // 0-100
+    Confidence      int     `json:"confidence"` // 0-100 integer
+}
+```
+
+**Gemini response schema (strict):**
+```go
+func buildMatchSchema() *genai.Schema {
+    return &genai.Schema{
+        Type: genai.TypeObject,
+        Properties: map[string]*genai.Schema{
+            "suggestions": {
+                Type: genai.TypeArray,
+                Items: &genai.Schema{
+                    Type: genai.TypeObject,
+                    Properties: map[string]*genai.Schema{
+                        "receipt_item_name": {Type: genai.TypeString},
+                        "matches": {
+                            Type: genai.TypeArray,
+                            Items: &genai.Schema{
+                                Type: genai.TypeObject,
+                                Properties: map[string]*genai.Schema{
+                                    "planned_item_name": {Type: genai.TypeString},
+                                    "confidence":        {Type: genai.TypeInteger},
+                                },
+                                Required: []string{"planned_item_name", "confidence"},
+                            },
+                        },
+                    },
+                    Required: []string{"receipt_item_name", "matches"},
+                },
+            },
+        },
+        Required: []string{"suggestions"},
+    }
+}
+```
+
+**API call:**
+```go
+func (c *GeminiClient) MatchReceiptItems(ctx context.Context, receiptItems []string, plannedItems []string) (*MatchResult, error) {
+    // Build prompt with both lists
+    // Call c.client.Models.GenerateContent with:
+    //   ResponseMIMEType: "application/json",
+    //   ResponseSchema:   buildMatchSchema(),
+    // Unmarshal into MatchResult
 }
 ```
 
@@ -91,11 +143,12 @@ determine which receipt items correspond to which planned items.
 Rules:
 - A receipt item may match 0 or 1 planned items
 - A planned item may match 0 or 1 receipt items
-- Return confidence as percentage (0-100)
+- Return confidence as integer percentage (0-100)
 - Consider that planned items are often short/generic ("jogurt") while receipt
   items are specific ("selský jogurt 2%")
 - Items in different languages or with brand names can still match
 - If no good match exists, return empty matches array
+- You MUST return one suggestion entry per receipt item, even if matches is empty
 
 Receipt items: [...]
 Planned items: [...]
