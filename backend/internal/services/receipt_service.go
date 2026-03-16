@@ -412,13 +412,6 @@ func (s *ReceiptService) applyItemMatches(tx *gorm.DB, receiptID uint, listID ui
 		itemByID[item.ID] = item
 	}
 
-	// First category for new unmatched items
-	var defaultCategoryID uint
-	var cat models.Category
-	if err := tx.Where("family_id = ?", familyID).Order("sort_order asc").First(&cat).Error; err == nil {
-		defaultCategoryID = cat.ID
-	}
-
 	needsReview := false
 
 	for i, parsedItem := range parsedItems {
