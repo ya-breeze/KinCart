@@ -1,21 +1,42 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { X, Upload, Check, Loader, FileText, Clock } from 'lucide-react';
 import { API_BASE_URL } from '../config';
+import ReceiptMatchModal from './ReceiptMatchModal';
 
 const ReceiptUploadModal = ({ isOpen, onClose, listId, token, onUploadSuccess }) => {
     const [inputMode, setInputMode] = useState('upload'); // 'upload' | 'paste'
     const [file, setFile] = useState(null);
+    const [previewUrl, setPreviewUrl] = useState(null);
     const [receiptText, setReceiptText] = useState('');
     const [isUploading, setIsUploading] = useState(false);
     const [error, setError] = useState(null);
-    // null | 'parsed' | 'queued'
+    // null | 'parsed' | 'queued' | 'pending_review'
     const [successStatus, setSuccessStatus] = useState(null);
+    const [pendingReceiptId, setPendingReceiptId] = useState(null);
+    const autoCloseTimerRef = useRef(null);
+
+    // Clean up blob URL when file changes or component unmounts
+    useEffect(() => {
+        return () => {
+            if (previewUrl) URL.revokeObjectURL(previewUrl);
+            if (autoCloseTimerRef.current) clearTimeout(autoCloseTimerRef.current);
+        };
+    }, [previewUrl]);
 
     if (!isOpen) return null;
 
     const handleFileChange = (e) => {
         if (e.target.files && e.target.files[0]) {
-            setFile(e.target.files[0]);
+            const newFile = e.target.files[0];
+            // Revoke previous blob URL to prevent memory leak
+            if (previewUrl) URL.revokeObjectURL(previewUrl);
+            setFile(newFile);
+            // Create preview URL for image files
+            if (newFile.type.startsWith('image/')) {
+                setPreviewUrl(URL.createObjectURL(newFile));
+            } else {
+                setPreviewUrl(null);
+            }
             setError(null);
         }
     };
@@ -53,14 +74,17 @@ const ReceiptUploadModal = ({ isOpen, onClose, listId, token, onUploadSuccess })
             }
 
             const data = await resp.json();
-            const status = data.status === 'parsed' ? 'parsed' : 'queued';
+            const status = data.status;
             setSuccessStatus(status);
 
             if (status === 'parsed') {
-                setTimeout(() => {
+                autoCloseTimerRef.current = setTimeout(() => {
+                    autoCloseTimerRef.current = null;
                     onUploadSuccess();
                     handleClose();
                 }, 1500);
+            } else if (status === 'pending_review') {
+                setPendingReceiptId(data.receipt_id);
             }
             // For 'queued': stay open so the user reads the explanation; they close manually.
 
@@ -72,16 +96,36 @@ const ReceiptUploadModal = ({ isOpen, onClose, listId, token, onUploadSuccess })
     };
 
     const handleClose = () => {
+        if (autoCloseTimerRef.current) {
+            clearTimeout(autoCloseTimerRef.current);
+            autoCloseTimerRef.current = null;
+        }
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
         setInputMode('upload');
         setFile(null);
+        setPreviewUrl(null);
         setReceiptText('');
         setIsUploading(false);
         setError(null);
         setSuccessStatus(null);
+        setPendingReceiptId(null);
         onClose();
     };
 
     const isSubmitDisabled = isUploading || !!successStatus || (inputMode === 'upload' ? !file : !receiptText.trim());
+
+    // When pending_review: hand off to ReceiptMatchModal
+    if (successStatus === 'pending_review' && pendingReceiptId) {
+        return (
+            <ReceiptMatchModal
+                isOpen={true}
+                onClose={handleClose}
+                receiptId={pendingReceiptId}
+                token={token}
+                onDone={onUploadSuccess}
+            />
+        );
+    }
 
     const tabStyle = (active) => ({
         flex: 1,
@@ -203,10 +247,10 @@ const ReceiptUploadModal = ({ isOpen, onClose, listId, token, onUploadSuccess })
                                 {file ? (
                                     <div style={{ textAlign: 'center' }}>
                                         <div style={{ width: '64px', height: '64px', margin: '0 auto 1rem', borderRadius: '8px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f3f4f6' }}>
-                                            {(file.type === 'application/pdf' || file.name.endsWith('.txt')) ? (
-                                                <FileText size={32} color="var(--text-muted)" />
+                                            {previewUrl ? (
+                                                <img src={previewUrl} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                             ) : (
-                                                <img src={URL.createObjectURL(file)} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                <FileText size={32} color="var(--text-muted)" />
                                             )}
                                         </div>
                                         <p style={{ fontWeight: 600 }}>{file.name}</p>

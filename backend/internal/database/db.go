@@ -47,6 +47,26 @@ func InitDB() {
 				}
 			}
 		}
+
+		// Migrate new columns on receipt_items for AI matching support
+		type receiptItemCol struct {
+			name string
+			def  string
+		}
+		riCols := []receiptItemCol{
+			{"matched_item_id", "INTEGER"},
+			{"match_status", "TEXT NOT NULL DEFAULT 'unmatched'"},
+			{"confidence", "INTEGER NOT NULL DEFAULT 0"},
+			{"suggested_items", "TEXT NOT NULL DEFAULT ''"},
+		}
+		for _, col := range riCols {
+			if DB.Migrator().HasTable("receipt_items") && !DB.Migrator().HasColumn("receipt_items", col.name) {
+				slog.Info("Adding column to receipt_items", "column", col.name)
+				if colErr := DB.Exec(fmt.Sprintf("ALTER TABLE receipt_items ADD COLUMN %s %s", col.name, col.def)).Error; colErr != nil {
+					slog.Warn("Failed to add column to receipt_items", "column", col.name, "error", colErr)
+				}
+			}
+		}
 	}
 
 	// Auto Migration
@@ -65,6 +85,7 @@ func InitDB() {
 		&models.JobStatus{},
 		&models.Receipt{},
 		&models.ReceiptItem{},
+		&models.ItemAlias{},
 		&models.RefreshToken{},
 	)
 	if err != nil {
