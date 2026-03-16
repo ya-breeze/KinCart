@@ -177,9 +177,21 @@ Before calling AI matching, look up each receipt item name in `ItemAlias` (filte
 6. NEW: Apply matching results:
    - confidence >= 90%: auto-match (mark MatchStatus="auto", link item, mark bought)
    - confidence < 90%: store suggestions, set MatchStatus="unmatched"
-7. Set receipt status:
-   - All items auto-matched → "parsed" (fully resolved)
-   - Some items need review → "pending_review"
+7. NEW: Identify edge cases:
+   a. **Extra items** (receipt items with 0 match suggestions):
+      - These are items bought but NOT on the planned list (impulse buys, bag fees, etc.)
+      - Set MatchStatus="unmatched", suggestions=[]
+      - User can later: "Add to list" (creates new item), "Dismiss" (ignore), or
+        "Match to planned" (manually link to an existing planned item)
+   b. **Unbought planned items** (planned items not matched by any receipt item):
+      - Collect all planned items whose IDs do NOT appear in any ReceiptItem.MatchedItemID
+      - Return these as `unmatched_planned_items` in the response
+      - These remain in their current state (not marked bought)
+      - User can later: leave as-is (still need to buy), mark bought manually,
+        or delete from list
+8. Set receipt status:
+   - All items auto-matched AND no unmatched planned items → "parsed" (fully resolved)
+   - Any items need review OR unmatched planned items exist → "pending_review"
 ```
 
 ### New method: `ConfirmMatch`
@@ -193,9 +205,10 @@ func (s *ReceiptService) ConfirmMatch(receiptItemID uint, plannedItemID *uint, f
     //    b. Upsert ItemAlias: (planned_name, receipt_name, shop_id)
     //       - If alias exists: increment PurchaseCount, update LastPrice, LastUsedAt
     //       - If new: create with PurchaseCount=1
-    // 3. If plannedItemID == nil (create as new):
-    //    a. Create new item in list (current behavior for unmatched)
-    //    b. Upsert ItemAlias with planned_name = receipt_name (self-alias for frequency)
+    // 3. If plannedItemID == nil (create as new — for EXTRA/impulse items):
+    //    a. Create new item in list with name from receipt, mark as bought
+    //    b. Set price/quantity from receipt item
+    //    c. Upsert ItemAlias with planned_name = receipt_name (self-alias for frequency tracking)
     // 4. Recalculate list total
 }
 ```
@@ -226,7 +239,7 @@ func (s *ReceiptService) DismissReceiptItem(receiptItemID uint, familyID uint) e
 GET    /api/receipts/:id/matches      → Get receipt with match suggestions
 PATCH  /api/receipts/:id/matches/:receipt_item_id  → Confirm/change a match
 POST   /api/receipts/:id/matches/:receipt_item_id/dismiss  → Dismiss an item
-POST   /api/receipts/:id/matches/confirm-all  → Accept all current matches
+POST   /api/receipts/:id/matches/confirm-all  → Accept all current matches, add extras as new items, leave unbought planned items unchanged
 ```
 
 ### `GET /api/receipts/:id/matches` response:
@@ -274,15 +287,33 @@ POST   /api/receipts/:id/matches/confirm-all  → Accept all current matches
       "match_status": "unmatched",
       "confidence": 0,
       "matched_item": null,
-      "suggestions": []
+      "suggestions": [],
+      "is_extra": true
+    },
+    {
+      "receipt_item_id": 13,
+      "receipt_name": "Chipsy Bohemia 150g",
+      "quantity": 1,
+      "price": 44.90,
+      "total_price": 44.90,
+      "match_status": "unmatched",
+      "confidence": 0,
+      "matched_item": null,
+      "suggestions": [],
+      "is_extra": true
     }
   ],
   "unmatched_planned_items": [
-    {"id": 7, "name": "sýr"},
-    {"id": 12, "name": "brie"},
-    {"id": 15, "name": "mléko"}
+    {"id": 15, "name": "mléko"},
+    {"id": 18, "name": "chleba"}
   ]
 }
+```
+
+**Notes on the response:**
+- `is_extra: true` — receipt item has NO planned counterpart (impulse buy, bag fee, etc.). Derived from: has 0 suggestions AND was not matched by alias lookup.
+- `unmatched_planned_items` — planned items NOT matched by ANY receipt item. These remain on the list; user may still need to buy them on another trip or at another store.
+- A receipt item with `suggestions` but no auto-match (`match_status: "unmatched"`) is NOT extra — it has potential matches but needs user confirmation.
 ```
 
 ### `PATCH /api/receipts/:id/matches/:receipt_item_id` body:
@@ -310,14 +341,21 @@ Shown after receipt upload when status is `"pending_review"`. Three sections:
 - "Create as new" option
 - "Dismiss" button (for bag fees, etc.)
 
-**Section 3: Unmatched planned items (grey)**
-- Planned items that weren't matched to any receipt item
-- User can drag a receipt item here (or the item shows as "not bought")
+**Section 3: Extra items — not on your list (blue)**
+- Receipt items with zero match suggestions (impulse buys, bag fees, etc.)
+- Each has: "Add to list" (creates new planned item, marks bought) or "Dismiss" (ignore)
+- User can also manually match to an unmatched planned item from Section 4
+
+**Section 4: Unbought planned items (grey)**
+- Planned items that weren't matched by any receipt item
+- Shows as "not bought yet" — these remain on the list as-is
+- User can: leave as-is, manually match to a receipt item from Section 3, or mark bought manually
 
 **Actions:**
-- "Confirm All" button — accepts all auto-matches and creates new items for unmatched
+- "Confirm All" button — accepts all auto-matches, adds unmatched receipt items as new list items (marked bought), leaves unbought planned items unchanged
 - Individual confirm/change per item
-- "Match Manually" — select a receipt item, then select a planned item
+- "Match Manually" — select a receipt item, then select a planned item (works across sections 2/3/4)
+- "Dismiss" — mark a receipt item as not relevant (bag fees, etc.)
 
 ### Modified: `ReceiptUploadModal.jsx`
 
