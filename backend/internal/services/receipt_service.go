@@ -8,6 +8,7 @@ import (
 	"mime/multipart"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -278,7 +279,19 @@ func (s *ReceiptService) buildItemMatches(ctx context.Context, familyID uint, li
 		}
 	}
 
-	if len(unresolvedIdxs) == 0 || ctx.Err() != nil {
+	if len(unresolvedIdxs) == 0 {
+		return plans
+	}
+
+	// If context was cancelled, explicitly mark remaining items as unmatched
+	// so applyItemMatches doesn't persist zero-value match_status.
+	if ctx.Err() != nil {
+		for _, idx := range unresolvedIdxs {
+			plans[idx] = receiptItemMatchPlan{
+				MatchStatus: "unmatched",
+				Suggestions: []MatchSuggestionItem{},
+			}
+		}
 		return plans
 	}
 
@@ -324,6 +337,10 @@ func (s *ReceiptService) buildItemMatches(ctx context.Context, familyID uint, li
 				Confidence: m.Confidence,
 			})
 		}
+		// Sort by confidence descending so suggestions[0] is the best candidate
+		sort.Slice(suggestions, func(a, b int) bool {
+			return suggestions[a].Confidence > suggestions[b].Confidence
+		})
 		aiByName[key] = suggestions
 
 		// Check for auto-match candidate (highest confidence ≥ threshold, not yet used)
@@ -538,7 +555,8 @@ func (s *ReceiptService) GetReceiptMatches(receiptID uint, familyID uint) (*Rece
 }
 
 // ConfirmMatch confirms or updates the match for a single receipt item.
-// If plannedItemID is nil, a new list item is created from the receipt item data.
+// If plannedItemID is nil and the item was previously matched, it reverts to "unmatched".
+// If plannedItemID is nil and the item was not matched, a new list item is created.
 func (s *ReceiptService) ConfirmMatch(ctx context.Context, receiptItemID uint, plannedItemID *uint, familyID uint) error {
 	// Load receipt item and verify ownership via receipt
 	var receiptItem models.ReceiptItem
@@ -554,12 +572,27 @@ func (s *ReceiptService) ConfirmMatch(ctx context.Context, receiptItemID uint, p
 		return fmt.Errorf("receipt has no associated list")
 	}
 
+	wasPreviouslyMatched := receiptItem.MatchedItemID != nil
+
 	return s.db.Transaction(func(tx *gorm.DB) error {
+		// Clear any previous association when re-matching
+		if receiptItem.MatchedItemID != nil {
+			var oldItem models.Item
+			if err := tx.Where("id = ? AND family_id = ?", *receiptItem.MatchedItemID, familyID).First(&oldItem).Error; err == nil {
+				oldItem.ReceiptItemID = nil
+				oldItem.IsBought = false
+				if err := tx.Save(&oldItem).Error; err != nil {
+					return fmt.Errorf("failed to clear previous match: %w", err)
+				}
+			}
+			receiptItem.MatchedItemID = nil
+		}
+
 		if plannedItemID != nil {
-			// Link to existing planned item
+			// Link to existing planned item — verify it belongs to the receipt's list
 			var item models.Item
-			if err := tx.Where("id = ? AND family_id = ?", *plannedItemID, familyID).First(&item).Error; err != nil {
-				return fmt.Errorf("planned item not found: %w", err)
+			if err := tx.Where("id = ? AND family_id = ? AND list_id = ?", *plannedItemID, familyID, *receipt.ListID).First(&item).Error; err != nil {
+				return fmt.Errorf("planned item not found or not on this list: %w", err)
 			}
 
 			item.ReceiptItemID = &receiptItemID
@@ -576,6 +609,10 @@ func (s *ReceiptService) ConfirmMatch(ctx context.Context, receiptItemID uint, p
 
 			receiptItem.MatchedItemID = plannedItemID
 			receiptItem.MatchStatus = "confirmed"
+		} else if wasPreviouslyMatched {
+			// Unmatch: revert to "unmatched" so user can pick a different match
+			// (previous association already cleared above)
+			receiptItem.MatchStatus = "unmatched"
 		} else {
 			// Create new list item from receipt data (extra/impulse buy)
 			var defaultCategoryID uint
