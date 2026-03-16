@@ -21,6 +21,9 @@ import (
 
 const autoMatchThreshold = 90 // confidence >= this → auto-accept
 
+// ErrGeminiUnavailable is returned when the Gemini AI client is not configured.
+var ErrGeminiUnavailable = fmt.Errorf("gemini client not available")
+
 // ReceiptParser is the AI client interface used by the service.
 type ReceiptParser interface {
 	ParseReceipt(ctx context.Context, imagePath string, knownItems []string) (*ai.ParsedReceipt, error)
@@ -135,12 +138,12 @@ func (s *ReceiptService) ProcessReceipt(ctx context.Context, receiptID uint, lis
 	}
 
 	if s.gemini == nil {
-		return fmt.Errorf("gemini client not available")
+		return ErrGeminiUnavailable
 	}
 
-	// 1. Get list items for context and matching
+	// 1. Get list items for context and matching — scope by family_id for tenant isolation
 	var listItems []models.Item
-	if err := s.db.Where("list_id = ?", listID).Find(&listItems).Error; err != nil {
+	if err := s.db.Where("list_id = ? AND family_id = ?", listID, receipt.FamilyID).Find(&listItems).Error; err != nil {
 		return fmt.Errorf("failed to fetch list items: %w", err)
 	}
 
@@ -235,11 +238,25 @@ func (s *ReceiptService) buildItemMatches(ctx context.Context, familyID uint, li
 		}
 	}
 
-	// Step 1: Check ItemAlias for auto-matches
+	// Step 1: Batch-load all ItemAliases for this family to avoid N+1 queries
+	receiptNames := make([]string, len(parsedItems))
+	for i, p := range parsedItems {
+		receiptNames[i] = strings.ToLower(p.Name)
+	}
+	var allAliases []models.ItemAlias
+	s.db.Where("family_id = ? AND LOWER(receipt_name) IN ?", familyID, receiptNames).Find(&allAliases)
+
+	// Group aliases by lowercase receipt name
+	aliasesByReceiptName := map[string][]models.ItemAlias{}
+	for _, a := range allAliases {
+		key := strings.ToLower(a.ReceiptName)
+		aliasesByReceiptName[key] = append(aliasesByReceiptName[key], a)
+	}
+
+	// Check aliases for auto-matches
 	unresolvedIdxs := []int{}
 	for i, parsed := range parsedItems {
-		var aliases []models.ItemAlias
-		s.db.Where("family_id = ? AND LOWER(receipt_name) = ?", familyID, strings.ToLower(parsed.Name)).Find(&aliases)
+		aliases := aliasesByReceiptName[strings.ToLower(parsed.Name)]
 
 		matched := false
 		for _, alias := range aliases {
@@ -397,10 +414,7 @@ func (s *ReceiptService) applyItemMatches(tx *gorm.DB, receiptID uint, listID ui
 
 		if plan.MatchStatus == "auto" && plan.PlannedItemID != nil {
 			// Auto-match: link and mark bought
-			receiptItem.MatchedItemID = plan.PlannedItemID
-
 			item := itemByID[*plan.PlannedItemID]
-			item.ReceiptItemID = nil // set after create
 			item.IsBought = true
 			item.Price = parsedItem.Price
 			item.Quantity = parsedItem.Quantity
@@ -440,9 +454,11 @@ func (s *ReceiptService) GetReceiptMatches(receiptID uint, familyID uint) (*Rece
 		return nil, fmt.Errorf("receipt has no associated list")
 	}
 
-	// Load all planned items from the list
+	// Load all planned items from the list — scope by family_id for tenant isolation
 	var listItems []models.Item
-	s.db.Where("list_id = ?", *receipt.ListID).Find(&listItems)
+	if err := s.db.Where("list_id = ? AND family_id = ?", *receipt.ListID, familyID).Find(&listItems).Error; err != nil {
+		return nil, fmt.Errorf("failed to fetch list items: %w", err)
+	}
 
 	// Build lookup of matched planned item IDs
 	matchedIDs := map[uint]bool{}
@@ -463,7 +479,9 @@ func (s *ReceiptService) GetReceiptMatches(receiptID uint, familyID uint) (*Rece
 	for _, ri := range receipt.Items {
 		var suggestions []MatchSuggestionItem
 		if ri.SuggestedItems != "" {
-			_ = json.Unmarshal([]byte(ri.SuggestedItems), &suggestions)
+			if err := json.Unmarshal([]byte(ri.SuggestedItems), &suggestions); err != nil {
+				slog.Warn("Failed to unmarshal suggested items", "receipt_item_id", ri.ID, "error", err)
+			}
 		}
 		if suggestions == nil {
 			suggestions = []MatchSuggestionItem{}
@@ -644,7 +662,9 @@ func (s *ReceiptService) ConfirmAllMatches(ctx context.Context, receiptID uint, 
 			case "auto":
 				// Already applied — just mark as confirmed
 				ri.MatchStatus = "confirmed"
-				tx.Save(&ri)
+				if err := tx.Save(&ri).Error; err != nil {
+					return fmt.Errorf("failed to confirm auto-match for %q: %w", ri.Name, err)
+				}
 			case "unmatched":
 				// Create new list item (extra buy)
 				newItem := models.Item{
@@ -659,15 +679,16 @@ func (s *ReceiptService) ConfirmAllMatches(ctx context.Context, receiptID uint, 
 					ReceiptItemID: &ri.ID,
 				}
 				if err := tx.Create(&newItem).Error; err != nil {
-					slog.Error("failed to create item from receipt in confirm-all", "name", ri.Name, "error", err)
-					continue
+					return fmt.Errorf("failed to create item from receipt in confirm-all for %q: %w", ri.Name, err)
 				}
 				s.upsertItemAlias(tx, familyID, ri.Name, ri.Name, ri.Price, receipt.ShopID)
 				s.updateItemFrequency(tx, familyID, ri.Name, ri.Price)
 
 				ri.MatchedItemID = &newItem.ID
 				ri.MatchStatus = "confirmed"
-				tx.Save(&ri)
+				if err := tx.Save(&ri).Error; err != nil {
+					return fmt.Errorf("failed to save confirmed receipt item %q: %w", ri.Name, err)
+				}
 			case "dismissed":
 				// Already handled — skip
 			}
@@ -691,7 +712,7 @@ func (s *ReceiptService) checkAndUpdateReceiptStatus(db *gorm.DB, receiptID uint
 		db.First(&receipt, receiptID)
 		var unmatchedPlanned int64
 		db.Model(&models.Item{}).
-			Where("list_id = ? AND is_bought = false", listID).
+			Where("list_id = ? AND family_id = ? AND is_bought = false", listID, familyID).
 			Count(&unmatchedPlanned)
 		if unmatchedPlanned == 0 {
 			db.Model(&models.Receipt{}).Where("id = ?", receiptID).Update("status", "parsed")
@@ -721,12 +742,16 @@ func (s *ReceiptService) upsertItemAlias(tx *gorm.DB, familyID uint, plannedName
 			PurchaseCount: 1,
 			LastUsedAt:    time.Now(),
 		}
-		tx.Create(&alias)
+		if err := tx.Create(&alias).Error; err != nil {
+			slog.Warn("Failed to create item alias", "planned", plannedName, "receipt", receiptName, "error", err)
+		}
 	} else {
 		alias.PurchaseCount++
 		alias.LastPrice = price
 		alias.LastUsedAt = time.Now()
-		tx.Save(&alias)
+		if err := tx.Save(&alias).Error; err != nil {
+			slog.Warn("Failed to update item alias", "planned", plannedName, "receipt", receiptName, "error", err)
+		}
 	}
 }
 
@@ -765,7 +790,7 @@ func (s *ReceiptService) updateListTitle(tx *gorm.DB, listID uint, date time.Tim
 
 func (s *ReceiptService) recalculateListTotal(tx *gorm.DB, listID uint, familyID uint) error {
 	var items []models.Item
-	if err := tx.Where("list_id = ?", listID).Find(&items).Error; err != nil {
+	if err := tx.Where("list_id = ? AND family_id = ?", listID, familyID).Find(&items).Error; err != nil {
 		return err
 	}
 
@@ -835,11 +860,15 @@ func (s *ReceiptService) updateItemFrequency(tx *gorm.DB, familyID uint, name st
 				Frequency: 1,
 				LastPrice: price,
 			}
-			tx.Create(&freq)
+			if err := tx.Create(&freq).Error; err != nil {
+				slog.Warn("Failed to create item frequency", "name", name, "error", err)
+			}
 		}
 	} else {
 		freq.Frequency++
 		freq.LastPrice = price
-		tx.Save(&freq)
+		if err := tx.Save(&freq).Error; err != nil {
+			slog.Warn("Failed to update item frequency", "name", name, "error", err)
+		}
 	}
 }

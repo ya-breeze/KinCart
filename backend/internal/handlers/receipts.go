@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -112,7 +113,8 @@ func uploadReceiptWith(c *gin.Context, svc receiptSvc) {
 
 		receipt, err = svc.CreateReceiptFromText(list.FamilyID, req.ReceiptText)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save receipt", "details": err.Error()})
+			slog.Error("Failed to save receipt from text", "error", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save receipt"})
 			return
 		}
 
@@ -160,7 +162,8 @@ func uploadReceiptWith(c *gin.Context, svc receiptSvc) {
 
 			receipt, err = svc.CreateReceiptFromText(list.FamilyID, string(data))
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save receipt", "details": err.Error()})
+				slog.Error("Failed to save receipt from text file", "error", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save receipt"})
 				return
 			}
 
@@ -168,7 +171,8 @@ func uploadReceiptWith(c *gin.Context, svc receiptSvc) {
 			// Image / PDF upload (existing path)
 			receipt, err = svc.CreateReceipt(list.FamilyID, file)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save receipt", "details": err.Error()})
+				slog.Error("Failed to save receipt from file upload", "error", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save receipt"})
 				return
 			}
 		}
@@ -179,12 +183,13 @@ func uploadReceiptWith(c *gin.Context, svc receiptSvc) {
 
 	// Process (synchronous; gracefully handles missing Gemini key)
 	if err := svc.ProcessReceipt(c.Request.Context(), receipt.ID, uint(listID)); err != nil {
-		if err.Error() == "gemini client not available" {
+		if errors.Is(err, services.ErrGeminiUnavailable) {
 			c.JSON(http.StatusOK, gin.H{"message": "Receipt saved (queued for parsing)", "receipt_id": receipt.ID, "status": "queued"})
 			return
 		}
 
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Parsing failed", "details": err.Error()})
+		slog.Error("Receipt parsing failed", "receipt_id", receipt.ID, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Parsing failed"})
 		return
 	}
 
@@ -213,7 +218,8 @@ func GetReceiptMatches(c *gin.Context) {
 	svc := getReceiptService(c.Request.Context())
 	resp, err := svc.GetReceiptMatches(uint(receiptID), familyID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		slog.Error("Failed to get receipt matches", "receipt_id", receiptID, "error", err)
+		c.JSON(http.StatusNotFound, gin.H{"error": "Receipt not found"})
 		return
 	}
 
@@ -241,7 +247,8 @@ func ConfirmReceiptItemMatch(c *gin.Context) {
 
 	svc := getReceiptService(c.Request.Context())
 	if err := svc.ConfirmMatch(c.Request.Context(), uint(receiptItemID), body.PlannedItemID, familyID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		slog.Error("Failed to confirm receipt match", "receipt_item_id", receiptItemID, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to confirm match"})
 		return
 	}
 
@@ -260,7 +267,8 @@ func DismissReceiptItem(c *gin.Context) {
 
 	svc := getReceiptService(c.Request.Context())
 	if err := svc.DismissReceiptItem(uint(receiptItemID), familyID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		slog.Error("Failed to dismiss receipt item", "receipt_item_id", receiptItemID, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to dismiss item"})
 		return
 	}
 
@@ -279,7 +287,8 @@ func ConfirmAllMatches(c *gin.Context) {
 
 	svc := getReceiptService(c.Request.Context())
 	if err := svc.ConfirmAllMatches(c.Request.Context(), uint(receiptID), familyID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		slog.Error("Failed to confirm all matches", "receipt_id", receiptID, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to confirm matches"})
 		return
 	}
 
