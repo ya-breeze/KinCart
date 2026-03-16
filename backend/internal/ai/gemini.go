@@ -31,6 +31,20 @@ type ParsedReceiptItem struct {
 	TotalPrice float64 `json:"total_price"`
 }
 
+type MatchResult struct {
+	Suggestions []MatchSuggestion `json:"suggestions"`
+}
+
+type MatchSuggestion struct {
+	ReceiptItemName string           `json:"receipt_item_name"`
+	Matches         []MatchCandidate `json:"matches"`
+}
+
+type MatchCandidate struct {
+	PlannedItemName string `json:"planned_item_name"`
+	Confidence      int    `json:"confidence"` // 0-100
+}
+
 func NewGeminiClient(ctx context.Context) (*GeminiClient, error) {
 	apiKey := os.Getenv("GEMINI_API_KEY")
 	if apiKey == "" {
@@ -183,4 +197,95 @@ Return strict JSON.
 	}
 
 	return parseGeminiResponse(resp)
+}
+
+// buildMatchSchema returns the strict JSON schema for MatchReceiptItems responses.
+func buildMatchSchema() *genai.Schema {
+	return &genai.Schema{
+		Type: genai.TypeObject,
+		Properties: map[string]*genai.Schema{
+			"suggestions": {
+				Type: genai.TypeArray,
+				Items: &genai.Schema{
+					Type: genai.TypeObject,
+					Properties: map[string]*genai.Schema{
+						"receipt_item_name": {Type: genai.TypeString},
+						"matches": {
+							Type: genai.TypeArray,
+							Items: &genai.Schema{
+								Type: genai.TypeObject,
+								Properties: map[string]*genai.Schema{
+									"planned_item_name": {Type: genai.TypeString},
+									"confidence":        {Type: genai.TypeInteger},
+								},
+								Required: []string{"planned_item_name", "confidence"},
+							},
+						},
+					},
+					Required: []string{"receipt_item_name", "matches"},
+				},
+			},
+		},
+		Required: []string{"suggestions"},
+	}
+}
+
+// MatchReceiptItems asks Gemini to suggest which receipt items correspond to
+// which planned items. Returns one suggestion entry per receipt item (even if
+// matches is empty). Uses strict structured output — no free-form parsing.
+func (c *GeminiClient) MatchReceiptItems(ctx context.Context, receiptItems []string, plannedItems []string) (*MatchResult, error) {
+	if len(receiptItems) == 0 || len(plannedItems) == 0 {
+		suggestions := make([]MatchSuggestion, len(receiptItems))
+		for i, name := range receiptItems {
+			suggestions[i] = MatchSuggestion{ReceiptItemName: name, Matches: []MatchCandidate{}}
+		}
+		return &MatchResult{Suggestions: suggestions}, nil
+	}
+
+	prompt := fmt.Sprintf(`You are a shopping item matcher. Given receipt items and a planned shopping list, determine which receipt items correspond to which planned items.
+
+Rules:
+- A receipt item may match 0 or 1 planned items
+- A planned item may match 0 or 1 receipt items
+- Return confidence as integer percentage (0-100)
+- Consider that planned items are often short/generic (e.g. "jogurt") while receipt items are specific (e.g. "selský jogurt 2%%")
+- Items in different languages or with brand names can still match
+- If no good match exists, return empty matches array
+- You MUST return exactly one suggestion entry per receipt item, even if matches is empty
+
+Receipt items: %s
+Planned items: %s`,
+		strings.Join(receiptItems, ", "),
+		strings.Join(plannedItems, ", "),
+	)
+
+	content := &genai.Content{
+		Parts: []*genai.Part{{Text: prompt}},
+	}
+
+	resp, err := c.client.Models.GenerateContent(ctx, c.model, []*genai.Content{content}, &genai.GenerateContentConfig{
+		ResponseMIMEType: "application/json",
+		ResponseSchema:   buildMatchSchema(),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("gemini matching error: %w", err)
+	}
+
+	if len(resp.Candidates) == 0 || resp.Candidates[0].Content == nil || len(resp.Candidates[0].Content.Parts) == 0 {
+		return nil, fmt.Errorf("no candidates returned from match call")
+	}
+
+	responseText := ""
+	for _, part := range resp.Candidates[0].Content.Parts {
+		if part.Text != "" {
+			responseText += part.Text
+		}
+	}
+
+	var result MatchResult
+	if err := json.Unmarshal([]byte(responseText), &result); err != nil {
+		return nil, fmt.Errorf("failed to decode match response: %w, response: %s", err, responseText)
+	}
+
+	return &result, nil
 }

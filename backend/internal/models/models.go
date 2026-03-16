@@ -152,11 +152,30 @@ type Receipt struct {
 }
 
 type ReceiptItem struct {
-	ID         uint    `gorm:"primaryKey" json:"id"`
-	ReceiptID  uint    `json:"receipt_id"`
-	Name       string  `json:"name"`
-	Quantity   float64 `json:"quantity"`
-	Unit       string  `json:"unit"` // e.g., "pcs", "kg"
-	Price      float64 `json:"price"`
-	TotalPrice float64 `json:"total_price"`
+	ID             uint    `gorm:"primaryKey" json:"id"`
+	ReceiptID      uint    `json:"receipt_id"`
+	Name           string  `json:"name"`
+	Quantity       float64 `json:"quantity"`
+	Unit           string  `json:"unit"` // e.g., "pcs", "kg"
+	Price          float64 `json:"price"`
+	TotalPrice     float64 `json:"total_price"`
+	MatchedItemID  *uint   `json:"matched_item_id"`  // planned Item it was matched to
+	MatchStatus    string  `gorm:"default:'unmatched'" json:"match_status"` // "auto","confirmed","manual","unmatched","dismissed"
+	Confidence     int     `json:"confidence"`       // 0-100
+	SuggestedItems string  `json:"suggested_items"`  // JSON: [{"item_id":1,"item_name":"jogurt","confidence":85}]
+}
+
+// ItemAlias records the mapping between a generic planned item name and the
+// specific receipt name it was bought as, building per-family purchase history.
+type ItemAlias struct {
+	ID            uint      `gorm:"primaryKey" json:"id"`
+	FamilyID      uint      `gorm:"not null;index" json:"family_id"`
+	PlannedName   string    `gorm:"not null" json:"planned_name"`  // e.g. "jogurt"
+	ReceiptName   string    `gorm:"not null" json:"receipt_name"`  // e.g. "selský jogurt 2%"
+	ShopID        *uint     `json:"shop_id"`
+	Shop          *Shop     `gorm:"foreignKey:ShopID" json:"shop"`
+	LastPrice     float64   `json:"last_price"`
+	PurchaseCount int       `gorm:"default:1" json:"purchase_count"`
+	LastUsedAt    time.Time `json:"last_used_at"`
+	CreatedAt     time.Time `json:"created_at"`
 }

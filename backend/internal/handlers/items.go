@@ -334,14 +334,61 @@ func AddItemPhoto(c *gin.Context) {
 	c.JSON(http.StatusOK, item)
 }
 
+type frequentItemVariant struct {
+	ReceiptName string  `json:"receipt_name"`
+	ShopName    string  `json:"shop_name,omitempty"`
+	LastPrice   float64 `json:"last_price"`
+	Count       int     `json:"count"`
+	LastUsed    string  `json:"last_used"`
+}
+
+type frequentItemResponse struct {
+	ItemName  string                `json:"item_name"`
+	Frequency int                   `json:"frequency"`
+	LastPrice float64               `json:"last_price"`
+	Variants  []frequentItemVariant `json:"variants"`
+}
+
 func GetFrequentItems(c *gin.Context) {
 	familyID := c.MustGet("family_id").(uint)
 
-	var items []models.ItemFrequency
-	if err := database.DB.Where("family_id = ?", familyID).Order("frequency DESC").Limit(20).Find(&items).Error; err != nil {
+	var freqItems []models.ItemFrequency
+	if err := database.DB.Where("family_id = ?", familyID).Order("frequency DESC").Limit(20).Find(&freqItems).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch frequent items"})
 		return
 	}
 
-	c.JSON(http.StatusOK, items)
+	// Enrich with alias variants
+	result := make([]frequentItemResponse, 0, len(freqItems))
+	for _, fi := range freqItems {
+		var aliases []models.ItemAlias
+		database.DB.Preload("Shop").
+			Where("family_id = ? AND LOWER(planned_name) = ?", familyID, strings.ToLower(fi.ItemName)).
+			Order("purchase_count DESC").
+			Find(&aliases)
+
+		variants := make([]frequentItemVariant, 0, len(aliases))
+		for _, a := range aliases {
+			shopName := ""
+			if a.Shop != nil {
+				shopName = a.Shop.Name
+			}
+			variants = append(variants, frequentItemVariant{
+				ReceiptName: a.ReceiptName,
+				ShopName:    shopName,
+				LastPrice:   a.LastPrice,
+				Count:       a.PurchaseCount,
+				LastUsed:    a.LastUsedAt.Format("2006-01-02"),
+			})
+		}
+
+		result = append(result, frequentItemResponse{
+			ItemName:  fi.ItemName,
+			Frequency: fi.Frequency,
+			LastPrice: fi.LastPrice,
+			Variants:  variants,
+		})
+	}
+
+	c.JSON(http.StatusOK, result)
 }

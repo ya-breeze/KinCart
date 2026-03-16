@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Upload, Check, Loader, FileText, Clock } from 'lucide-react';
 import { API_BASE_URL } from '../config';
+import ReceiptMatchModal from './ReceiptMatchModal';
 
 const ReceiptUploadModal = ({ isOpen, onClose, listId, token, onUploadSuccess }) => {
     const [inputMode, setInputMode] = useState('upload'); // 'upload' | 'paste'
@@ -8,8 +9,9 @@ const ReceiptUploadModal = ({ isOpen, onClose, listId, token, onUploadSuccess })
     const [receiptText, setReceiptText] = useState('');
     const [isUploading, setIsUploading] = useState(false);
     const [error, setError] = useState(null);
-    // null | 'parsed' | 'queued'
+    // null | 'parsed' | 'queued' | 'pending_review'
     const [successStatus, setSuccessStatus] = useState(null);
+    const [pendingReceiptId, setPendingReceiptId] = useState(null);
 
     if (!isOpen) return null;
 
@@ -53,7 +55,7 @@ const ReceiptUploadModal = ({ isOpen, onClose, listId, token, onUploadSuccess })
             }
 
             const data = await resp.json();
-            const status = data.status === 'parsed' ? 'parsed' : 'queued';
+            const status = data.status;
             setSuccessStatus(status);
 
             if (status === 'parsed') {
@@ -61,6 +63,8 @@ const ReceiptUploadModal = ({ isOpen, onClose, listId, token, onUploadSuccess })
                     onUploadSuccess();
                     handleClose();
                 }, 1500);
+            } else if (status === 'pending_review') {
+                setPendingReceiptId(data.receipt_id);
             }
             // For 'queued': stay open so the user reads the explanation; they close manually.
 
@@ -78,10 +82,24 @@ const ReceiptUploadModal = ({ isOpen, onClose, listId, token, onUploadSuccess })
         setIsUploading(false);
         setError(null);
         setSuccessStatus(null);
+        setPendingReceiptId(null);
         onClose();
     };
 
     const isSubmitDisabled = isUploading || !!successStatus || (inputMode === 'upload' ? !file : !receiptText.trim());
+
+    // When pending_review: hand off to ReceiptMatchModal
+    if (successStatus === 'pending_review' && pendingReceiptId) {
+        return (
+            <ReceiptMatchModal
+                isOpen={true}
+                onClose={handleClose}
+                receiptId={pendingReceiptId}
+                token={token}
+                onDone={onUploadSuccess}
+            />
+        );
+    }
 
     const tabStyle = (active) => ({
         flex: 1,

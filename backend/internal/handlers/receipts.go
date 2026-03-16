@@ -188,7 +188,102 @@ func uploadReceiptWith(c *gin.Context, svc receiptSvc) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Receipt processed", "receipt_id": receipt.ID, "status": "parsed"})
+	// Read the actual status set by ProcessReceipt (may be "parsed" or "pending_review")
+	status := "parsed"
+	if receipt.ID != 0 {
+		var updated models.Receipt
+		if dbErr := database.DB.Select("status").First(&updated, receipt.ID).Error; dbErr == nil {
+			status = updated.Status
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Receipt processed", "receipt_id": receipt.ID, "status": status})
+}
+
+// GetReceiptMatches returns the receipt with AI match suggestions for user review.
+// GET /api/receipts/:id/matches
+func GetReceiptMatches(c *gin.Context) {
+	familyID := c.MustGet("family_id").(uint)
+	receiptID, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid receipt ID"})
+		return
+	}
+
+	svc := getReceiptService(c.Request.Context())
+	resp, err := svc.GetReceiptMatches(uint(receiptID), familyID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+// ConfirmReceiptItemMatch confirms or changes the match for a single receipt item.
+// PATCH /api/receipts/:id/matches/:receipt_item_id
+// Body: {"planned_item_id": 7}  or  {"planned_item_id": null}
+func ConfirmReceiptItemMatch(c *gin.Context) {
+	familyID := c.MustGet("family_id").(uint)
+	receiptItemID, err := strconv.ParseUint(c.Param("receipt_item_id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid receipt item ID"})
+		return
+	}
+
+	var body struct {
+		PlannedItemID *uint `json:"planned_item_id"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		return
+	}
+
+	svc := getReceiptService(c.Request.Context())
+	if err := svc.ConfirmMatch(c.Request.Context(), uint(receiptItemID), body.PlannedItemID, familyID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Match confirmed"})
+}
+
+// DismissReceiptItem marks a receipt item as dismissed (not relevant to the list).
+// POST /api/receipts/:id/matches/:receipt_item_id/dismiss
+func DismissReceiptItem(c *gin.Context) {
+	familyID := c.MustGet("family_id").(uint)
+	receiptItemID, err := strconv.ParseUint(c.Param("receipt_item_id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid receipt item ID"})
+		return
+	}
+
+	svc := getReceiptService(c.Request.Context())
+	if err := svc.DismissReceiptItem(uint(receiptItemID), familyID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Item dismissed"})
+}
+
+// ConfirmAllMatches accepts all auto-matches and creates new items for unmatched receipt items.
+// POST /api/receipts/:id/matches/confirm-all
+func ConfirmAllMatches(c *gin.Context) {
+	familyID := c.MustGet("family_id").(uint)
+	receiptID, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid receipt ID"})
+		return
+	}
+
+	svc := getReceiptService(c.Request.Context())
+	if err := svc.ConfirmAllMatches(c.Request.Context(), uint(receiptID), familyID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "All matches confirmed"})
 }
 
 // GetReceiptFile serves the raw receipt file (image, PDF, or text).
@@ -221,8 +316,6 @@ func getReceiptFileWith(c *gin.Context, dataPath string) {
 
 	rawDataPath, _ := filepath.Abs(dataPath)
 	// EvalSymlinks resolves macOS /var → /private/var etc., keeping tests green on all platforms.
-	// We resolve the data path (which always exists) and then construct the file path from it,
-	// so both share the same symlink-resolved base.
 	absDataPath, err := filepath.EvalSymlinks(rawDataPath)
 	if err != nil {
 		absDataPath = rawDataPath
@@ -264,7 +357,6 @@ func getReceiptFileWith(c *gin.Context, dataPath string) {
 }
 
 // sanitizeSlug converts a shop name to a safe filename slug.
-// It lowercases, replaces spaces with hyphens, and strips non-ASCII-alphanumeric characters.
 func sanitizeSlug(name string) string {
 	name = strings.ToLower(name)
 	name = strings.ReplaceAll(name, " ", "-")

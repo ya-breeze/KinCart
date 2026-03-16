@@ -125,6 +125,10 @@ func main() {
 			protected.POST("/lists/:id/items", handlers.AddItemToList)
 			protected.POST("/lists/:id/receipts", handlers.UploadReceipt)
 			protected.GET("/receipts/:id/file", handlers.GetReceiptFile)
+			protected.GET("/receipts/:id/matches", handlers.GetReceiptMatches)
+			protected.PATCH("/receipts/:id/matches/:receipt_item_id", handlers.ConfirmReceiptItemMatch)
+			protected.POST("/receipts/:id/matches/:receipt_item_id/dismiss", handlers.DismissReceiptItem)
+			protected.POST("/receipts/:id/matches/confirm-all", handlers.ConfirmAllMatches)
 			protected.PATCH("/items/:id", handlers.UpdateItem)
 			protected.DELETE("/items/:id", handlers.DeleteItem)
 
