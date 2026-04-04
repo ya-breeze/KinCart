@@ -4,11 +4,14 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"kincart/internal/ai"
+	"kincart/internal/backup"
 	"kincart/internal/database"
 	"kincart/internal/flyers"
 	"kincart/internal/handlers"
@@ -29,6 +32,28 @@ func main() {
 	_ = gotenv.Load() // .env file is optional
 	database.InitDB()
 
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	dbPath := os.Getenv("DB_PATH")
+	if dbPath == "" {
+		dbPath = "data/kincart.db"
+	}
+	uploadsPath := os.Getenv("UPLOADS_PATH")
+	if uploadsPath == "" {
+		uploadsPath = "./uploads"
+	}
+	flyerItemsPath := os.Getenv("FLYER_ITEMS_PATH")
+	if flyerItemsPath == "" {
+		flyerItemsPath = filepath.Join(uploadsPath, "flyer_items")
+	}
+	dataPath := os.Getenv("KINCART_DATA_PATH")
+	if dataPath == "" {
+		dataPath = "./kincart-data"
+	}
+
+	backup.NewTask(logger, dbPath, uploadsPath, flyerItemsPath, dataPath).Start(ctx)
+
 	// Start token blacklist cleanup routine
 	middleware.CleanupBlacklist()
 
@@ -41,15 +66,6 @@ func main() {
 		} else {
 			manager := flyers.NewManager(database.DB, parser)
 
-			// Set output directory for cropped images
-			flyerItemsPath := os.Getenv("FLYER_ITEMS_PATH")
-			if flyerItemsPath == "" {
-				uploadsPath := os.Getenv("UPLOADS_PATH")
-				if uploadsPath == "" {
-					uploadsPath = "./uploads"
-				}
-				flyerItemsPath = filepath.Join(uploadsPath, "flyer_items")
-			}
 			manager.OutputDir = flyerItemsPath
 
 			flyers.StartScheduler(database.DB, manager)
@@ -63,13 +79,12 @@ func main() {
 		ticker := time.NewTicker(10 * time.Minute)
 		defer ticker.Stop()
 
-		ctx := context.Background()
-
-		for range ticker.C {
-			// Re-init service each run to check if ENV changed or just usage
-			// Ideally we reuse, but here we need to check if Key became available?
-			// Actually, env vars don't change without restart usually.
-			// But if we want to run it, we need a service instance.
+		for {
+			select {
+			case <-ticker.C:
+			case <-ctx.Done():
+				return
+			}
 
 			geminiKey := os.Getenv("GEMINI_API_KEY")
 			if geminiKey == "" {
@@ -82,10 +97,6 @@ func main() {
 				continue
 			}
 
-			dataPath := os.Getenv("KINCART_DATA_PATH")
-			if dataPath == "" {
-				dataPath = "./kincart-data"
-			}
 			fileStorage := services.NewFileStorageService(dataPath)
 			svc := services.NewReceiptService(database.DB, gemClient, fileStorage, dataPath)
 
@@ -170,20 +181,10 @@ func main() {
 		}
 	}
 
-	uploadsPath := os.Getenv("UPLOADS_PATH")
-	if uploadsPath == "" {
-		uploadsPath = "./uploads"
-	}
-
 	// Apply security middleware to uploads route
 	uploadsGroup := r.Group("/uploads")
 	uploadsGroup.Use(middleware.UploadSecurityMiddleware())
 	uploadsGroup.Static("/", uploadsPath)
-
-	flyerItemsPath := os.Getenv("FLYER_ITEMS_PATH")
-	if flyerItemsPath == "" {
-		flyerItemsPath = filepath.Join(uploadsPath, "flyer_items")
-	}
 
 	// Also serve flyer items. If they are in /data/flyer_items, serve them there.
 	// This matches the absolute paths stored in the DB by some legacy code or docker configs.
