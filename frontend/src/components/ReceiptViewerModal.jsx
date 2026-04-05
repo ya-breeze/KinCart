@@ -23,7 +23,7 @@ function fileReducer(state, action) {
 }
 
 export default function ReceiptViewerModal({ receipts, isOpen, onClose }) {
-    const { token } = useAuth();
+    
     const [fileState, dispatch] = useReducer(fileReducer, initialFileState);
     const { selectedReceiptId, blobUrl, textContent, isLoadingFile } = fileState;
 
@@ -39,7 +39,6 @@ export default function ReceiptViewerModal({ receipts, isOpen, onClose }) {
         const isTextReceipt = selectedReceipt.image_path?.endsWith('.txt');
 
         fetch(`${API_BASE_URL}/api/receipts/${selectedReceiptId}/file`, {
-            headers: { Authorization: `Bearer ${token}` },
         })
             .then(res => {
                 if (!res.ok) throw new Error('Failed to load receipt file');
@@ -91,7 +90,6 @@ export default function ReceiptViewerModal({ receipts, isOpen, onClose }) {
 
         try {
             const res = await fetch(`${API_BASE_URL}/api/receipts/${selectedReceipt.id}/file`, {
-                headers: { Authorization: `Bearer ${token}` },
             });
             const blob = await res.blob();
             const url = URL.createObjectURL(blob);

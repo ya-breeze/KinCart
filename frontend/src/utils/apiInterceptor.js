@@ -6,8 +6,8 @@ function subscribeTokenRefresh(cb) {
     refreshSubscribers.push(cb);
 }
 
-function onTokenRefreshed(token) {
-    refreshSubscribers.map((cb) => cb(token));
+function onRefreshed() {
+    refreshSubscribers.map((cb) => cb());
     refreshSubscribers = [];
 }
 
@@ -23,60 +23,38 @@ export const setupInterceptor = () => {
         const isRefreshRequest = url.includes('/api/auth/refresh');
 
         if (isApiRequest) {
-            const newConfig = { ...(config || {}), redirect: 'manual' };
-
-            // Inject the current token if it exists in localStorage and not already provided
-            if (!newConfig.headers) {
-                newConfig.headers = {};
-            }
-            if (!newConfig.headers['Authorization']) {
-                const token = localStorage.getItem('token');
-                if (token) {
-                    newConfig.headers['Authorization'] = `Bearer ${token}`;
-                }
-            }
+            // Always send cookies with API requests
+            const newConfig = { ...(config || {}), credentials: 'include', redirect: 'manual' };
 
             const response = await originalFetch(resource, newConfig);
 
-            // Handle KinCart 401 Unauthorized (Token Expired)
+            // Handle 401 Unauthorized — try cookie-based refresh
             if (response.status === 401 && !isRefreshRequest) {
-                const refreshToken = localStorage.getItem('refresh_token');
-                if (!refreshToken) {
-                    return response; // No refresh token, let the app handle 401 (log out)
-                }
-
                 if (!isRefreshing) {
                     isRefreshing = true;
-                    // Use originalFetch to avoid infinite loops
                     originalFetch('/api/auth/refresh', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ refresh_token: refreshToken })
-                    }).then(async refreshResp => {
+                        credentials: 'include',
+                    }).then(refreshResp => {
                         isRefreshing = false;
                         if (refreshResp.ok) {
-                            const data = await refreshResp.json();
-                            localStorage.setItem('token', data.token);
-                            onTokenRefreshed(data.token);
+                            onRefreshed();
                         } else {
-                            // Refresh failed, clear everything and reload or let subscribers fail
-                            console.error('Refresh token invalid or expired');
-                            localStorage.removeItem('token');
-                            localStorage.removeItem('refresh_token');
-                            window.location.reload();
+                            refreshSubscribers = [];
+                            window.dispatchEvent(new Event('auth:session-expired'));
                         }
                     }).catch(err => {
                         isRefreshing = false;
+                        refreshSubscribers = [];
                         console.error('Refresh request failed', err);
+                        window.dispatchEvent(new Event('auth:session-expired'));
                     });
                 }
 
-                // Wait for refresh to complete
+                // Wait for refresh then retry original request
                 return new Promise((resolve) => {
-                    subscribeTokenRefresh((newToken) => {
-                        const retryConfig = { ...newConfig };
-                        retryConfig.headers = { ...retryConfig.headers, 'Authorization': `Bearer ${newToken}` };
-                        resolve(originalFetch(resource, retryConfig));
+                    subscribeTokenRefresh(() => {
+                        resolve(originalFetch(resource, newConfig));
                     });
                 });
             }
@@ -88,6 +66,9 @@ export const setupInterceptor = () => {
 };
 
 export const resetInterceptor = () => {
+    if (originalFetch) {
+        window.fetch = originalFetch;
+    }
     originalFetch = null;
     isRefreshing = false;
     refreshSubscribers = [];

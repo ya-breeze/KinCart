@@ -17,6 +17,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 
 	"kincart/internal/ai"
 	"kincart/internal/database"
@@ -28,9 +29,9 @@ const maxReceiptTextBytes = 100 * 1024 // 100 KB
 
 // receiptSvc is the interface used by the upload handler (enables testing with mocks).
 type receiptSvc interface {
-	CreateReceipt(familyID uint, file *multipart.FileHeader) (*models.Receipt, error)
-	CreateReceiptFromText(familyID uint, text string) (*models.Receipt, error)
-	ProcessReceipt(ctx context.Context, receiptID uint, listID uint) error
+	CreateReceipt(familyID uuid.UUID, file *multipart.FileHeader) (*models.Receipt, error)
+	CreateReceiptFromText(familyID uuid.UUID, text string) (*models.Receipt, error)
+	ProcessReceipt(ctx context.Context, receiptID uuid.UUID, listID uuid.UUID) error
 }
 
 // Helper to get service instance (in a real app, use dependency injection)
@@ -66,19 +67,16 @@ func UploadReceipt(c *gin.Context) {
 }
 
 // uploadReceiptWith is the testable core of UploadReceipt.
-// It accepts either:
-//   - application/json body with {"receipt_text": "..."}
-//   - multipart/form-data with field "receipt" (image, PDF, or .txt)
 func uploadReceiptWith(c *gin.Context, svc receiptSvc) {
 	listIDStr := c.Param("id")
-	listID, err := strconv.ParseUint(listIDStr, 10, 32)
+	listID, err := uuid.Parse(listIDStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid list ID"})
 		return
 	}
 
 	var list struct {
-		FamilyID uint
+		FamilyID uuid.UUID
 	}
 	if dbErr := database.DB.Table("shopping_lists").Select("family_id").Where("id = ?", listID).First(&list).Error; dbErr != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "List not found"})
@@ -128,7 +126,6 @@ func uploadReceiptWith(c *gin.Context, svc receiptSvc) {
 
 		ext := strings.ToLower(filepath.Ext(file.Filename))
 		if ext == ".txt" {
-			// Validate and read .txt file
 			if file.Size > maxReceiptTextBytes {
 				c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "File exceeds 100KB limit"})
 				return
@@ -147,7 +144,6 @@ func uploadReceiptWith(c *gin.Context, svc receiptSvc) {
 				return
 			}
 
-			// Strip UTF-8 BOM if present
 			data = bytes.TrimPrefix(data, []byte{0xEF, 0xBB, 0xBF})
 
 			if !utf8.Valid(data) {
@@ -168,7 +164,6 @@ func uploadReceiptWith(c *gin.Context, svc receiptSvc) {
 			}
 
 		} else {
-			// Image / PDF upload (existing path)
 			receipt, err = svc.CreateReceipt(list.FamilyID, file)
 			if err != nil {
 				slog.Error("Failed to save receipt from file upload", "error", err)
@@ -182,7 +177,7 @@ func uploadReceiptWith(c *gin.Context, svc receiptSvc) {
 	database.DB.Model(receipt).Updates(map[string]interface{}{"list_id": listID})
 
 	// Process (synchronous; gracefully handles missing Gemini key)
-	if err := svc.ProcessReceipt(c.Request.Context(), receipt.ID, uint(listID)); err != nil {
+	if err := svc.ProcessReceipt(c.Request.Context(), receipt.ID, listID); err != nil {
 		if errors.Is(err, services.ErrGeminiUnavailable) {
 			c.JSON(http.StatusOK, gin.H{"message": "Receipt saved (queued for parsing)", "receipt_id": receipt.ID, "status": "queued"})
 			return
@@ -193,11 +188,11 @@ func uploadReceiptWith(c *gin.Context, svc receiptSvc) {
 		return
 	}
 
-	// Read the actual status set by ProcessReceipt (may be "parsed" or "pending_review")
+	// Read the actual status set by ProcessReceipt
 	status := "parsed"
-	if receipt.ID != 0 {
+	if receipt.ID != uuid.Nil {
 		var updated models.Receipt
-		if dbErr := database.DB.Select("status").First(&updated, receipt.ID).Error; dbErr == nil {
+		if dbErr := database.DB.Select("status").First(&updated, "id = ?", receipt.ID).Error; dbErr == nil {
 			status = updated.Status
 		}
 	}
@@ -208,15 +203,15 @@ func uploadReceiptWith(c *gin.Context, svc receiptSvc) {
 // GetReceiptMatches returns the receipt with AI match suggestions for user review.
 // GET /api/receipts/:id/matches
 func GetReceiptMatches(c *gin.Context) {
-	familyID := c.MustGet("family_id").(uint)
-	receiptID, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	familyID := c.MustGet("family_id").(uuid.UUID)
+	receiptID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid receipt ID"})
 		return
 	}
 
 	svc := getReceiptService(c.Request.Context())
-	resp, err := svc.GetReceiptMatches(uint(receiptID), familyID)
+	resp, err := svc.GetReceiptMatches(receiptID, familyID)
 	if err != nil {
 		slog.Error("Failed to get receipt matches", "receipt_id", receiptID, "error", err)
 		c.JSON(http.StatusNotFound, gin.H{"error": "Receipt not found"})
@@ -228,9 +223,9 @@ func GetReceiptMatches(c *gin.Context) {
 
 // ConfirmReceiptItemMatch confirms or changes the match for a single receipt item.
 // PATCH /api/receipts/:id/matches/:receipt_item_id
-// Body: {"planned_item_id": 7}  or  {"planned_item_id": null}
+// Body: {"planned_item_id": "uuid"}  or  {"planned_item_id": null}
 func ConfirmReceiptItemMatch(c *gin.Context) {
-	familyID := c.MustGet("family_id").(uint)
+	familyID := c.MustGet("family_id").(uuid.UUID)
 	receiptItemID, err := strconv.ParseUint(c.Param("receipt_item_id"), 10, 32)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid receipt item ID"})
@@ -238,7 +233,7 @@ func ConfirmReceiptItemMatch(c *gin.Context) {
 	}
 
 	var body struct {
-		PlannedItemID *uint `json:"planned_item_id"`
+		PlannedItemID *uuid.UUID `json:"planned_item_id"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
@@ -265,7 +260,7 @@ func ConfirmReceiptItemMatch(c *gin.Context) {
 // DismissReceiptItem marks a receipt item as dismissed (not relevant to the list).
 // POST /api/receipts/:id/matches/:receipt_item_id/dismiss
 func DismissReceiptItem(c *gin.Context) {
-	familyID := c.MustGet("family_id").(uint)
+	familyID := c.MustGet("family_id").(uuid.UUID)
 	receiptItemID, err := strconv.ParseUint(c.Param("receipt_item_id"), 10, 32)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid receipt item ID"})
@@ -285,15 +280,15 @@ func DismissReceiptItem(c *gin.Context) {
 // ConfirmAllMatches accepts all auto-matches and creates new items for unmatched receipt items.
 // POST /api/receipts/:id/matches/confirm-all
 func ConfirmAllMatches(c *gin.Context) {
-	familyID := c.MustGet("family_id").(uint)
-	receiptID, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	familyID := c.MustGet("family_id").(uuid.UUID)
+	receiptID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid receipt ID"})
 		return
 	}
 
 	svc := getReceiptService(c.Request.Context())
-	if err := svc.ConfirmAllMatches(c.Request.Context(), uint(receiptID), familyID); err != nil {
+	if err := svc.ConfirmAllMatches(c.Request.Context(), receiptID, familyID); err != nil {
 		slog.Error("Failed to confirm all matches", "receipt_id", receiptID, "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to confirm matches"})
 		return
@@ -314,9 +309,8 @@ func GetReceiptFile(c *gin.Context) {
 
 // getReceiptFileWith is the testable core of GetReceiptFile.
 func getReceiptFileWith(c *gin.Context, dataPath string) {
-	familyID := c.MustGet("family_id").(uint)
-	receiptIDStr := c.Param("id")
-	receiptID, err := strconv.ParseUint(receiptIDStr, 10, 32)
+	familyID := c.MustGet("family_id").(uuid.UUID)
+	receiptID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid receipt ID"})
 		return
@@ -331,14 +325,12 @@ func getReceiptFileWith(c *gin.Context, dataPath string) {
 	}
 
 	rawDataPath, _ := filepath.Abs(dataPath)
-	// EvalSymlinks resolves macOS /var → /private/var etc., keeping tests green on all platforms.
 	absDataPath, err := filepath.EvalSymlinks(rawDataPath)
 	if err != nil {
 		absDataPath = rawDataPath
 	}
 	absFilePath := filepath.Join(absDataPath, receipt.ImagePath)
 
-	// Path traversal guard (uses "/" intentionally — project runs on Linux/Docker)
 	if !strings.HasPrefix(absFilePath, absDataPath+"/") {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file path"})
 		return
@@ -355,7 +347,6 @@ func getReceiptFileWith(c *gin.Context, dataPath string) {
 		return
 	}
 
-	// Derive a friendly download filename
 	ext := strings.TrimPrefix(filepath.Ext(receipt.ImagePath), ".")
 	if ext == "" {
 		ext = "bin"
@@ -366,7 +357,7 @@ func getReceiptFileWith(c *gin.Context, dataPath string) {
 		shopSlug := sanitizeSlug(receipt.Shop.Name)
 		filename = "receipt-" + date + "-" + shopSlug + "." + ext
 	} else {
-		filename = fmt.Sprintf("receipt-%d.%s", receipt.ID, ext)
+		filename = fmt.Sprintf("receipt-%s.%s", receipt.ID.String(), ext)
 	}
 
 	c.FileAttachment(absFilePath, filename)

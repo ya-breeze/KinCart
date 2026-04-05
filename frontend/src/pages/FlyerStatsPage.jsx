@@ -198,7 +198,7 @@ const DetailsModal = ({ isOpen, onClose, title, loading, data, type, selectedDat
 };
 
 const FlyerStatsPage = () => {
-    const { token } = useAuth();
+    
     const navigate = useNavigate();
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -215,7 +215,6 @@ const FlyerStatsPage = () => {
     const fetchStats = async () => {
         try {
             const resp = await fetch(`${API_BASE_URL}/api/flyers/stats`, {
-                headers: { 'Authorization': `Bearer ${token}` }
             });
             if (resp.ok) {
                 const data = await resp.json();
@@ -231,7 +230,7 @@ const FlyerStatsPage = () => {
     useEffect(() => {
         fetchStats();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [token]);
+    }, []);
 
     const fetchModalData = async (type, date) => {
         setModal(prev => ({ ...prev, loading: true }));
@@ -245,7 +244,6 @@ const FlyerStatsPage = () => {
 
         try {
             const resp = await fetch(url, {
-                headers: { 'Authorization': `Bearer ${token}` }
             });
             if (resp.ok) {
                 const data = await resp.json();
@@ -264,7 +262,6 @@ const FlyerStatsPage = () => {
         if (!date && ['pages', 'parsed', 'errors', 'items'].includes(card.id)) {
             try {
                 const resp = await fetch(`${API_BASE_URL}/api/flyers/activity-stats`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if (resp.ok) {
                     const data = await resp.json();

@@ -15,7 +15,7 @@ vi.mock('lucide-react', () => ({
 vi.mock('../context/AuthContext', () => ({
     useAuth: () => ({
         login: vi.fn(),
-        token: null,
+        user: null,
     }),
     AuthProvider: ({ children }) => <div>{children}</div>,
 }));

@@ -3,16 +3,16 @@ package handlers
 import (
 	"log/slog"
 	"net/http"
-	"strconv"
 
 	"kincart/internal/database"
 	"kincart/internal/models"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 func GetCategories(c *gin.Context) {
-	familyID := c.MustGet("family_id").(uint)
+	familyID := c.MustGet("family_id").(uuid.UUID)
 
 	var categories []models.Category
 	if err := database.DB.Where("family_id = ?", familyID).Order("sort_order asc").Find(&categories).Error; err != nil {
@@ -24,11 +24,11 @@ func GetCategories(c *gin.Context) {
 }
 
 func ReorderCategories(c *gin.Context) {
-	familyID := c.MustGet("family_id").(uint)
+	familyID := c.MustGet("family_id").(uuid.UUID)
 
 	var req []struct {
-		ID        uint `json:"id"`
-		SortOrder int  `json:"sort_order"`
+		ID        uuid.UUID `json:"id"`
+		SortOrder int       `json:"sort_order"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -51,7 +51,7 @@ func ReorderCategories(c *gin.Context) {
 }
 
 func CreateCategory(c *gin.Context) {
-	familyID := c.MustGet("family_id").(uint)
+	familyID := c.MustGet("family_id").(uuid.UUID)
 
 	var category models.Category
 	if err := c.ShouldBindJSON(&category); err != nil {
@@ -70,19 +70,18 @@ func CreateCategory(c *gin.Context) {
 }
 
 func UpdateCategory(c *gin.Context) {
-	familyID := c.MustGet("family_id").(uint)
-	categoryID := c.Param("id")
+	familyID := c.MustGet("family_id").(uuid.UUID)
+	categoryIDStr := c.Param("id")
 
-	// Validate category ID
-	catID, err := strconv.ParseUint(categoryID, 10, 32)
+	catID, err := uuid.Parse(categoryIDStr)
 	if err != nil {
-		slog.Warn("Invalid category ID format", "category_id", categoryID, "ip", c.ClientIP())
+		slog.Warn("Invalid category ID format", "category_id", categoryIDStr, "ip", c.ClientIP())
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid category ID"})
 		return
 	}
 
 	var category models.Category
-	if err := database.DB.Where("id = ? AND family_id = ?", uint(catID), familyID).First(&category).Error; err != nil {
+	if err := database.DB.Where("id = ? AND family_id = ?", catID, familyID).First(&category).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Category not found"})
 		return
 	}
@@ -98,23 +97,22 @@ func UpdateCategory(c *gin.Context) {
 }
 
 func DeleteCategory(c *gin.Context) {
-	familyID := c.MustGet("family_id").(uint)
-	categoryID := c.Param("id")
+	familyID := c.MustGet("family_id").(uuid.UUID)
+	categoryIDStr := c.Param("id")
 
-	// Validate category ID to prevent SQL injection
-	catID, err := strconv.ParseUint(categoryID, 10, 32)
+	catID, err := uuid.Parse(categoryIDStr)
 	if err != nil {
-		slog.Warn("Invalid category ID format in delete", "category_id", categoryID, "ip", c.ClientIP())
+		slog.Warn("Invalid category ID format in delete", "category_id", categoryIDStr, "ip", c.ClientIP())
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid category ID"})
 		return
 	}
 
-	// Set items that use this category to null or uncategorized, scoped by family
+	// Clear category from items scoped by family
 	database.DB.Model(&models.Item{}).
-		Where("category_id = ? AND list_id IN (SELECT id FROM shopping_lists WHERE family_id = ?)", uint(catID), familyID).
-		Update("category_id", 0)
+		Where("category_id = ? AND list_id IN (SELECT id FROM shopping_lists WHERE family_id = ?)", catID, familyID).
+		Update("category_id", uuid.Nil)
 
-	if err := database.DB.Where("id = ? AND family_id = ?", uint(catID), familyID).Delete(&models.Category{}).Error; err != nil {
+	if err := database.DB.Where("id = ? AND family_id = ?", catID, familyID).Delete(&models.Category{}).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete category"})
 		return
 	}

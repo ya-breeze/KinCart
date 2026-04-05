@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { API_BASE_URL } from '../config';
 
-export const usePriceHistory = (token, q, excludeWords, period) => {
+export const usePriceHistory = (q, excludeWords, period) => {
     const [chartData, setChartData] = useState([]);
     const [items, setItems] = useState([]);
     const [pagination, setPagination] = useState(null);
@@ -39,7 +39,6 @@ export const usePriceHistory = (token, q, excludeWords, period) => {
             const resp = await fetch(
                 `${API_BASE_URL}/api/flyers/items/history?${params}`,
                 {
-                    headers: { Authorization: `Bearer ${token}` },
                     signal: abortControllerRef.current.signal
                 }
             );
@@ -71,7 +70,7 @@ export const usePriceHistory = (token, q, excludeWords, period) => {
             setLoading(false);
             setLoadingMore(false);
         }
-    }, [token, q, excludeStr, period]);
+    }, [q, excludeStr, period]);
 
     // Reset on param change
     useEffect(() => {

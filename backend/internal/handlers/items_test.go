@@ -11,6 +11,7 @@ import (
 	"kincart/internal/database"
 	"kincart/internal/models"
 
+	"github.com/google/uuid"
 	coremodels "github.com/ya-breeze/kin-core/models"
 
 	"github.com/gin-gonic/gin"
@@ -33,10 +34,10 @@ func TestItemsHandlers(t *testing.T) {
 
 	t.Run("AddItemToList", func(t *testing.T) {
 		setupItemTestDBIsolated()
-		family := models.Family{Family: coremodels.Family{Name: "Test Family"}}
+		family := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "Test Family"}}
 		database.DB.Create(&family)
 		list := models.ShoppingList{
-			TenantModel: coremodels.TenantModel{FamilyID: family.ID},
+			TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID},
 			Title:       "Test List",
 		}
 		database.DB.Create(&list)
@@ -50,7 +51,7 @@ func TestItemsHandlers(t *testing.T) {
 
 		newItem := models.Item{Name: "Bread"}
 		jsonValue, _ := json.Marshal(newItem)
-		req, _ := http.NewRequest(http.MethodPost, fmt.Sprintf("/lists/%d/items", list.ID), bytes.NewBuffer(jsonValue))
+		req, _ := http.NewRequest(http.MethodPost, fmt.Sprintf("/lists/%s/items", list.ID.String()), bytes.NewBuffer(jsonValue))
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
 
@@ -68,14 +69,18 @@ func TestItemsHandlers(t *testing.T) {
 
 	t.Run("UpdateItem", func(t *testing.T) {
 		setupItemTestDBIsolated()
-		family := models.Family{Family: coremodels.Family{Name: "Test Family"}}
+		family := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "Test Family"}}
 		database.DB.Create(&family)
 		list := models.ShoppingList{
-			TenantModel: coremodels.TenantModel{FamilyID: family.ID},
+			TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID},
 			Title:       "Test List",
 		}
 		database.DB.Create(&list)
-		item := models.Item{Name: "Milk", ListID: list.ID}
+		item := models.Item{
+			TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID},
+			Name:        "Milk",
+			ListID:      list.ID,
+		}
 		database.DB.Create(&item)
 
 		r := gin.New()
@@ -87,13 +92,13 @@ func TestItemsHandlers(t *testing.T) {
 
 		updateData := map[string]interface{}{"name": "Organic Milk", "is_bought": true}
 		jsonValue, _ := json.Marshal(updateData)
-		req, _ := http.NewRequest(http.MethodPatch, fmt.Sprintf("/items/%d", item.ID), bytes.NewBuffer(jsonValue))
+		req, _ := http.NewRequest(http.MethodPatch, fmt.Sprintf("/items/%s", item.ID.String()), bytes.NewBuffer(jsonValue))
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
 		var updated models.Item
-		database.DB.First(&updated, item.ID)
+		database.DB.First(&updated, "id = ?", item.ID)
 		assert.Equal(t, "Organic Milk", updated.Name)
 		assert.True(t, updated.IsBought)
 	})

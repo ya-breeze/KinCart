@@ -8,15 +8,15 @@ const LoginPage = () => {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
-    const { login, token } = useAuth();
+    const { login, user } = useAuth();
     const navigate = useNavigate();
 
     // Redirect if already logged in
     React.useEffect(() => {
-        if (token) {
+        if (user) {
             navigate('/');
         }
-    }, [token, navigate]);
+    }, [user, navigate]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -25,11 +25,12 @@ const LoginPage = () => {
             const resp = await fetch(`${API_BASE_URL}/api/auth/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
                 body: JSON.stringify({ username, password })
             });
             const data = await resp.json();
             if (resp.ok) {
-                login(data.user, data.token, data.refresh_token);
+                login(data.user);
                 navigate('/');
             } else {
                 setError(data.error || 'Login failed');

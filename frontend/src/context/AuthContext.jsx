@@ -5,61 +5,39 @@ const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem('token'));
-  const [refreshToken, setRefreshToken] = useState(localStorage.getItem('refresh_token'));
   const [loading, setLoading] = useState(true);
+  const [mode, setMode] = useState(localStorage.getItem('mode') || 'shopper');
+  const [currency, setCurrency] = useState('₽');
 
   useEffect(() => {
-    if (token) {
-      // For MVP, we'll assume the token is valid or fetch /me
-      fetchProfile();
-    } else {
-      setLoading(false);
-    }
+    fetchProfile();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+  }, []);
 
   const fetchProfile = async () => {
     try {
       const resp = await fetch(`${API_BASE_URL}/api/auth/me`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        credentials: 'include',
       });
       if (resp.ok) {
         const data = await resp.json();
         setUser(data);
-      } else if (resp.status === 401 || resp.status === 403) {
-        // Only log out if specifically unauthorized by our backend
-        logout();
+        fetchFamilyConfig();
       } else {
-        // Leave token intact for 5xx errors or weird Cloudflare states
-        console.warn(`fetchProfile returned ${resp.status}, but keeping token`);
+        setUser(null);
       }
     } catch (err) {
-      // Network errors (like Cloudflare opaque redirects) shouldn't log the user out
-      console.warn('fetchProfile network error, keeping token:', err);
+      console.warn('fetchProfile network error:', err);
+      setUser(null);
     } finally {
       setLoading(false);
     }
   };
 
-  const [mode, setMode] = useState(localStorage.getItem('mode') || 'shopper');
-  const [currency, setCurrency] = useState('₽');
-
-  useEffect(() => {
-    localStorage.setItem('mode', mode);
-  }, [mode]);
-
-  useEffect(() => {
-    if (token) {
-      fetchFamilyConfig();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
-
   const fetchFamilyConfig = async () => {
     try {
       const resp = await fetch(`${API_BASE_URL}/api/family/config`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        credentials: 'include',
       });
       if (resp.ok) {
         const data = await resp.json();
@@ -70,46 +48,42 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  useEffect(() => {
+    localStorage.setItem('mode', mode);
+  }, [mode]);
+
+  // Listen for session expiry from the API interceptor
+  useEffect(() => {
+    const handler = () => setUser(null);
+    window.addEventListener('auth:session-expired', handler);
+    return () => window.removeEventListener('auth:session-expired', handler);
+  }, []);
+
   const toggleMode = () => {
     setMode(prev => prev === 'manager' ? 'shopper' : 'manager');
   };
 
-  const login = React.useCallback((userData, userToken, userRefreshToken) => {
+  const login = React.useCallback((userData) => {
     setUser(userData);
-    setToken(userToken);
-    setRefreshToken(userRefreshToken);
-    localStorage.setItem('token', userToken);
-    localStorage.setItem('refresh_token', userRefreshToken);
+    fetchFamilyConfig();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const logout = React.useCallback(async () => {
-    // Call backend logout endpoint to blacklist token and revoke refresh token
-    if (token) {
-      try {
-        await fetch(`${API_BASE_URL}/api/auth/logout`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ refresh_token: refreshToken || localStorage.getItem('refresh_token') })
-        });
-      } catch (err) {
-        console.error("Logout request failed:", err);
-      }
+    try {
+      await fetch(`${API_BASE_URL}/api/auth/logout`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch (err) {
+      console.error("Logout request failed:", err);
     }
-
     setUser(null);
-    setToken(null);
-    setRefreshToken(null);
-    localStorage.removeItem('token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('mode');
-  }, [token, refreshToken]);
+  }, []);
 
   const contextValue = React.useMemo(() => ({
-    user, token, mode, currency, setCurrency, toggleMode, login, logout, loading
-  }), [user, token, mode, currency, login, logout, loading]);
+    user, mode, currency, setCurrency, toggleMode, login, logout, loading
+  }), [user, mode, currency, login, logout, loading]);
 
   return (
     <AuthContext.Provider value={contextValue}>

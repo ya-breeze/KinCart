@@ -11,11 +11,12 @@ import (
 	"kincart/internal/database"
 	"kincart/internal/models"
 
-	coremodels "github.com/ya-breeze/kin-core/models"
-
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
-	"golang.org/x/crypto/bcrypt"
+	"github.com/ya-breeze/kin-core/auth"
+	"github.com/ya-breeze/kin-core/authdb"
+	coremodels "github.com/ya-breeze/kin-core/models"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -23,28 +24,28 @@ import (
 func TestLogin(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	// Setup in-memory DB
 	var err error
-	database.DB, err = gorm.Open(sqlite.Open("file::memory:"), &gorm.Config{})
+	database.DB, err = gorm.Open(sqlite.Open("file::memory:?cache=shared&_pragma=foreign_keys(1)"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("Failed to connect to database: %v", err)
 	}
 
-	err = database.DB.AutoMigrate(&models.Family{}, &models.User{}, &models.RefreshToken{})
+	err = database.DB.AutoMigrate(&models.Family{}, &models.User{}, &authdb.RefreshToken{})
 	if err != nil {
 		t.Fatalf("Failed to migrate database: %v", err)
 	}
 
 	// Create a test user
-	family := models.Family{Family: coremodels.Family{Name: "Test Family"}}
+	family := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "Test Family"}}
 	database.DB.Create(&family)
 
 	password := "password123"
-	hash, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hash, _ := auth.HashPassword(password)
 	user := models.User{
 		User: coremodels.User{
+			ID:           uuid.New(),
 			Username:     "testuser",
-			PasswordHash: string(hash),
+			PasswordHash: hash,
 			FamilyID:     family.ID,
 		},
 	}
@@ -88,15 +89,25 @@ func TestLogin(t *testing.T) {
 
 			jsonValue, _ := json.Marshal(tt.request)
 			req, _ := http.NewRequest(http.MethodPost, "/login", bytes.NewBuffer(jsonValue))
+			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 			r.ServeHTTP(w, req)
 
 			assert.Equal(t, tt.expectedStatus, w.Code)
 			if tt.expectedStatus == http.StatusOK {
-				var resp map[string]interface{}
-				json.Unmarshal(w.Body.Bytes(), &resp)
-				assert.NotEmpty(t, resp["token"])
-				assert.NotEmpty(t, resp["refresh_token"])
+				// Cookies should be set
+				cookies := w.Result().Cookies()
+				var hasAccess, hasRefresh bool
+				for _, c := range cookies {
+					if c.Name == "kin_access" {
+						hasAccess = true
+					}
+					if c.Name == "kin_refresh" {
+						hasRefresh = true
+					}
+				}
+				assert.True(t, hasAccess, "kin_access cookie should be set")
+				assert.True(t, hasRefresh, "kin_refresh cookie should be set")
 			}
 		})
 	}
@@ -105,20 +116,27 @@ func TestLogin(t *testing.T) {
 func TestRefresh(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	// Setup in-memory DB
 	var err error
-	database.DB, err = gorm.Open(sqlite.Open("file::memory:"), &gorm.Config{})
+	database.DB, err = gorm.Open(sqlite.Open("file:testrefresh?mode=memory&cache=shared"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("Failed to connect to database: %v", err)
 	}
 
-	database.DB.AutoMigrate(&models.User{}, &models.RefreshToken{})
+	database.DB.AutoMigrate(&models.Family{}, &models.User{}, &authdb.RefreshToken{})
 
-	user := models.User{User: coremodels.User{Username: "testuser"}}
+	family := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "TestFamily"}}
+	database.DB.Create(&family)
+
+	user := models.User{User: coremodels.User{
+		ID:       uuid.New(),
+		Username: "testuser",
+		FamilyID: family.ID,
+	}}
 	database.DB.Create(&user)
 
 	// Create a valid refresh token
-	validToken := models.RefreshToken{
+	validToken := authdb.RefreshToken{
+		ID:        uuid.New(),
 		UserID:    user.ID,
 		Token:     "valid-token",
 		ExpiresAt: time.Now().Add(time.Hour),
@@ -127,7 +145,8 @@ func TestRefresh(t *testing.T) {
 	database.DB.Create(&validToken)
 
 	// Create an expired refresh token
-	expiredToken := models.RefreshToken{
+	expiredToken := authdb.RefreshToken{
+		ID:        uuid.New(),
 		UserID:    user.ID,
 		Token:     "expired-token",
 		ExpiresAt: time.Now().Add(-time.Hour),
@@ -136,7 +155,8 @@ func TestRefresh(t *testing.T) {
 	database.DB.Create(&expiredToken)
 
 	// Create a revoked refresh token
-	revokedToken := models.RefreshToken{
+	revokedToken := authdb.RefreshToken{
+		ID:        uuid.New(),
 		UserID:    user.ID,
 		Token:     "revoked-token",
 		ExpiresAt: time.Now().Add(time.Hour),
@@ -146,27 +166,27 @@ func TestRefresh(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		token          string
+		cookieValue    string
 		expectedStatus int
 	}{
 		{
 			name:           "successful refresh",
-			token:          "valid-token",
+			cookieValue:    "valid-token",
 			expectedStatus: http.StatusOK,
 		},
 		{
 			name:           "expired token",
-			token:          "expired-token",
+			cookieValue:    "expired-token",
 			expectedStatus: http.StatusUnauthorized,
 		},
 		{
 			name:           "revoked token",
-			token:          "revoked-token",
+			cookieValue:    "revoked-token",
 			expectedStatus: http.StatusUnauthorized,
 		},
 		{
 			name:           "non-existent token",
-			token:          "non-existent",
+			cookieValue:    "non-existent",
 			expectedStatus: http.StatusUnauthorized,
 		},
 	}
@@ -176,17 +196,21 @@ func TestRefresh(t *testing.T) {
 			r := gin.New()
 			r.POST("/refresh", Refresh)
 
-			reqBody := map[string]string{"refresh_token": tt.token}
-			jsonValue, _ := json.Marshal(reqBody)
-			req, _ := http.NewRequest(http.MethodPost, "/refresh", bytes.NewBuffer(jsonValue))
+			req, _ := http.NewRequest(http.MethodPost, "/refresh", nil)
+			req.AddCookie(&http.Cookie{Name: "kin_refresh", Value: tt.cookieValue})
 			w := httptest.NewRecorder()
 			r.ServeHTTP(w, req)
 
 			assert.Equal(t, tt.expectedStatus, w.Code)
 			if tt.expectedStatus == http.StatusOK {
-				var resp map[string]interface{}
-				json.Unmarshal(w.Body.Bytes(), &resp)
-				assert.NotEmpty(t, resp["token"])
+				cookies := w.Result().Cookies()
+				var hasAccess bool
+				for _, c := range cookies {
+					if c.Name == "kin_access" {
+						hasAccess = true
+					}
+				}
+				assert.True(t, hasAccess, "kin_access cookie should be set on refresh")
 			}
 		})
 	}

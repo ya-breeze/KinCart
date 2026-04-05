@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { API_BASE_URL } from '../config';
 
-export const usePaginatedFlyerItems = (token, filters) => {
+export const usePaginatedFlyerItems = (filters) => {
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
@@ -64,7 +64,7 @@ export const usePaginatedFlyerItems = (token, filters) => {
             const resp = await fetch(
                 `${API_BASE_URL}/api/flyers/items?${params.toString()}`,
                 {
-                    headers: { 'Authorization': `Bearer ${token}` },
+                    
                     signal: abortControllerRef.current.signal
                 }
             );
@@ -106,7 +106,7 @@ export const usePaginatedFlyerItems = (token, filters) => {
             setLoading(false);
             setLoadingMore(false);
         }
-    }, [token, filters, getCacheKey]);
+    }, [filters, getCacheKey]);
 
     // Load more items
     const loadMore = useCallback(() => {

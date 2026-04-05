@@ -61,7 +61,7 @@ function parseSearchText(text) {
 }
 
 const PriceHistoryPage = () => {
-    const { token, currency } = useAuth();
+    const { currency } = useAuth();
     const navigate = useNavigate();
     const [searchText, setSearchText] = useState('');
     const [period, setPeriod] = useState('6m');
@@ -71,7 +71,7 @@ const PriceHistoryPage = () => {
     const { query, excludes } = useMemo(() => parseSearchText(searchText), [searchText]);
 
     const { chartData, items, pagination, loading, loadingMore, loadMore } = usePriceHistory(
-        token, query, excludes, period
+        query, excludes, period
     );
 
     const removeExclude = useCallback((word) => {

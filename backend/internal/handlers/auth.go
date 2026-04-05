@@ -1,9 +1,6 @@
 package handlers
 
 import (
-	"crypto/rand"
-	"encoding/hex"
-	"log"
 	"log/slog"
 	"net/http"
 	"time"
@@ -13,8 +10,15 @@ import (
 	"kincart/internal/models"
 
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v5"
-	"golang.org/x/crypto/bcrypt"
+	"github.com/google/uuid"
+	"github.com/ya-breeze/kin-core/auth"
+	"github.com/ya-breeze/kin-core/authdb"
+	"github.com/ya-breeze/kin-core/cookies"
+)
+
+const (
+	accessTokenTTL  = 15 * time.Minute
+	refreshTokenTTL = 365 * 24 * time.Hour
 )
 
 type LoginRequest struct {
@@ -30,59 +34,40 @@ func Login(c *gin.Context) {
 	}
 
 	var user models.User
-	if err := database.DB.Where("username = ?", req.Username).First(&user).Error; err != nil {
-		slog.Warn("Failed login attempt - user not found", "username", req.Username, "ip", c.ClientIP())
+	found := database.DB.Where("username = ?", req.Username).First(&user).Error == nil
+
+	// Always run bcrypt to prevent timing oracle (use DummyHash when user not found)
+	hash := auth.DummyHash
+	if found {
+		hash = user.PasswordHash
+	}
+
+	if !auth.VerifyPassword(req.Password, hash) || !found {
+		slog.Warn("Failed login attempt", "username", req.Username, "ip", c.ClientIP())
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
-		slog.Warn("Failed login attempt - invalid password", "username", req.Username, "ip", c.ClientIP())
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
-		return
-	}
-
-	// Generate JWT (Access Token) - shortened to 1 hour for security/testing
-	expiresAt := time.Now().Add(time.Hour * 1)
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"user_id":   user.ID,
-		"family_id": user.FamilyID,
-		"exp":       expiresAt.Unix(),
-	})
-
-	tokenString, err := token.SignedString(middleware.JWTSecret)
+	familyID := user.FamilyID
+	accessToken, err := auth.GenerateAccessToken(user.ID, &familyID, middleware.JWTSecret, accessTokenTTL)
 	if err != nil {
-		slog.Error("Failed to generate token", "username", req.Username, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
-		return
-	}
-
-	// Generate Refresh Token
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		slog.Error("Failed to generate random bytes for refresh token", "error", err)
+		slog.Error("Failed to generate access token", "username", req.Username, "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
 		return
 	}
-	refreshTokenStr := hex.EncodeToString(b)
 
-	// Save Refresh Token to DB (30 days validity)
-	refreshToken := models.RefreshToken{
-		UserID:    user.ID,
-		Token:     refreshTokenStr,
-		ExpiresAt: time.Now().Add(time.Hour * 24 * 30),
-	}
-	if err := database.DB.Create(&refreshToken).Error; err != nil {
-		slog.Error("Failed to save refresh token", "error", err)
+	rt, err := authdb.CreateRefreshToken(database.DB, user.ID, refreshTokenTTL)
+	if err != nil {
+		slog.Error("Failed to create refresh token", "username", req.Username, "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
 		return
 	}
+
+	cookies.SetAccessCookie(c.Writer, accessToken, int(accessTokenTTL.Seconds()), middleware.CookieConfig)
+	cookies.SetRefreshCookie(c.Writer, rt.Token, int(refreshTokenTTL.Seconds()), middleware.CookieConfig)
 
 	slog.Info("Successful login", "username", req.Username, "ip", c.ClientIP())
-
 	c.JSON(http.StatusOK, gin.H{
-		"token":         tokenString,
-		"refresh_token": refreshTokenStr,
 		"user": gin.H{
 			"id":        user.ID,
 			"username":  user.Username,
@@ -92,90 +77,72 @@ func Login(c *gin.Context) {
 }
 
 func Logout(c *gin.Context) {
-	// 1. Blacklist Access Token
-	tokenString, exists := c.Get("token")
-	if exists {
-		token, err := jwt.Parse(tokenString.(string), func(token *jwt.Token) (interface{}, error) {
-			return middleware.JWTSecret, nil
-		})
-
-		if err == nil && token.Valid {
-			if claims, ok := token.Claims.(jwt.MapClaims); ok {
-				if exp, ok := claims["exp"].(float64); ok {
-					expiresAt := time.Unix(int64(exp), 0)
-					middleware.BlacklistToken(tokenString.(string), expiresAt)
-				}
-			}
+	// Blacklist the access token
+	tokenString := cookies.GetAccessToken(c.Request)
+	if tokenString != "" {
+		claims, err := auth.ParseToken(tokenString, middleware.JWTSecret)
+		if err == nil {
+			expiresAt := claims.ExpiresAt.Time
+			authdb.BlacklistToken(database.DB, tokenString, expiresAt)
 		}
 	}
 
-	// 2. Revoke Refresh Token if provided
-	var req struct {
-		RefreshToken string `json:"refresh_token"`
+	// Revoke the refresh token
+	refreshToken := cookies.GetRefreshToken(c.Request)
+	if refreshToken != "" {
+		authdb.RevokeRefreshToken(database.DB, refreshToken)
 	}
-	if err := c.ShouldBindJSON(&req); err == nil && req.RefreshToken != "" {
-		database.DB.Model(&models.RefreshToken{}).
-			Where("token = ?", req.RefreshToken).
-			Update("is_revoked", true)
-	}
+
+	cookies.ClearAuthCookies(c.Writer, middleware.CookieConfig)
 
 	userID, _ := c.Get("user_id")
-	log.Printf("[SECURITY] User %v logged out from IP: %s", userID, c.ClientIP())
-
+	slog.Info("User logged out", "user_id", userID, "ip", c.ClientIP())
 	c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully"})
 }
 
 func Refresh(c *gin.Context) {
-	var req struct {
-		RefreshToken string `json:"refresh_token" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Refresh token required"})
+	tokenString := cookies.GetRefreshToken(c.Request)
+	if tokenString == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Refresh token required"})
 		return
 	}
 
-	var rt models.RefreshToken
-	if err := database.DB.Where("token = ? AND is_revoked = ?", req.RefreshToken, false).First(&rt).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or revoked refresh token"})
+	newRT, err := authdb.RotateRefreshToken(database.DB, tokenString, refreshTokenTTL)
+	if err != nil {
+		if err == authdb.ErrTokenCompromised {
+			slog.Warn("Refresh token reuse detected — all sessions revoked", "ip", c.ClientIP())
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Session compromised, all sessions revoked"})
+			return
+		}
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired refresh token"})
 		return
 	}
 
-	if time.Now().After(rt.ExpiresAt) {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Refresh token expired"})
-		return
-	}
-
-	// Token is valid, generate new Access Token (JWT)
-	// We need UserID and FamilyID. Let's fetch them from the User model associated with this token.
 	var user models.User
-	if err := database.DB.First(&user, rt.UserID).Error; err != nil {
+	if err := database.DB.First(&user, "id = ?", newRT.UserID).Error; err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
 		return
 	}
 
-	expiresAt := time.Now().Add(time.Hour * 1)
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"user_id":   user.ID,
-		"family_id": user.User.FamilyID,
-		"exp":       expiresAt.Unix(),
-	})
-
-	tokenString, err := token.SignedString(middleware.JWTSecret)
+	familyID := user.FamilyID
+	accessToken, err := auth.GenerateAccessToken(user.ID, &familyID, middleware.JWTSecret, accessTokenTTL)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
+		slog.Error("Failed to generate access token on refresh", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"token": tokenString,
-	})
+	cookies.SetAccessCookie(c.Writer, accessToken, int(accessTokenTTL.Seconds()), middleware.CookieConfig)
+	cookies.SetRefreshCookie(c.Writer, newRT.Token, int(refreshTokenTTL.Seconds()), middleware.CookieConfig)
+
+	c.JSON(http.StatusOK, gin.H{"message": "Token refreshed"})
 }
 
 func GetMe(c *gin.Context) {
-	userID := c.MustGet("user_id").(uint)
+	userID := c.MustGet("user_id").(uuid.UUID)
 
 	var user models.User
-	if err := database.DB.Preload("Family").First(&user, userID).Error; err != nil {
+	if err := database.DB.Preload("Family").First(&user, "id = ?", userID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
 	}

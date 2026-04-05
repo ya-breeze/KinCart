@@ -54,8 +54,8 @@ func main() {
 
 	backup.NewTask(logger, dbPath, uploadsPath, flyerItemsPath, dataPath).Start(ctx)
 
-	// Start token blacklist cleanup routine
-	middleware.CleanupBlacklist()
+	// Start token cleanup routine (blacklist + refresh tokens)
+	middleware.CleanupTokens(database.DB)
 
 	// Initialize Flyer Manager and start scheduler
 	geminiKey := os.Getenv("GEMINI_API_KEY")
@@ -121,7 +121,7 @@ func main() {
 
 		// Protected routes
 		protected := api.Group("/")
-		protected.Use(middleware.AuthMiddleware())
+		protected.Use(middleware.AuthMiddleware(database.DB))
 		{
 			protected.GET("/auth/me", handlers.GetMe)
 			protected.POST("/auth/logout", handlers.Logout)

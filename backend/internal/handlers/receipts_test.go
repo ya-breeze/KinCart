@@ -16,10 +16,12 @@ import (
 
 	"kincart/internal/database"
 	"kincart/internal/models"
+	"kincart/internal/services"
 
 	coremodels "github.com/ya-breeze/kin-core/models"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -27,33 +29,33 @@ import (
 
 // mockReceiptSvc is a test double for receiptSvc.
 type mockReceiptSvc struct {
-	createReceiptFunc     func(familyID uint, file *multipart.FileHeader) (*models.Receipt, error)
-	createReceiptTextFunc func(familyID uint, text string) (*models.Receipt, error)
-	processReceiptFunc    func(ctx context.Context, receiptID uint, listID uint) error
+	createReceiptFunc     func(familyID uuid.UUID, file *multipart.FileHeader) (*models.Receipt, error)
+	createReceiptTextFunc func(familyID uuid.UUID, text string) (*models.Receipt, error)
+	processReceiptFunc    func(ctx context.Context, receiptID uuid.UUID, listID uuid.UUID) error
 }
 
-func (m *mockReceiptSvc) CreateReceipt(familyID uint, file *multipart.FileHeader) (*models.Receipt, error) {
+func (m *mockReceiptSvc) CreateReceipt(familyID uuid.UUID, file *multipart.FileHeader) (*models.Receipt, error) {
 	if m.createReceiptFunc != nil {
 		return m.createReceiptFunc(familyID, file)
 	}
-	return &models.Receipt{}, nil
+	return &models.Receipt{TenantModel: coremodels.TenantModel{ID: uuid.New()}}, nil
 }
 
-func (m *mockReceiptSvc) CreateReceiptFromText(familyID uint, text string) (*models.Receipt, error) {
+func (m *mockReceiptSvc) CreateReceiptFromText(familyID uuid.UUID, text string) (*models.Receipt, error) {
 	if m.createReceiptTextFunc != nil {
 		return m.createReceiptTextFunc(familyID, text)
 	}
-	return &models.Receipt{}, nil
+	return &models.Receipt{TenantModel: coremodels.TenantModel{ID: uuid.New()}}, nil
 }
 
-func (m *mockReceiptSvc) ProcessReceipt(ctx context.Context, receiptID uint, listID uint) error {
+func (m *mockReceiptSvc) ProcessReceipt(ctx context.Context, receiptID uuid.UUID, listID uuid.UUID) error {
 	if m.processReceiptFunc != nil {
 		return m.processReceiptFunc(ctx, receiptID, listID)
 	}
 	return nil
 }
 
-func setupReceiptTestDB() uint {
+func setupReceiptTestDB() uuid.UUID {
 	var err error
 	database.DB, err = gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
@@ -61,11 +63,11 @@ func setupReceiptTestDB() uint {
 	}
 	database.DB.AutoMigrate(&models.ShoppingList{}, &models.Item{}, &models.Family{}, &models.Receipt{}, &models.ReceiptItem{})
 
-	family := models.Family{Family: coremodels.Family{Name: "Test Family"}}
+	family := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "Test Family"}}
 	database.DB.Create(&family)
 
 	list := models.ShoppingList{
-		TenantModel: coremodels.TenantModel{FamilyID: family.ID},
+		TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID},
 		Title:       "Test List",
 	}
 	database.DB.Create(&list)
@@ -88,10 +90,10 @@ func TestUploadReceipt_JSONSuccess(t *testing.T) {
 	listID := setupReceiptTestDB()
 
 	svc := &mockReceiptSvc{
-		createReceiptTextFunc: func(familyID uint, text string) (*models.Receipt, error) {
-			return &models.Receipt{}, nil
+		createReceiptTextFunc: func(familyID uuid.UUID, text string) (*models.Receipt, error) {
+			return &models.Receipt{TenantModel: coremodels.TenantModel{ID: uuid.New()}}, nil
 		},
-		processReceiptFunc: func(ctx context.Context, receiptID uint, listID uint) error {
+		processReceiptFunc: func(ctx context.Context, receiptID uuid.UUID, listID uuid.UUID) error {
 			return nil
 		},
 	}
@@ -99,7 +101,7 @@ func TestUploadReceipt_JSONSuccess(t *testing.T) {
 	r := newReceiptRouter(svc)
 
 	body := `{"receipt_text": "Store: Lidl\nTotal: 10.00\nMilk 2.00"}`
-	req, _ := http.NewRequest(http.MethodPost, fmt.Sprintf("/lists/%d/receipts", listID), strings.NewReader(body))
+	req, _ := http.NewRequest(http.MethodPost, fmt.Sprintf("/lists/%s/receipts", listID.String()), strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	w := httptest.NewRecorder()
@@ -115,7 +117,7 @@ func TestUploadReceipt_JSONWithCharset(t *testing.T) {
 	listID := setupReceiptTestDB()
 
 	svc := &mockReceiptSvc{
-		processReceiptFunc: func(ctx context.Context, receiptID uint, listID uint) error {
+		processReceiptFunc: func(ctx context.Context, receiptID uuid.UUID, listID uuid.UUID) error {
 			return nil
 		},
 	}
@@ -123,7 +125,7 @@ func TestUploadReceipt_JSONWithCharset(t *testing.T) {
 	r := newReceiptRouter(svc)
 
 	body := `{"receipt_text": "Store: Lidl\nTotal: 5.00"}`
-	req, _ := http.NewRequest(http.MethodPost, fmt.Sprintf("/lists/%d/receipts", listID), strings.NewReader(body))
+	req, _ := http.NewRequest(http.MethodPost, fmt.Sprintf("/lists/%s/receipts", listID.String()), strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json; charset=utf-8")
 
 	w := httptest.NewRecorder()
@@ -138,7 +140,7 @@ func TestUploadReceipt_InvalidJSON(t *testing.T) {
 	svc := &mockReceiptSvc{}
 	r := newReceiptRouter(svc)
 
-	req, _ := http.NewRequest(http.MethodPost, fmt.Sprintf("/lists/%d/receipts", listID), strings.NewReader("{invalid json"))
+	req, _ := http.NewRequest(http.MethodPost, fmt.Sprintf("/lists/%s/receipts", listID.String()), strings.NewReader("{invalid json"))
 	req.Header.Set("Content-Type", "application/json")
 
 	w := httptest.NewRecorder()
@@ -158,7 +160,7 @@ func TestUploadReceipt_EmptyReceiptText(t *testing.T) {
 		`{"receipt_text": "   "}`,
 		`{"receipt_text": "\n\t\n"}`,
 	} {
-		req, _ := http.NewRequest(http.MethodPost, fmt.Sprintf("/lists/%d/receipts", listID), strings.NewReader(body))
+		req, _ := http.NewRequest(http.MethodPost, fmt.Sprintf("/lists/%s/receipts", listID.String()), strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 
 		w := httptest.NewRecorder()
@@ -177,7 +179,7 @@ func TestUploadReceipt_OversizedPastedText(t *testing.T) {
 	bigText := strings.Repeat("A", maxReceiptTextBytes+1)
 	body, _ := json.Marshal(map[string]string{"receipt_text": bigText})
 
-	req, _ := http.NewRequest(http.MethodPost, fmt.Sprintf("/lists/%d/receipts", listID), bytes.NewReader(body))
+	req, _ := http.NewRequest(http.MethodPost, fmt.Sprintf("/lists/%s/receipts", listID.String()), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	w := httptest.NewRecorder()
@@ -188,7 +190,7 @@ func TestUploadReceipt_OversizedPastedText(t *testing.T) {
 
 // --- Multipart file tests ---
 
-func buildMultipartRequest(t *testing.T, listID uint, filename string, content []byte) *http.Request {
+func buildMultipartRequest(t *testing.T, listID uuid.UUID, filename string, content []byte) *http.Request {
 	t.Helper()
 	buf := &bytes.Buffer{}
 	writer := multipart.NewWriter(buf)
@@ -199,7 +201,7 @@ func buildMultipartRequest(t *testing.T, listID uint, filename string, content [
 	err = writer.Close()
 	assert.NoError(t, err)
 
-	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("/lists/%d/receipts", listID), buf)
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("/lists/%s/receipts", listID.String()), buf)
 	assert.NoError(t, err)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	return req
@@ -210,11 +212,11 @@ func TestUploadReceipt_MultipartTxtSuccess(t *testing.T) {
 
 	var capturedText string
 	svc := &mockReceiptSvc{
-		createReceiptTextFunc: func(familyID uint, text string) (*models.Receipt, error) {
+		createReceiptTextFunc: func(familyID uuid.UUID, text string) (*models.Receipt, error) {
 			capturedText = text
-			return &models.Receipt{}, nil
+			return &models.Receipt{TenantModel: coremodels.TenantModel{ID: uuid.New()}}, nil
 		},
-		processReceiptFunc: func(ctx context.Context, receiptID uint, listID uint) error {
+		processReceiptFunc: func(ctx context.Context, receiptID uuid.UUID, listID uuid.UUID) error {
 			return nil
 		},
 	}
@@ -256,11 +258,11 @@ func TestUploadReceipt_MultipartImageUnchanged(t *testing.T) {
 
 	var imageCalled bool
 	svc := &mockReceiptSvc{
-		createReceiptFunc: func(familyID uint, file *multipart.FileHeader) (*models.Receipt, error) {
+		createReceiptFunc: func(familyID uuid.UUID, file *multipart.FileHeader) (*models.Receipt, error) {
 			imageCalled = true
-			return &models.Receipt{}, nil
+			return &models.Receipt{TenantModel: coremodels.TenantModel{ID: uuid.New()}}, nil
 		},
-		processReceiptFunc: func(ctx context.Context, receiptID uint, listID uint) error {
+		processReceiptFunc: func(ctx context.Context, receiptID uuid.UUID, listID uuid.UUID) error {
 			return nil
 		},
 	}
@@ -284,7 +286,8 @@ func TestUploadReceipt_ListNotFound(t *testing.T) {
 	r := newReceiptRouter(svc)
 
 	body := `{"receipt_text": "some text"}`
-	req, _ := http.NewRequest(http.MethodPost, "/lists/99999/receipts", strings.NewReader(body))
+	nonExistentID := uuid.New()
+	req, _ := http.NewRequest(http.MethodPost, fmt.Sprintf("/lists/%s/receipts", nonExistentID.String()), strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	w := httptest.NewRecorder()
@@ -297,15 +300,15 @@ func TestUploadReceipt_GeminiUnavailableQueues(t *testing.T) {
 	listID := setupReceiptTestDB()
 
 	svc := &mockReceiptSvc{
-		processReceiptFunc: func(ctx context.Context, receiptID uint, listID uint) error {
-			return fmt.Errorf("gemini client not available")
+		processReceiptFunc: func(ctx context.Context, receiptID uuid.UUID, listID uuid.UUID) error {
+			return services.ErrGeminiUnavailable
 		},
 	}
 
 	r := newReceiptRouter(svc)
 
 	body := `{"receipt_text": "Store: Test\nTotal: 5.00"}`
-	req, _ := http.NewRequest(http.MethodPost, fmt.Sprintf("/lists/%d/receipts", listID), strings.NewReader(body))
+	req, _ := http.NewRequest(http.MethodPost, fmt.Sprintf("/lists/%s/receipts", listID.String()), strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	w := httptest.NewRecorder()
@@ -319,7 +322,7 @@ func TestUploadReceipt_GeminiUnavailableQueues(t *testing.T) {
 
 // --- GetReceiptFile tests ---
 
-func setupReceiptFileTestDB(t *testing.T) (familyID uint) {
+func setupReceiptFileTestDB(t *testing.T) uuid.UUID {
 	t.Helper()
 	var err error
 	database.DB, err = gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
@@ -331,13 +334,13 @@ func setupReceiptFileTestDB(t *testing.T) (familyID uint) {
 		&models.Receipt{}, &models.ReceiptItem{}, &models.Shop{},
 	)
 
-	family := models.Family{Family: coremodels.Family{Name: "File Test Family"}}
+	family := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "File Test Family"}}
 	database.DB.Create(&family)
 
 	return family.ID
 }
 
-func newReceiptFileRouterWithFamily(dataPath string, familyID uint) *gin.Engine {
+func newReceiptFileRouterWithFamily(dataPath string, familyID uuid.UUID) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.GET("/receipts/:id/file", func(c *gin.Context) {
@@ -351,7 +354,7 @@ func TestGetReceiptFile_Success(t *testing.T) {
 	familyID := setupReceiptFileTestDB(t)
 
 	tmpDir := t.TempDir()
-	imagePath := fmt.Sprintf("families/%d/receipts/2026/03/receipt.jpg", familyID)
+	imagePath := fmt.Sprintf("families/%s/receipts/2026/03/receipt.jpg", familyID.String())
 	fullPath := filepath.Join(tmpDir, imagePath)
 	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
 		t.Fatal(err)
@@ -361,7 +364,7 @@ func TestGetReceiptFile_Success(t *testing.T) {
 	}
 
 	receipt := models.Receipt{
-		TenantModel: coremodels.TenantModel{FamilyID: familyID},
+		TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: familyID},
 		ImagePath:   imagePath,
 		Status:      "parsed",
 	}
@@ -369,7 +372,7 @@ func TestGetReceiptFile_Success(t *testing.T) {
 
 	r := newReceiptFileRouterWithFamily(tmpDir, familyID)
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", fmt.Sprintf("/receipts/%d/file", receipt.ID), nil)
+	req, _ := http.NewRequest("GET", fmt.Sprintf("/receipts/%s/file", receipt.ID.String()), nil)
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
@@ -382,7 +385,7 @@ func TestGetReceiptFile_NotFound(t *testing.T) {
 	tmpDir := t.TempDir()
 	r := newReceiptFileRouterWithFamily(tmpDir, familyID)
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/receipts/99999/file", nil)
+	req, _ := http.NewRequest("GET", fmt.Sprintf("/receipts/%s/file", uuid.New().String()), nil)
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
@@ -392,7 +395,7 @@ func TestGetReceiptFile_WrongFamily(t *testing.T) {
 	familyID := setupReceiptFileTestDB(t)
 
 	tmpDir := t.TempDir()
-	imagePath := fmt.Sprintf("families/%d/receipts/2026/03/receipt.jpg", familyID)
+	imagePath := fmt.Sprintf("families/%s/receipts/2026/03/receipt.jpg", familyID.String())
 	fullPath := filepath.Join(tmpDir, imagePath)
 	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
 		t.Fatal(err)
@@ -402,16 +405,17 @@ func TestGetReceiptFile_WrongFamily(t *testing.T) {
 	}
 
 	receipt := models.Receipt{
-		TenantModel: coremodels.TenantModel{FamilyID: familyID},
+		TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: familyID},
 		ImagePath:   imagePath,
 		Status:      "parsed",
 	}
 	database.DB.Create(&receipt)
 
 	// Request as a different family
-	r := newReceiptFileRouterWithFamily(tmpDir, familyID+99)
+	otherFamilyID := uuid.New()
+	r := newReceiptFileRouterWithFamily(tmpDir, otherFamilyID)
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", fmt.Sprintf("/receipts/%d/file", receipt.ID), nil)
+	req, _ := http.NewRequest("GET", fmt.Sprintf("/receipts/%s/file", receipt.ID.String()), nil)
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
@@ -422,15 +426,15 @@ func TestGetReceiptFile_MissingFile(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	receipt := models.Receipt{
-		TenantModel: coremodels.TenantModel{FamilyID: familyID},
-		ImagePath:   "families/1/receipts/2026/03/missing.jpg",
+		TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: familyID},
+		ImagePath:   "families/test/receipts/2026/03/missing.jpg",
 		Status:      "parsed",
 	}
 	database.DB.Create(&receipt)
 
 	r := newReceiptFileRouterWithFamily(tmpDir, familyID)
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", fmt.Sprintf("/receipts/%d/file", receipt.ID), nil)
+	req, _ := http.NewRequest("GET", fmt.Sprintf("/receipts/%s/file", receipt.ID.String()), nil)
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)

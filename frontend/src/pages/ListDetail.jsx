@@ -11,7 +11,7 @@ import Modal from '../components/Modal';
 const ListDetail = () => {
     const { id } = useParams();
     const navigate = useNavigate();
-    const { token, mode, currency } = useAuth();
+    const { mode, currency } = useAuth();
     const [list, setList] = useState(null);
     const [categories, setCategories] = useState([]);
     const [shops, setShops] = useState([]);
@@ -42,7 +42,6 @@ const ListDetail = () => {
 
     const fetchShops = async () => {
         const resp = await fetch(`${API_BASE_URL}/api/shops`, {
-            headers: { 'Authorization': `Bearer ${token}` }
         });
         if (resp.ok) setShops(await resp.json());
     };
@@ -53,7 +52,6 @@ const ListDetail = () => {
             return;
         }
         const resp = await fetch(`${API_BASE_URL}/api/shops/${shopId}/order`, {
-            headers: { 'Authorization': `Bearer ${token}` }
         });
         if (resp.ok) setShopOrder(await resp.json());
     };
@@ -66,21 +64,18 @@ const ListDetail = () => {
 
     const fetchFrequentItems = async () => {
         const resp = await fetch(`${API_BASE_URL}/api/family/frequent-items`, {
-            headers: { 'Authorization': `Bearer ${token}` }
         });
         if (resp.ok) setFrequentItems(await resp.json());
     };
 
     const fetchCategories = async () => {
         const resp = await fetch(`${API_BASE_URL}/api/categories`, {
-            headers: { 'Authorization': `Bearer ${token}` }
         });
         if (resp.ok) setCategories(await resp.json());
     };
 
     const fetchList = async () => {
         const resp = await fetch(`${API_BASE_URL}/api/lists/${id}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
         });
         if (resp.ok) {
             setList(await resp.json());
@@ -96,7 +91,6 @@ const ListDetail = () => {
 
         const resp = await fetch(`${API_BASE_URL}/api/lists/${id}/items`, {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 ...newItem,
                 price: parseFloat(newItem.price) || 0,
@@ -114,7 +108,6 @@ const ListDetail = () => {
                 formData.append('photo', selectedPhoto);
                 await fetch(`${API_BASE_URL}/api/items/${addedItem.id}/photo`, {
                     method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}` },
                     body: formData
                 });
             }
@@ -129,7 +122,6 @@ const ListDetail = () => {
     const toggleItem = async (item) => {
         const resp = await fetch(`${API_BASE_URL}/api/items/${item.id}`, {
             method: 'PATCH',
-            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ is_bought: !item.is_bought })
         });
         if (resp.ok) fetchList();
@@ -143,7 +135,6 @@ const ListDetail = () => {
         if (!itemToDelete) return;
         const resp = await fetch(`${API_BASE_URL}/api/items/${itemToDelete.id}`, {
             method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${token}` }
         });
         if (resp.ok) {
             fetchList();
@@ -154,7 +145,6 @@ const ListDetail = () => {
     const updateStatus = async (status) => {
         const resp = await fetch(`${API_BASE_URL}/api/lists/${id}`, {
             method: 'PATCH',
-            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ status })
         });
         if (resp.ok) fetchList();
@@ -172,7 +162,6 @@ const ListDetail = () => {
     const saveEdit = async () => {
         const resp = await fetch(`${API_BASE_URL}/api/items/${editingItemId}`, {
             method: 'PATCH',
-            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 ...editItemData,
                 price: parseFloat(editItemData.price) || 0,
@@ -190,7 +179,6 @@ const ListDetail = () => {
         if (!newCategoryName.trim()) return;
         const resp = await fetch(`${API_BASE_URL}/api/categories`, {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: newCategoryName.trim() })
         });
         if (resp.ok) {
@@ -210,7 +198,6 @@ const ListDetail = () => {
 
         const resp = await fetch(`${API_BASE_URL}/api/lists/${id}`, {
             method: 'PATCH',
-            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ title: renameValue.trim() })
         });
 
@@ -227,7 +214,6 @@ const ListDetail = () => {
     const confirmDeleteList = async () => {
         const resp = await fetch(`${API_BASE_URL}/api/lists/${id}`, {
             method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${token}` }
         });
 
         if (resp.ok) {
@@ -982,7 +968,6 @@ const ListDetail = () => {
                 isOpen={isReceiptModalOpen}
                 onClose={() => setIsReceiptModalOpen(false)}
                 listId={id}
-                token={token}
                 onUploadSuccess={() => {
                     fetchList();
                     fetchFrequentItems();

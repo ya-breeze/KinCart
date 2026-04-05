@@ -6,6 +6,7 @@ import (
 	"kincart/internal/database"
 	"kincart/internal/models"
 
+	"github.com/google/uuid"
 	coremodels "github.com/ya-breeze/kin-core/models"
 
 	"github.com/stretchr/testify/assert"
@@ -24,13 +25,13 @@ func TestValidateItemsFamily(t *testing.T) {
 	database.DB.AutoMigrate(&models.Category{}, &models.Family{})
 
 	// Seed data
-	family1 := models.Family{Family: coremodels.Family{Name: "Family 1"}}
+	family1 := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "Family 1"}}
 	database.DB.Create(&family1)
-	family2 := models.Family{Family: coremodels.Family{Name: "Family 2"}}
+	family2 := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "Family 2"}}
 	database.DB.Create(&family2)
 
 	cat1 := models.Category{
-		TenantModel: coremodels.TenantModel{FamilyID: family1.ID},
+		TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family1.ID},
 		Name:        "Cat 1",
 	}
 	database.DB.Create(&cat1)
@@ -38,7 +39,7 @@ func TestValidateItemsFamily(t *testing.T) {
 	tests := []struct {
 		name     string
 		items    []models.Item
-		familyID uint
+		familyID uuid.UUID
 		wantErr  bool
 	}{
 		{
@@ -58,9 +59,9 @@ func TestValidateItemsFamily(t *testing.T) {
 			wantErr:  true,
 		},
 		{
-			name: "no category (0) is valid",
+			name: "no category (zero UUID) is valid",
 			items: []models.Item{
-				{CategoryID: 0},
+				{CategoryID: uuid.Nil},
 			},
 			familyID: family1.ID,
 			wantErr:  false,

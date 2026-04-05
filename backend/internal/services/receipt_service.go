@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	"kincart/internal/ai"
@@ -46,16 +47,16 @@ type ReceiptParser interface {
 
 // MatchSuggestionItem is the JSON element stored in ReceiptItem.SuggestedItems.
 type MatchSuggestionItem struct {
-	ItemID     uint   `json:"item_id"`
-	ItemName   string `json:"item_name"`
-	Confidence int    `json:"confidence"`
+	ItemID     uuid.UUID `json:"item_id"`
+	ItemName   string    `json:"item_name"`
+	Confidence int       `json:"confidence"`
 }
 
 // Response types returned by GetReceiptMatches.
 
 type PlannedItemRef struct {
-	ID   uint   `json:"id"`
-	Name string `json:"name"`
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
 }
 
 type ReceiptItemMatch struct {
@@ -72,7 +73,7 @@ type ReceiptItemMatch struct {
 }
 
 type ReceiptMatchResponse struct {
-	ReceiptID             uint               `json:"receipt_id"`
+	ReceiptID             uuid.UUID          `json:"receipt_id"`
 	Status                string             `json:"status"`
 	ShopName              string             `json:"shop_name,omitempty"`
 	Date                  string             `json:"date"`
@@ -83,7 +84,7 @@ type ReceiptMatchResponse struct {
 
 // receiptItemMatchPlan holds pre-computed match info for one parsed receipt item.
 type receiptItemMatchPlan struct {
-	PlannedItemID *uint
+	PlannedItemID *uuid.UUID
 	MatchStatus   string // "auto" or "unmatched"
 	Confidence    int
 	Suggestions   []MatchSuggestionItem
@@ -105,14 +106,14 @@ func NewReceiptService(db *gorm.DB, gemini ReceiptParser, fileStorage *FileStora
 	}
 }
 
-func (s *ReceiptService) CreateReceipt(familyID uint, file *multipart.FileHeader) (*models.Receipt, error) {
+func (s *ReceiptService) CreateReceipt(familyID uuid.UUID, file *multipart.FileHeader) (*models.Receipt, error) {
 	path, err := s.fileStorage.SaveReceipt(familyID, file)
 	if err != nil {
 		return nil, fmt.Errorf("storage error: %w", err)
 	}
 
 	receipt := models.Receipt{
-		TenantModel: coremodels.TenantModel{FamilyID: familyID},
+		TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: familyID},
 		ImagePath:   path,
 		Date:        time.Now(),
 	}
@@ -125,14 +126,14 @@ func (s *ReceiptService) CreateReceipt(familyID uint, file *multipart.FileHeader
 }
 
 // CreateReceiptFromText saves the plain text as a .txt file and creates a Receipt DB record.
-func (s *ReceiptService) CreateReceiptFromText(familyID uint, text string) (*models.Receipt, error) {
+func (s *ReceiptService) CreateReceiptFromText(familyID uuid.UUID, text string) (*models.Receipt, error) {
 	path, err := s.fileStorage.SaveReceiptText(familyID, text)
 	if err != nil {
 		return nil, fmt.Errorf("storage error: %w", err)
 	}
 
 	receipt := models.Receipt{
-		TenantModel: coremodels.TenantModel{FamilyID: familyID},
+		TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: familyID},
 		ImagePath:   path,
 		Date:        time.Now(),
 	}
@@ -144,9 +145,9 @@ func (s *ReceiptService) CreateReceiptFromText(familyID uint, text string) (*mod
 	return &receipt, nil
 }
 
-func (s *ReceiptService) ProcessReceipt(ctx context.Context, receiptID uint, listID uint) error {
+func (s *ReceiptService) ProcessReceipt(ctx context.Context, receiptID uuid.UUID, listID uuid.UUID) error {
 	var receipt models.Receipt
-	if err := s.db.Preload("Items").First(&receipt, receiptID).Error; err != nil {
+	if err := s.db.Preload("Items").First(&receipt, "id = ?", receiptID).Error; err != nil {
 		return fmt.Errorf("receipt not found: %w", err)
 	}
 
@@ -239,9 +240,9 @@ func (s *ReceiptService) ProcessReceipt(ctx context.Context, receiptID uint, lis
 // buildItemMatches computes how each parsed receipt item should be matched.
 // It first checks ItemAlias, then falls back to AI for unresolved items.
 // Returns a slice parallel to parsedItems.
-func (s *ReceiptService) buildItemMatches(ctx context.Context, familyID uint, listItems []models.Item, parsedItems []ai.ParsedReceiptItem) []receiptItemMatchPlan {
+func (s *ReceiptService) buildItemMatches(ctx context.Context, familyID uuid.UUID, listItems []models.Item, parsedItems []ai.ParsedReceiptItem) []receiptItemMatchPlan {
 	plans := make([]receiptItemMatchPlan, len(parsedItems))
-	usedPlannedIDs := map[uint]bool{}
+	usedPlannedIDs := map[uuid.UUID]bool{}
 
 	// Build a lookup: lowercase name → Item
 	plannedByName := map[string]models.Item{}
@@ -296,7 +297,6 @@ func (s *ReceiptService) buildItemMatches(ctx context.Context, familyID uint, li
 	}
 
 	// If context was cancelled, explicitly mark remaining items as unmatched
-	// so applyItemMatches doesn't persist zero-value match_status.
 	if ctx.Err() != nil {
 		for _, idx := range unresolvedIdxs {
 			plans[idx] = receiptItemMatchPlan{
@@ -334,7 +334,7 @@ func (s *ReceiptService) buildItemMatches(ctx context.Context, familyID uint, li
 
 	// Build a lookup from AI results: receipt name (lower) → suggestion list
 	aiByName := map[string][]MatchSuggestionItem{}
-	aiAutoMatch := map[string]*uint{} // receipt name (lower) → planned item ID if high confidence
+	aiAutoMatch := map[string]*uuid.UUID{} // receipt name (lower) → planned item ID if high confidence
 	for _, sug := range aiResult.Suggestions {
 		key := strings.ToLower(sug.ReceiptItemName)
 		var suggestions []MatchSuggestionItem
@@ -393,8 +393,8 @@ func (s *ReceiptService) buildItemMatches(ctx context.Context, familyID uint, li
 }
 
 // collectMatchedItemIDs returns a set of planned item IDs that were auto-matched.
-func collectMatchedItemIDs(plans []receiptItemMatchPlan) map[uint]bool {
-	ids := map[uint]bool{}
+func collectMatchedItemIDs(plans []receiptItemMatchPlan) map[uuid.UUID]bool {
+	ids := map[uuid.UUID]bool{}
 	for _, p := range plans {
 		if p.PlannedItemID != nil {
 			ids[*p.PlannedItemID] = true
@@ -405,9 +405,9 @@ func collectMatchedItemIDs(plans []receiptItemMatchPlan) map[uint]bool {
 
 // applyItemMatches creates ReceiptItem records and links/creates planned items.
 // Returns true if the receipt needs manual review.
-func (s *ReceiptService) applyItemMatches(tx *gorm.DB, receiptID uint, listID uint, familyID uint, parsedItems []ai.ParsedReceiptItem, plans []receiptItemMatchPlan, listItems []models.Item) (bool, error) {
+func (s *ReceiptService) applyItemMatches(tx *gorm.DB, receiptID uuid.UUID, listID uuid.UUID, familyID uuid.UUID, parsedItems []ai.ParsedReceiptItem, plans []receiptItemMatchPlan, listItems []models.Item) (bool, error) {
 	// Build Item lookup by ID for quick access
-	itemByID := map[uint]models.Item{}
+	itemByID := map[uuid.UUID]models.Item{}
 	for _, item := range listItems {
 		itemByID[item.ID] = item
 	}
@@ -464,7 +464,7 @@ func (s *ReceiptService) applyItemMatches(tx *gorm.DB, receiptID uint, listID ui
 }
 
 // GetReceiptMatches returns the receipt with AI match suggestions for user review.
-func (s *ReceiptService) GetReceiptMatches(receiptID uint, familyID uint) (*ReceiptMatchResponse, error) {
+func (s *ReceiptService) GetReceiptMatches(receiptID uuid.UUID, familyID uuid.UUID) (*ReceiptMatchResponse, error) {
 	var receipt models.Receipt
 	if err := s.db.Preload("Items").Preload("Shop").
 		Where("id = ? AND family_id = ?", receiptID, familyID).
@@ -483,7 +483,7 @@ func (s *ReceiptService) GetReceiptMatches(receiptID uint, familyID uint) (*Rece
 	}
 
 	// Build lookup of matched planned item IDs
-	matchedIDs := map[uint]bool{}
+	matchedIDs := map[uuid.UUID]bool{}
 	for _, ri := range receipt.Items {
 		if ri.MatchedItemID != nil {
 			matchedIDs[*ri.MatchedItemID] = true
@@ -491,7 +491,7 @@ func (s *ReceiptService) GetReceiptMatches(receiptID uint, familyID uint) (*Rece
 	}
 
 	// Build item lookup
-	itemByID := map[uint]models.Item{}
+	itemByID := map[uuid.UUID]models.Item{}
 	for _, item := range listItems {
 		itemByID[item.ID] = item
 	}
@@ -562,7 +562,7 @@ func (s *ReceiptService) GetReceiptMatches(receiptID uint, familyID uint) (*Rece
 // ConfirmMatch confirms or updates the match for a single receipt item.
 // If plannedItemID is nil and the item was previously matched, it reverts to "unmatched".
 // If plannedItemID is nil and the item was not matched, a new list item is created.
-func (s *ReceiptService) ConfirmMatch(ctx context.Context, receiptItemID uint, plannedItemID *uint, familyID uint) error {
+func (s *ReceiptService) ConfirmMatch(ctx context.Context, receiptItemID uint, plannedItemID *uuid.UUID, familyID uuid.UUID) error {
 	// Load receipt item and verify ownership via receipt
 	var receiptItem models.ReceiptItem
 	if err := s.db.First(&receiptItem, receiptItemID).Error; err != nil {
@@ -616,18 +616,17 @@ func (s *ReceiptService) ConfirmMatch(ctx context.Context, receiptItemID uint, p
 			receiptItem.MatchStatus = "confirmed"
 		} else if wasPreviouslyMatched {
 			// Unmatch: revert to "unmatched" so user can pick a different match
-			// (previous association already cleared above)
 			receiptItem.MatchStatus = "unmatched"
 		} else {
 			// Create new list item from receipt data (extra/impulse buy)
-			var defaultCategoryID uint
+			var defaultCategoryID uuid.UUID
 			var cat models.Category
 			if err := tx.Where("family_id = ?", familyID).Order("sort_order asc").First(&cat).Error; err == nil {
 				defaultCategoryID = cat.ID
 			}
 
 			newItem := models.Item{
-				TenantModel:   coremodels.TenantModel{FamilyID: familyID},
+				TenantModel:   coremodels.TenantModel{ID: uuid.New(), FamilyID: familyID},
 				Name:          receiptItem.Name,
 				ListID:        *receipt.ListID,
 				CategoryID:    defaultCategoryID,
@@ -659,7 +658,7 @@ func (s *ReceiptService) ConfirmMatch(ctx context.Context, receiptItemID uint, p
 }
 
 // DismissReceiptItem marks a receipt item as dismissed — not relevant to the list.
-func (s *ReceiptService) DismissReceiptItem(receiptItemID uint, familyID uint) error {
+func (s *ReceiptService) DismissReceiptItem(receiptItemID uint, familyID uuid.UUID) error {
 	var receiptItem models.ReceiptItem
 	if err := s.db.First(&receiptItem, receiptItemID).Error; err != nil {
 		return fmt.Errorf("receipt item not found: %w", err)
@@ -683,7 +682,7 @@ func (s *ReceiptService) DismissReceiptItem(receiptItemID uint, familyID uint) e
 
 // ConfirmAllMatches accepts all current auto-matches, creates new items for
 // unmatched receipt items, and leaves unbought planned items unchanged.
-func (s *ReceiptService) ConfirmAllMatches(ctx context.Context, receiptID uint, familyID uint) error {
+func (s *ReceiptService) ConfirmAllMatches(ctx context.Context, receiptID uuid.UUID, familyID uuid.UUID) error {
 	var receipt models.Receipt
 	if err := s.db.Preload("Items").Where("id = ? AND family_id = ?", receiptID, familyID).First(&receipt).Error; err != nil {
 		return fmt.Errorf("receipt not found: %w", err)
@@ -693,7 +692,7 @@ func (s *ReceiptService) ConfirmAllMatches(ctx context.Context, receiptID uint, 
 	}
 
 	return s.db.Transaction(func(tx *gorm.DB) error {
-		var defaultCategoryID uint
+		var defaultCategoryID uuid.UUID
 		var cat models.Category
 		if err := tx.Where("family_id = ?", familyID).Order("sort_order asc").First(&cat).Error; err == nil {
 			defaultCategoryID = cat.ID
@@ -710,7 +709,7 @@ func (s *ReceiptService) ConfirmAllMatches(ctx context.Context, receiptID uint, 
 			case "unmatched":
 				// Create new list item (extra buy)
 				newItem := models.Item{
-					TenantModel:   coremodels.TenantModel{FamilyID: familyID},
+					TenantModel:   coremodels.TenantModel{ID: uuid.New(), FamilyID: familyID},
 					Name:          ri.Name,
 					ListID:        *receipt.ListID,
 					CategoryID:    defaultCategoryID,
@@ -742,16 +741,15 @@ func (s *ReceiptService) ConfirmAllMatches(ctx context.Context, receiptID uint, 
 }
 
 // checkAndUpdateReceiptStatus sets receipt to "parsed" when all items are resolved.
-func (s *ReceiptService) checkAndUpdateReceiptStatus(db *gorm.DB, receiptID uint, listID uint, familyID uint) {
+func (s *ReceiptService) checkAndUpdateReceiptStatus(db *gorm.DB, receiptID uuid.UUID, listID uuid.UUID, familyID uuid.UUID) {
 	var pendingCount int64
 	db.Model(&models.ReceiptItem{}).
 		Where("receipt_id = ? AND match_status = 'unmatched'", receiptID).
 		Count(&pendingCount)
 
 	if pendingCount == 0 {
-		// Also check for unbought planned items
 		var receipt models.Receipt
-		db.First(&receipt, receiptID)
+		db.First(&receipt, "id = ?", receiptID)
 		var unmatchedPlanned int64
 		db.Model(&models.Item{}).
 			Where("list_id = ? AND family_id = ? AND is_bought = false", listID, familyID).
@@ -763,7 +761,7 @@ func (s *ReceiptService) checkAndUpdateReceiptStatus(db *gorm.DB, receiptID uint
 }
 
 // upsertItemAlias creates or increments a planned_name → receipt_name mapping.
-func (s *ReceiptService) upsertItemAlias(tx *gorm.DB, familyID uint, plannedName string, receiptName string, price float64, shopID *uint) {
+func (s *ReceiptService) upsertItemAlias(tx *gorm.DB, familyID uuid.UUID, plannedName string, receiptName string, price float64, shopID *uuid.UUID) {
 	var alias models.ItemAlias
 	q := tx.Where("family_id = ? AND LOWER(planned_name) = ? AND LOWER(receipt_name) = ?",
 		familyID, strings.ToLower(plannedName), strings.ToLower(receiptName))
@@ -797,12 +795,12 @@ func (s *ReceiptService) upsertItemAlias(tx *gorm.DB, familyID uint, plannedName
 	}
 }
 
-func (s *ReceiptService) findOrCreateShop(tx *gorm.DB, familyID uint, storeName string) (*uint, error) {
+func (s *ReceiptService) findOrCreateShop(tx *gorm.DB, familyID uuid.UUID, storeName string) (*uuid.UUID, error) {
 	var shop models.Shop
 	if err := tx.Where("LOWER(name) = ? AND family_id = ?", strings.ToLower(storeName), familyID).First(&shop).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			shop = models.Shop{
-				TenantModel: coremodels.TenantModel{FamilyID: familyID},
+				TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: familyID},
 				Name:        storeName,
 			}
 			if createErr := tx.Create(&shop).Error; createErr != nil {
@@ -815,10 +813,10 @@ func (s *ReceiptService) findOrCreateShop(tx *gorm.DB, familyID uint, storeName 
 	return &shop.ID, nil
 }
 
-func (s *ReceiptService) updateListTitle(tx *gorm.DB, listID uint, date time.Time) {
+func (s *ReceiptService) updateListTitle(tx *gorm.DB, listID uuid.UUID, date time.Time) {
 	if !date.IsZero() {
 		var list models.ShoppingList
-		if err := tx.First(&list, listID).Error; err == nil {
+		if err := tx.First(&list, "id = ?", listID).Error; err == nil {
 			dateSuffix := fmt.Sprintf(" (%s)", date.Format("2006-01-02"))
 			if !strings.Contains(list.Title, dateSuffix) {
 				list.Title += dateSuffix
@@ -830,7 +828,7 @@ func (s *ReceiptService) updateListTitle(tx *gorm.DB, listID uint, date time.Tim
 	}
 }
 
-func (s *ReceiptService) recalculateListTotal(tx *gorm.DB, listID uint, familyID uint) error {
+func (s *ReceiptService) recalculateListTotal(tx *gorm.DB, listID uuid.UUID, familyID uuid.UUID) error {
 	var items []models.Item
 	if err := tx.Where("list_id = ? AND family_id = ?", listID, familyID).Find(&items).Error; err != nil {
 		return err
@@ -892,7 +890,7 @@ func (s *ReceiptService) ProcessPendingReceipts(ctx context.Context) error {
 	return nil
 }
 
-func (s *ReceiptService) updateItemFrequency(tx *gorm.DB, familyID uint, name string, price float64) {
+func (s *ReceiptService) updateItemFrequency(tx *gorm.DB, familyID uuid.UUID, name string, price float64) {
 	var freq models.ItemFrequency
 	if err := tx.Where("family_id = ? AND LOWER(item_name) = ?", familyID, strings.ToLower(name)).First(&freq).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {

@@ -11,10 +11,10 @@ import PriceHistoryPage from './pages/PriceHistoryPage';
 import './index.css';
 
 const ProtectedRoute = ({ children }) => {
-  const { token, loading } = useAuth();
+  const { user, loading } = useAuth();
 
   if (loading) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>Loading...</div>;
-  if (!token) return <Navigate to="/login" />;
+  if (!user) return <Navigate to="/login" />;
 
   return children;
 };

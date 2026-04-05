@@ -6,7 +6,7 @@ import { API_BASE_URL } from '../config';
  * ReceiptMatchModal — shown after receipt upload when status is "pending_review".
  * Lets the user confirm/change AI item matches, handle extras and unbought items.
  */
-const ReceiptMatchModal = ({ isOpen, onClose, receiptId, token, onDone }) => {
+const ReceiptMatchModal = ({ isOpen, onClose, receiptId, onDone }) => {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -17,20 +17,18 @@ const ReceiptMatchModal = ({ isOpen, onClose, receiptId, token, onDone }) => {
         setLoading(true);
         setError(null);
         fetch(`${API_BASE_URL}/api/receipts/${receiptId}/matches`, {
-            headers: { Authorization: `Bearer ${token}` },
         })
             .then(r => r.ok ? r.json() : r.json().then(d => Promise.reject(d.error || 'Failed to load')))
             .then(setData)
             .catch(err => setError(String(err)))
             .finally(() => setLoading(false));
-    }, [isOpen, receiptId, token]);
+    }, [isOpen, receiptId]);
 
     if (!isOpen) return null;
 
     const reload = () => {
         setLoading(true);
         fetch(`${API_BASE_URL}/api/receipts/${receiptId}/matches`, {
-            headers: { Authorization: `Bearer ${token}` },
         })
             .then(r => r.ok ? r.json() : r.json().then(d => Promise.reject(d.error || 'Failed to load')))
             .then(setData)
@@ -46,7 +44,6 @@ const ReceiptMatchModal = ({ isOpen, onClose, receiptId, token, onDone }) => {
                 {
                     method: 'PATCH',
                     headers: {
-                        Authorization: `Bearer ${token}`,
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({ planned_item_id: plannedItemId ?? null }),
@@ -71,7 +68,6 @@ const ReceiptMatchModal = ({ isOpen, onClose, receiptId, token, onDone }) => {
                 `${API_BASE_URL}/api/receipts/${receiptId}/matches/${receiptItemId}/dismiss`,
                 {
                     method: 'POST',
-                    headers: { Authorization: `Bearer ${token}` },
                 }
             );
             if (!resp.ok) {
@@ -93,7 +89,6 @@ const ReceiptMatchModal = ({ isOpen, onClose, receiptId, token, onDone }) => {
                 `${API_BASE_URL}/api/receipts/${receiptId}/matches/confirm-all`,
                 {
                     method: 'POST',
-                    headers: { Authorization: `Bearer ${token}` },
                 }
             );
             if (!resp.ok) {

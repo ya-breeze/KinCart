@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -42,34 +42,34 @@ func TestDataIsolation(t *testing.T) {
 	setupTestDB()
 
 	// 1. Create two families
-	familyA := models.Family{Family: coremodels.Family{Name: "FamilyA"}}
-	familyB := models.Family{Family: coremodels.Family{Name: "FamilyB"}}
+	familyA := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "FamilyA"}}
+	familyB := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "FamilyB"}}
 	database.DB.Create(&familyA)
 	database.DB.Create(&familyB)
 
 	// 2. Create users
-	userA := models.User{User: coremodels.User{Username: "userA", FamilyID: familyA.ID}}
-	userB := models.User{User: coremodels.User{Username: "userB", FamilyID: familyB.ID}}
+	userA := models.User{User: coremodels.User{ID: uuid.New(), Username: "userA", FamilyID: familyA.ID}}
+	userB := models.User{User: coremodels.User{ID: uuid.New(), Username: "userB", FamilyID: familyB.ID}}
 	database.DB.Create(&userA)
 	database.DB.Create(&userB)
 
 	// 3. Create a category in Family B
 	catB := models.Category{
-		TenantModel: coremodels.TenantModel{FamilyID: familyB.ID},
+		TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: familyB.ID},
 		Name:        "CatB",
 	}
 	database.DB.Create(&catB)
 
 	// 4. Create a shop in Family B
 	shopB := models.Shop{
-		TenantModel: coremodels.TenantModel{FamilyID: familyB.ID},
+		TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: familyB.ID},
 		Name:        "ShopB",
 	}
 	database.DB.Create(&shopB)
 
 	// 5. Create a list in Family A
 	listA := models.ShoppingList{
-		TenantModel: coremodels.TenantModel{FamilyID: familyA.ID},
+		TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: familyA.ID},
 		Title:       "ListA",
 	}
 	database.DB.Create(&listA)
@@ -78,15 +78,15 @@ func TestDataIsolation(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Set("family_id", familyA.ID)
-		c.Params = []gin.Param{{Key: "id", Value: strconv.Itoa(int(listA.ID))}}
+		c.Params = []gin.Param{{Key: "id", Value: listA.ID.String()}}
 
 		// Try to use catB in listA
 		body := map[string]interface{}{
 			"name":        "Milk",
-			"category_id": catB.ID,
+			"category_id": catB.ID.String(),
 		}
 		jsonBody, _ := json.Marshal(body)
-		c.Request = httptest.NewRequest("POST", "/lists/1/items", bytes.NewBuffer(jsonBody))
+		c.Request = httptest.NewRequest("POST", "/lists/"+listA.ID.String()+"/items", bytes.NewBuffer(jsonBody))
 		c.Request.Header.Set("Content-Type", "application/json")
 
 		AddItemToList(c)
@@ -99,7 +99,7 @@ func TestDataIsolation(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Set("family_id", familyA.ID)
-		c.Params = []gin.Param{{Key: "id", Value: strconv.Itoa(int(shopB.ID))}}
+		c.Params = []gin.Param{{Key: "id", Value: shopB.ID.String()}}
 
 		GetShopCategoryOrder(c)
 
@@ -111,11 +111,11 @@ func TestDataIsolation(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Set("family_id", familyA.ID)
-		c.Params = []gin.Param{{Key: "id", Value: strconv.Itoa(int(shopB.ID))}}
+		c.Params = []gin.Param{{Key: "id", Value: shopB.ID.String()}}
 
 		body := []map[string]interface{}{}
 		jsonBody, _ := json.Marshal(body)
-		c.Request = httptest.NewRequest("POST", "/shops/1/categories/order", bytes.NewBuffer(jsonBody))
+		c.Request = httptest.NewRequest("POST", "/shops/"+shopB.ID.String()+"/categories/order", bytes.NewBuffer(jsonBody))
 		c.Request.Header.Set("Content-Type", "application/json")
 
 		SetShopCategoryOrder(c)
@@ -126,7 +126,7 @@ func TestDataIsolation(t *testing.T) {
 	t.Run("SetShopCategoryOrder - Cross-family Category Leak", func(t *testing.T) {
 		// Create a shop in Family A
 		shopA := models.Shop{
-			TenantModel: coremodels.TenantModel{FamilyID: familyA.ID},
+			TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: familyA.ID},
 			Name:        "ShopA",
 		}
 		database.DB.Create(&shopA)
@@ -134,14 +134,14 @@ func TestDataIsolation(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Set("family_id", familyA.ID)
-		c.Params = []gin.Param{{Key: "id", Value: strconv.Itoa(int(shopA.ID))}}
+		c.Params = []gin.Param{{Key: "id", Value: shopA.ID.String()}}
 
 		// Try to use catB in shopA order
 		body := []map[string]interface{}{
-			{"category_id": catB.ID, "sort_order": 1},
+			{"category_id": catB.ID.String(), "sort_order": 1},
 		}
 		jsonBody, _ := json.Marshal(body)
-		c.Request = httptest.NewRequest("POST", "/shops/2/categories/order", bytes.NewBuffer(jsonBody))
+		c.Request = httptest.NewRequest("POST", "/shops/"+shopA.ID.String()+"/categories/order", bytes.NewBuffer(jsonBody))
 		c.Request.Header.Set("Content-Type", "application/json")
 
 		SetShopCategoryOrder(c)
@@ -159,7 +159,7 @@ func TestDataIsolation(t *testing.T) {
 		body := map[string]interface{}{
 			"title": "New List",
 			"items": []map[string]interface{}{
-				{"name": "Stolen Item", "category_id": catB.ID},
+				{"name": "Stolen Item", "category_id": catB.ID.String()},
 			},
 		}
 		jsonBody, _ := json.Marshal(body)
@@ -168,27 +168,29 @@ func TestDataIsolation(t *testing.T) {
 
 		CreateList(c)
 
-		// If it's vulnerable, it will return 201 Created
-		// If it's secure, it should return 400 Bad Request
 		assert.NotEqual(t, http.StatusCreated, w.Code, "Should not allow creating items with categories from other families")
 	})
 
 	t.Run("UpdateItem - Cross-family Category Leak", func(t *testing.T) {
 		// Create an item in Family A
-		itemA := models.Item{Name: "ItemA", ListID: listA.ID}
+		itemA := models.Item{
+			TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: familyA.ID},
+			Name:        "ItemA",
+			ListID:      listA.ID,
+		}
 		database.DB.Create(&itemA)
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Set("family_id", familyA.ID)
-		c.Params = []gin.Param{{Key: "id", Value: strconv.Itoa(int(itemA.ID))}}
+		c.Params = []gin.Param{{Key: "id", Value: itemA.ID.String()}}
 
 		// Try to update itemA to use catB
 		body := map[string]interface{}{
-			"category_id": catB.ID,
+			"category_id": catB.ID.String(),
 		}
 		jsonBody, _ := json.Marshal(body)
-		c.Request = httptest.NewRequest("PATCH", "/items/1", bytes.NewBuffer(jsonBody))
+		c.Request = httptest.NewRequest("PATCH", "/items/"+itemA.ID.String(), bytes.NewBuffer(jsonBody))
 		c.Request.Header.Set("Content-Type", "application/json")
 
 		UpdateItem(c)

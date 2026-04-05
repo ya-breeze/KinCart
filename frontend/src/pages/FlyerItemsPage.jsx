@@ -11,7 +11,7 @@ import Modal from '../components/Modal';
 
 
 const FlyerItemsPage = () => {
-    const { token, currency } = useAuth();
+    const { currency } = useAuth();
     const navigate = useNavigate();
     const [shops, setShops] = useState([]);
     const [categories, setCategories] = useState([]);
@@ -67,12 +67,11 @@ const FlyerItemsPage = () => {
         totalCount,
         loadMore,
         clearCache
-    } = usePaginatedFlyerItems(token, filters);
+    } = usePaginatedFlyerItems(filters);
 
     const fetchShops = async () => {
         try {
             const resp = await fetch(`${API_BASE_URL}/api/flyers/shops`, {
-                headers: { 'Authorization': `Bearer ${token}` }
             });
             if (resp.ok) {
                 setShops(await resp.json());
@@ -85,7 +84,6 @@ const FlyerItemsPage = () => {
     const fetchCategories = async () => {
         try {
             const resp = await fetch(`${API_BASE_URL}/api/categories`, {
-                headers: { 'Authorization': `Bearer ${token}` }
             });
             if (resp.ok) {
                 setCategories(await resp.json());
@@ -98,7 +96,6 @@ const FlyerItemsPage = () => {
     const fetchActiveLists = async () => {
         try {
             const resp = await fetch(`${API_BASE_URL}/api/lists`, {
-                headers: { 'Authorization': `Bearer ${token}` }
             });
             if (resp.ok) {
                 const allLists = await resp.json();
@@ -142,7 +139,6 @@ const FlyerItemsPage = () => {
             const resp = await fetch(`${API_BASE_URL}/api/lists/${listId}/items`, {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
@@ -183,7 +179,6 @@ const FlyerItemsPage = () => {
             const resp = await fetch(`${API_BASE_URL}/api/lists`, {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ title: newListTitle.trim() })

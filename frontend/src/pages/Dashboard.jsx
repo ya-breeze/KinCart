@@ -6,7 +6,7 @@ import { API_BASE_URL } from '../config';
 import Modal from '../components/Modal';
 
 const Dashboard = () => {
-    const { user, token, mode, currency, toggleMode, logout } = useAuth();
+    const { user, mode, currency, toggleMode, logout } = useAuth();
     const navigate = useNavigate();
     const [lists, setLists] = useState([]);
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -34,7 +34,6 @@ const Dashboard = () => {
 
     const fetchLists = async () => {
         const resp = await fetch(`${API_BASE_URL}/api/lists`, {
-            headers: { 'Authorization': `Bearer ${token}` }
         });
         if (resp.ok) {
             setLists(await resp.json());
@@ -85,7 +84,6 @@ const Dashboard = () => {
         const resp = await fetch(`${API_BASE_URL}/api/lists`, {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({ title: newListTitle.trim() })
@@ -102,7 +100,6 @@ const Dashboard = () => {
         e.stopPropagation();
         const resp = await fetch(`${API_BASE_URL}/api/lists/${id}/duplicate`, {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}` }
         });
         if (resp.ok) {
             fetchLists();

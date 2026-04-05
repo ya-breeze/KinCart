@@ -5,7 +5,7 @@ import ReceiptViewerModal from './ReceiptViewerModal';
 
 // Mock useAuth
 vi.mock('../context/AuthContext', () => ({
-    useAuth: () => ({ token: 'test-token' }),
+    useAuth: () => ({}),
 }));
 
 // Mock config
@@ -201,7 +201,7 @@ describe('ReceiptViewerModal', () => {
         expect(onClose).toHaveBeenCalled();
     });
 
-    it('sends auth header when fetching receipt file', async () => {
+    it('fetches receipt file without auth header (cookies handle auth)', async () => {
         fetchMock.mockResolvedValueOnce({
             ok: true,
             blob: () => Promise.resolve(new Blob()),
@@ -215,8 +215,8 @@ describe('ReceiptViewerModal', () => {
         await waitFor(() => {
             expect(fetchMock).toHaveBeenCalledWith(
                 'http://localhost:8080/api/receipts/1/file',
-                expect.objectContaining({
-                    headers: expect.objectContaining({ Authorization: 'Bearer test-token' }),
+                expect.not.objectContaining({
+                    headers: expect.objectContaining({ Authorization: expect.any(String) }),
                 })
             );
         });

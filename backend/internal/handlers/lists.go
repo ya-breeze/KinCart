@@ -7,15 +7,15 @@ import (
 	"kincart/internal/database"
 	"kincart/internal/models"
 
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/ya-breeze/kin-core/db"
 	coremodels "github.com/ya-breeze/kin-core/models"
-
-	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
 func GetLists(c *gin.Context) {
-	familyID := c.MustGet("family_id").(uint)
+	familyID := c.MustGet("family_id").(uuid.UUID)
 
 	var lists []models.ShoppingList
 	if err := database.DB.Preload("Receipts").Scopes(db.Scope(familyID)).Order("created_at desc").Find(&lists).Error; err != nil {
@@ -27,7 +27,7 @@ func GetLists(c *gin.Context) {
 }
 
 func GetList(c *gin.Context) {
-	familyID := c.MustGet("family_id").(uint)
+	familyID := c.MustGet("family_id").(uuid.UUID)
 	listID := c.Param("id")
 
 	var list models.ShoppingList
@@ -40,7 +40,7 @@ func GetList(c *gin.Context) {
 }
 
 func CreateList(c *gin.Context) {
-	familyID := c.MustGet("family_id").(uint)
+	familyID := c.MustGet("family_id").(uuid.UUID)
 
 	var list models.ShoppingList
 	if err := c.ShouldBindJSON(&list); err != nil {
@@ -65,7 +65,7 @@ func CreateList(c *gin.Context) {
 }
 
 func UpdateList(c *gin.Context) {
-	familyID := c.MustGet("family_id").(uint)
+	familyID := c.MustGet("family_id").(uuid.UUID)
 	listID := c.Param("id")
 
 	var list models.ShoppingList
@@ -97,7 +97,7 @@ func UpdateList(c *gin.Context) {
 }
 
 func DuplicateList(c *gin.Context) {
-	familyID := c.MustGet("family_id").(uint)
+	familyID := c.MustGet("family_id").(uuid.UUID)
 	listID := c.Param("id")
 
 	var originalList models.ShoppingList
@@ -137,7 +137,7 @@ func DuplicateList(c *gin.Context) {
 }
 
 func DeleteList(c *gin.Context) {
-	familyID := c.MustGet("family_id").(uint)
+	familyID := c.MustGet("family_id").(uuid.UUID)
 	listID := c.Param("id")
 
 	var list models.ShoppingList
@@ -153,7 +153,6 @@ func DeleteList(c *gin.Context) {
 		}
 
 		// Unlink receipts (set list_id to NULL)
-		// Receipts are NOT deleted, but become orphans (can be viewed in history later)
 		if err := tx.Model(&models.Receipt{}).Where("list_id = ?", list.ID).Update("list_id", nil).Error; err != nil {
 			return err
 		}

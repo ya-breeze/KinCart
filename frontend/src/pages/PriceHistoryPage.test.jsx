@@ -5,7 +5,7 @@ import { BrowserRouter } from 'react-router-dom';
 import PriceHistoryPage from './PriceHistoryPage';
 
 vi.mock('../context/AuthContext', () => ({
-    useAuth: () => ({ token: 'fake-token', currency: 'Kč' }),
+    useAuth: () => ({ currency: 'Kč' }),
 }));
 
 vi.mock('recharts', () => {
@@ -84,7 +84,7 @@ describe('PriceHistoryPage', () => {
     });
 
     it('shows no results message when chart data is empty after search', async () => {
-        usePriceHistory.mockImplementation((token, q) =>
+        usePriceHistory.mockImplementation((q) =>
             q ? { ...emptyHook, chartData: [], items: [] } : emptyHook
         );
 
@@ -95,7 +95,7 @@ describe('PriceHistoryPage', () => {
     });
 
     it('renders chart and items when data is available', () => {
-        usePriceHistory.mockImplementation((token, q) =>
+        usePriceHistory.mockImplementation((q) =>
             q ? {
                 ...emptyHook,
                 chartData: mockChartData,
@@ -115,7 +115,7 @@ describe('PriceHistoryPage', () => {
     });
 
     it('shows correct price point count summary', () => {
-        usePriceHistory.mockImplementation((token, q) =>
+        usePriceHistory.mockImplementation((q) =>
             q ? {
                 ...emptyHook,
                 chartData: mockChartData,
@@ -155,13 +155,13 @@ describe('PriceHistoryPage', () => {
         fireEvent.click(btn3m);
 
         expect(usePriceHistory).toHaveBeenCalledWith(
-            expect.anything(), expect.anything(), expect.anything(), '3m'
+            expect.anything(), expect.anything(), '3m'
         );
     });
 
     it('show load more button when has_more is true', () => {
         const loadMore = vi.fn();
-        usePriceHistory.mockImplementation((token, q) =>
+        usePriceHistory.mockImplementation((q) =>
             q ? {
                 ...emptyHook,
                 chartData: mockChartData,

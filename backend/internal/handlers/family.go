@@ -7,10 +7,11 @@ import (
 	"kincart/internal/models"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 func GetFamilyConfig(c *gin.Context) {
-	familyID := c.MustGet("family_id").(uint)
+	familyID := c.MustGet("family_id").(uuid.UUID)
 
 	var family models.Family
 	if err := database.DB.Where("id = ?", familyID).First(&family).Error; err != nil {
@@ -25,7 +26,7 @@ func GetFamilyConfig(c *gin.Context) {
 }
 
 func UpdateFamilyConfig(c *gin.Context) {
-	familyID := c.MustGet("family_id").(uint)
+	familyID := c.MustGet("family_id").(uuid.UUID)
 
 	var req struct {
 		Currency string `json:"currency"`

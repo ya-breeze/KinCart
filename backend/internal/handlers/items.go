@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 
 	"kincart/internal/database"
 	"kincart/internal/models"
@@ -22,7 +23,7 @@ import (
 
 func AddItemToList(c *gin.Context) {
 	listID := c.Param("id")
-	familyID := c.MustGet("family_id").(uint)
+	familyID := c.MustGet("family_id").(uuid.UUID)
 
 	// Verify list ownership
 	var list models.ShoppingList
@@ -71,7 +72,7 @@ func AddItemToList(c *gin.Context) {
 
 func UpdateItem(c *gin.Context) {
 	itemID := c.Param("id")
-	familyID := c.MustGet("family_id").(uint)
+	familyID := c.MustGet("family_id").(uuid.UUID)
 
 	var item models.Item
 	if err := database.DB.Joins("JOIN shopping_lists ON shopping_lists.id = items.list_id").
@@ -89,15 +90,13 @@ func UpdateItem(c *gin.Context) {
 
 	// Validate CategoryID if present in update
 	if val, ok := updateData["category_id"]; ok && val != nil {
-		catID := uint(0)
-		switch v := val.(type) {
-		case float64:
-			catID = uint(v)
-		case int:
-			catID = uint(v)
-		}
-
-		if catID != 0 {
+		catIDStr, isStr := val.(string)
+		if isStr && catIDStr != "" && catIDStr != "00000000-0000-0000-0000-000000000000" {
+			catID, err := uuid.Parse(catIDStr)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid category ID format"})
+				return
+			}
 			var cat models.Category
 			if err := database.DB.Where("id = ? AND family_id = ?", catID, familyID).First(&cat).Error; err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid category ID"})
@@ -107,7 +106,6 @@ func UpdateItem(c *gin.Context) {
 	}
 
 	// If item is linked to a flyer, protect certain fields
-	// Unless the user is unlinking the item (by setting flyer_item_id to null)
 	if item.FlyerItemID != nil {
 		willUnlink := false
 		if val, ok := updateData["flyer_item_id"]; ok && val == nil {
@@ -131,7 +129,7 @@ func UpdateItem(c *gin.Context) {
 
 func DeleteItem(c *gin.Context) {
 	itemID := c.Param("id")
-	familyID := c.MustGet("family_id").(uint)
+	familyID := c.MustGet("family_id").(uuid.UUID)
 
 	var item models.Item
 	if err := database.DB.Joins("JOIN shopping_lists ON shopping_lists.id = items.list_id").
@@ -195,19 +193,13 @@ func validateImageFile(file *multipart.FileHeader) error {
 
 // generateSecureFilename creates a cryptographically secure random filename
 func generateSecureFilename(itemID string, mimeType string) (string, error) {
-	// Generate 16 random bytes
 	randomBytes := make([]byte, 16)
 	if _, err := rand.Read(randomBytes); err != nil {
 		return "", err
 	}
 
-	// Convert to hex string
 	randomStr := hex.EncodeToString(randomBytes)
-
-	// Get extension from MIME type
 	ext := allowedMimeTypes[mimeType]
-
-	// Create filename: itemID_timestamp_random.ext
 	filename := fmt.Sprintf("%s_%d_%s%s", itemID, time.Now().Unix(), randomStr, ext)
 
 	return filename, nil
@@ -215,18 +207,14 @@ func generateSecureFilename(itemID string, mimeType string) (string, error) {
 
 // sanitizePath prevents path traversal attacks
 func sanitizePath(basePath, filename string) (string, error) {
-	// Clean the filename to remove any path components
 	cleanFilename := filepath.Base(filepath.Clean(filename))
 
-	// Ensure filename doesn't contain path separators
 	if strings.Contains(cleanFilename, "..") || strings.ContainsAny(cleanFilename, "/\\") {
 		return "", fmt.Errorf("invalid filename")
 	}
 
-	// Join with base path and clean
 	fullPath := filepath.Join(basePath, cleanFilename)
 
-	// Verify the result is still within basePath
 	absBase, err := filepath.Abs(basePath)
 	if err != nil {
 		return "", err
@@ -246,7 +234,7 @@ func sanitizePath(basePath, filename string) (string, error) {
 
 func AddItemPhoto(c *gin.Context) {
 	itemID := c.Param("id")
-	familyID := c.MustGet("family_id").(uint)
+	familyID := c.MustGet("family_id").(uuid.UUID)
 
 	var item models.Item
 	if err := database.DB.Joins("JOIN shopping_lists ON shopping_lists.id = items.list_id").
@@ -286,7 +274,6 @@ func AddItemPhoto(c *gin.Context) {
 	n, _ := src.Read(buffer)
 	mimeType := http.DetectContentType(buffer[:n])
 
-	// Reset file pointer
 	src.Close()
 
 	// Generate secure filename
@@ -351,7 +338,7 @@ type frequentItemResponse struct {
 }
 
 func GetFrequentItems(c *gin.Context) {
-	familyID := c.MustGet("family_id").(uint)
+	familyID := c.MustGet("family_id").(uuid.UUID)
 
 	var freqItems []models.ItemFrequency
 	if err := database.DB.Where("family_id = ?", familyID).Order("frequency DESC").Limit(20).Find(&freqItems).Error; err != nil {

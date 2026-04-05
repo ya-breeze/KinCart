@@ -6,7 +6,7 @@ import { API_BASE_URL } from '../config';
 import Modal from '../components/Modal';
 
 const SettingsPage = () => {
-    const { token, currency, setCurrency } = useAuth();
+    const { currency, setCurrency } = useAuth();
     const navigate = useNavigate();
     const [categories, setCategories] = useState([]);
     const [shops, setShops] = useState([]);
@@ -20,14 +20,12 @@ const SettingsPage = () => {
 
     const fetchShops = async () => {
         const resp = await fetch(`${API_BASE_URL}/api/shops`, {
-            headers: { 'Authorization': `Bearer ${token}` }
         });
         if (resp.ok) setShops(await resp.json());
     };
 
     const fetchCategories = async () => {
         const resp = await fetch(`${API_BASE_URL}/api/categories`, {
-            headers: { 'Authorization': `Bearer ${token}` }
         });
         if (resp.ok) setCategories(await resp.json());
     };
@@ -40,7 +38,6 @@ const SettingsPage = () => {
 
     const fetchShopOrder = async (shopId) => {
         const resp = await fetch(`${API_BASE_URL}/api/shops/${shopId}/order`, {
-            headers: { 'Authorization': `Bearer ${token}` }
         });
         if (resp.ok) {
             const data = await resp.json();
@@ -51,7 +48,6 @@ const SettingsPage = () => {
     const updateCurrency = async (newVal) => {
         const resp = await fetch(`${API_BASE_URL}/api/family/config`, {
             method: 'PATCH',
-            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ currency: newVal })
         });
         if (resp.ok) setCurrency(newVal);
@@ -61,7 +57,6 @@ const SettingsPage = () => {
         if (!newCatName) return;
         const resp = await fetch(`${API_BASE_URL}/api/categories`, {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: newCatName, icon: 'package', sort_order: categories.length + 1 })
         });
         if (resp.ok) {
@@ -83,7 +78,6 @@ const SettingsPage = () => {
         const endpoint = deleteConfirm.type === 'category' ? `categories/${deleteConfirm.id}` : `shops/${deleteConfirm.id}`;
         const resp = await fetch(`${API_BASE_URL}/api/${endpoint}`, {
             method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${token}` }
         });
 
         if (resp.ok) {
@@ -105,7 +99,6 @@ const SettingsPage = () => {
     const saveEdit = async (cat) => {
         const resp = await fetch(`${API_BASE_URL}/api/categories/${cat.id}`, {
             method: 'PATCH',
-            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ ...cat, name: editName })
         });
         if (resp.ok) {
@@ -118,7 +111,6 @@ const SettingsPage = () => {
         if (!newShopName) return;
         const resp = await fetch(`${API_BASE_URL}/api/shops`, {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: newShopName })
         });
         if (resp.ok) {
@@ -152,7 +144,6 @@ const SettingsPage = () => {
             const orderPayload = updatedList.map(c => ({ category_id: c.id, sort_order: c.sort_order }));
             const resp = await fetch(`${API_BASE_URL}/api/shops/${selectedShop.id}/order`, {
                 method: 'PATCH',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify(orderPayload)
             });
             if (resp.ok) fetchShopOrder(selectedShop.id);
@@ -163,7 +154,6 @@ const SettingsPage = () => {
             // (Re-using the existing reorder logic if I implemented it, or I'll add the endpoint)
             const resp = await fetch(`${API_BASE_URL}/api/categories/reorder`, {
                 method: 'PATCH',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify(updatedList)
             });
             if (resp.ok) fetchCategories();

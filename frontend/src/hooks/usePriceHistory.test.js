@@ -47,7 +47,7 @@ describe('usePriceHistory', () => {
 
     it('returns empty state when query is empty', async () => {
         const { result } = renderHook(() =>
-            usePriceHistory('token', '', [], '6m')
+            usePriceHistory('', [], '6m')
         );
 
         await flush();
@@ -59,7 +59,7 @@ describe('usePriceHistory', () => {
     });
 
     it('fetches data after debounce when query is provided', async () => {
-        renderHook(() => usePriceHistory('token', 'banana', [], '6m'));
+        renderHook(() => usePriceHistory('banana', [], '6m'));
 
         expect(fetch).not.toHaveBeenCalled();
 
@@ -73,7 +73,7 @@ describe('usePriceHistory', () => {
     });
 
     it('includes exclude param when excludeWords provided', async () => {
-        renderHook(() => usePriceHistory('token', 'banana', ['candy', 'flavour'], '6m'));
+        renderHook(() => usePriceHistory('banana', ['candy', 'flavour'], '6m'));
 
         await flush();
 
@@ -83,7 +83,7 @@ describe('usePriceHistory', () => {
 
     it('sorts each shop points by date ascending', async () => {
         const { result } = renderHook(() =>
-            usePriceHistory('token', 'banana', [], '6m')
+            usePriceHistory('banana', [], '6m')
         );
 
         await flush();
@@ -100,7 +100,7 @@ describe('usePriceHistory', () => {
 
     it('adds ts (millisecond timestamp) to each point', async () => {
         const { result } = renderHook(() =>
-            usePriceHistory('token', 'banana', [], '6m')
+            usePriceHistory('banana', [], '6m')
         );
 
         await flush();
@@ -115,7 +115,7 @@ describe('usePriceHistory', () => {
 
     it('ts values are proportional to real time gaps', async () => {
         const { result } = renderHook(() =>
-            usePriceHistory('token', 'banana', [], '6m')
+            usePriceHistory('banana', [], '6m')
         );
 
         await flush();
@@ -133,7 +133,7 @@ describe('usePriceHistory', () => {
     it('resets chart data and items when query changes', async () => {
         let query = 'banana';
         const { result, rerender } = renderHook(() =>
-            usePriceHistory('token', query, [], '6m')
+            usePriceHistory(query, [], '6m')
         );
 
         await flush();
@@ -164,7 +164,7 @@ describe('usePriceHistory', () => {
             });
 
         const { result } = renderHook(() =>
-            usePriceHistory('token', 'banana', [], '6m')
+            usePriceHistory('banana', [], '6m')
         );
 
         await flush();

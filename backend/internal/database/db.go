@@ -1,7 +1,6 @@
 package database
 
 import (
-	"fmt"
 	"log/slog"
 	"os"
 	"strconv"
@@ -11,6 +10,8 @@ import (
 	"kincart/internal/models"
 	"kincart/internal/utils"
 
+	"github.com/google/uuid"
+	"github.com/ya-breeze/kin-core/authdb"
 	coremodels "github.com/ya-breeze/kin-core/models"
 
 	"golang.org/x/crypto/bcrypt"
@@ -34,40 +35,8 @@ func InitDB() {
 		os.Exit(1)
 	}
 
-	// Handle SQLite NOT NULL column migration for existing tables
-	if DB.Dialector.Name() == "sqlite" {
-		tables := []string{"users", "items", "categories", "shops", "shopping_lists", "receipts", "item_frequencies"}
-		for _, table := range tables {
-			if DB.Migrator().HasTable(table) && !DB.Migrator().HasColumn(table, "family_id") {
-				slog.Info("Adding family_id column with default value to existing table", "table", table)
-				// Add column with default 1 to satisfy NOT NULL on existing rows
-				err = DB.Exec(fmt.Sprintf("ALTER TABLE `%s` ADD COLUMN family_id INTEGER NOT NULL DEFAULT 1", table)).Error
-				if err != nil {
-					slog.Warn("Failed to manually add family_id column", "table", table, "error", err)
-				}
-			}
-		}
-
-		// Migrate new columns on receipt_items for AI matching support
-		type receiptItemCol struct {
-			name string
-			def  string
-		}
-		riCols := []receiptItemCol{
-			{"matched_item_id", "INTEGER"},
-			{"match_status", "TEXT NOT NULL DEFAULT 'unmatched'"},
-			{"confidence", "INTEGER NOT NULL DEFAULT 0"},
-			{"suggested_items", "TEXT NOT NULL DEFAULT ''"},
-		}
-		for _, col := range riCols {
-			if DB.Migrator().HasTable("receipt_items") && !DB.Migrator().HasColumn("receipt_items", col.name) {
-				slog.Info("Adding column to receipt_items", "column", col.name)
-				if colErr := DB.Exec(fmt.Sprintf("ALTER TABLE receipt_items ADD COLUMN %s %s", col.name, col.def)).Error; colErr != nil {
-					slog.Warn("Failed to add column to receipt_items", "column", col.name, "error", colErr)
-				}
-			}
-		}
-	}
+	// NOTE: UUID migration — the old schema used integer IDs. If upgrading an existing DB,
+	// run the cmd/migrate tool first to convert integer IDs to UUIDs before starting the server.
 
 	// Auto Migration
 	err = DB.AutoMigrate(
@@ -86,7 +55,8 @@ func InitDB() {
 		&models.Receipt{},
 		&models.ReceiptItem{},
 		&models.ItemAlias{},
-		&models.RefreshToken{},
+		&authdb.RefreshToken{},
+		&authdb.BlacklistedToken{},
 	)
 	if err != nil {
 		slog.Error("Failed to migrate database", "error", err)
@@ -140,7 +110,7 @@ func seedFromEnv() {
 		// Find or create family
 		var family models.Family
 		if err := DB.Where("name = ?", familyName).First(&family).Error; err != nil {
-			family = models.Family{Family: coremodels.Family{Name: familyName}}
+			family = models.Family{Family: coremodels.Family{ID: uuid.New(), Name: familyName}}
 			if err := DB.Create(&family).Error; err != nil {
 				slog.Error("Failed to seed family from env", "family", familyName, "error", err)
 				continue
@@ -159,6 +129,7 @@ func seedFromEnv() {
 			}
 			user = models.User{
 				User: coremodels.User{
+					ID:           uuid.New(),
 					Username:     username,
 					PasswordHash: string(hash),
 					FamilyID:     family.ID,

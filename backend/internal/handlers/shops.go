@@ -4,16 +4,16 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"strconv"
 
 	"kincart/internal/database"
 	"kincart/internal/models"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 func GetShops(c *gin.Context) {
-	familyID := c.MustGet("family_id").(uint)
+	familyID := c.MustGet("family_id").(uuid.UUID)
 
 	var shops []models.Shop
 	if err := database.DB.Where("family_id = ?", familyID).Find(&shops).Error; err != nil {
@@ -25,7 +25,7 @@ func GetShops(c *gin.Context) {
 }
 
 func CreateShop(c *gin.Context) {
-	familyID := c.MustGet("family_id").(uint)
+	familyID := c.MustGet("family_id").(uuid.UUID)
 
 	var shop models.Shop
 	if err := c.ShouldBindJSON(&shop); err != nil {
@@ -44,19 +44,18 @@ func CreateShop(c *gin.Context) {
 }
 
 func UpdateShop(c *gin.Context) {
-	familyID := c.MustGet("family_id").(uint)
-	shopID := c.Param("id")
+	familyID := c.MustGet("family_id").(uuid.UUID)
+	shopIDStr := c.Param("id")
 
-	// Validate shop ID
-	sID, err := strconv.ParseUint(shopID, 10, 32)
+	shopID, err := uuid.Parse(shopIDStr)
 	if err != nil {
-		slog.Warn("Invalid shop ID format", "shop_id", shopID, "ip", c.ClientIP())
+		slog.Warn("Invalid shop ID format", "shop_id", shopIDStr, "ip", c.ClientIP())
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid shop ID"})
 		return
 	}
 
 	var shop models.Shop
-	if err := database.DB.Where("id = ? AND family_id = ?", uint(sID), familyID).First(&shop).Error; err != nil {
+	if err := database.DB.Where("id = ? AND family_id = ?", shopID, familyID).First(&shop).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Shop not found"})
 		return
 	}
@@ -67,54 +66,59 @@ func UpdateShop(c *gin.Context) {
 	}
 
 	database.DB.Save(&shop)
-	slog.Info("Shop updated", "shop_id", sID, "family_id", familyID)
+	slog.Info("Shop updated", "shop_id", shopID, "family_id", familyID)
 	c.JSON(http.StatusOK, shop)
 }
 
 func DeleteShop(c *gin.Context) {
-	familyID := c.MustGet("family_id").(uint)
-	shopID := c.Param("id")
+	familyID := c.MustGet("family_id").(uuid.UUID)
+	shopIDStr := c.Param("id")
 
-	// Validate shop ID
-	sID, err := strconv.ParseUint(shopID, 10, 32)
+	shopID, err := uuid.Parse(shopIDStr)
 	if err != nil {
-		slog.Warn("Invalid shop ID format in delete", "shop_id", shopID, "ip", c.ClientIP())
+		slog.Warn("Invalid shop ID format in delete", "shop_id", shopIDStr, "ip", c.ClientIP())
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid shop ID"})
 		return
 	}
 
-	if err := database.DB.Where("id = ? AND family_id = ?", uint(sID), familyID).Delete(&models.Shop{}).Error; err != nil {
+	if err := database.DB.Where("id = ? AND family_id = ?", shopID, familyID).Delete(&models.Shop{}).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete shop"})
 		return
 	}
 
 	// Also delete category orders for this shop
-	database.DB.Where("shop_id = ?", uint(sID)).Delete(&models.ShopCategoryOrder{})
+	database.DB.Where("shop_id = ?", shopID).Delete(&models.ShopCategoryOrder{})
 
-	slog.Info("Shop deleted", "shop_id", sID, "family_id", familyID)
+	slog.Info("Shop deleted", "shop_id", shopID, "family_id", familyID)
 	c.Status(http.StatusNoContent)
 }
 
 func GetShopCategoryOrder(c *gin.Context) {
-	familyID := c.MustGet("family_id").(uint)
-	shopID := c.Param("id")
+	familyID := c.MustGet("family_id").(uuid.UUID)
+	shopIDStr := c.Param("id")
 
 	// Verify shop ownership
 	var shop models.Shop
-	if err := database.DB.Where("id = ? AND family_id = ?", shopID, familyID).First(&shop).Error; err != nil {
+	if err := database.DB.Where("id = ? AND family_id = ?", shopIDStr, familyID).First(&shop).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Shop not found"})
 		return
 	}
 
 	var orders []models.ShopCategoryOrder
-	database.DB.Where("shop_id = ?", shopID).Order("sort_order ASC").Find(&orders)
+	database.DB.Where("shop_id = ?", shopIDStr).Order("sort_order ASC").Find(&orders)
 
 	c.JSON(http.StatusOK, orders)
 }
 
 func SetShopCategoryOrder(c *gin.Context) {
-	familyID := c.MustGet("family_id").(uint)
-	shopID := c.Param("id")
+	familyID := c.MustGet("family_id").(uuid.UUID)
+	shopIDStr := c.Param("id")
+
+	shopID, err := uuid.Parse(shopIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid shop ID"})
+		return
+	}
 
 	// Verify shop ownership
 	var shop models.Shop
@@ -124,8 +128,8 @@ func SetShopCategoryOrder(c *gin.Context) {
 	}
 
 	var req []struct {
-		CategoryID uint `json:"category_id"`
-		SortOrder  int  `json:"sort_order"`
+		CategoryID uuid.UUID `json:"category_id"`
+		SortOrder  int       `json:"sort_order"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -137,7 +141,7 @@ func SetShopCategoryOrder(c *gin.Context) {
 	for _, item := range req {
 		var category models.Category
 		if err := database.DB.Where("id = ? AND family_id = ?", item.CategoryID, familyID).First(&category).Error; err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Invalid category ID: %d", item.CategoryID)})
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Invalid category ID: %s", item.CategoryID)})
 			return
 		}
 	}
@@ -146,17 +150,11 @@ func SetShopCategoryOrder(c *gin.Context) {
 
 	for _, item := range req {
 		database.DB.Create(&models.ShopCategoryOrder{
-			ShopID:     parseID(shopID),
+			ShopID:     shopID,
 			CategoryID: item.CategoryID,
 			SortOrder:  item.SortOrder,
 		})
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Shop category order updated"})
-}
-
-func parseID(id string) uint {
-	var val uint
-	fmt.Sscanf(id, "%d", &val)
-	return val
 }

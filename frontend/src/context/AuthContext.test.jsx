@@ -6,12 +6,11 @@ import React from 'react';
 
 // Helper component to test the context
 const TestComponent = () => {
-    const { user, login, logout, token } = useAuth();
+    const { user, login, logout } = useAuth();
     return (
         <div>
             <div data-testid="user">{user ? user.username : 'no user'}</div>
-            <div data-testid="token">{token || 'no token'}</div>
-            <button onClick={() => login({ username: 'test' }, 'secret-token')}>Login</button>
+            <button onClick={() => login({ username: 'test' })}>Login</button>
             <button onClick={logout}>Logout</button>
         </div>
     );
@@ -20,60 +19,68 @@ const TestComponent = () => {
 describe('AuthContext', () => {
     beforeEach(() => {
         vi.stubGlobal('localStorage', {
-            getItem: vi.fn(),
+            getItem: vi.fn().mockReturnValue(null),
             setItem: vi.fn(),
             clear: vi.fn(),
             removeItem: vi.fn(),
         });
         vi.stubGlobal('fetch', vi.fn(() =>
             Promise.resolve({
-                ok: true,
-                json: () => Promise.resolve({ username: 'test' }),
+                ok: false,
+                status: 401,
+                json: () => Promise.resolve({}),
             })
         ));
         vi.clearAllMocks();
     });
 
-    it('provides initial null state', () => {
-        render(
-            <AuthProvider>
-                <TestComponent />
-            </AuthProvider>
-        );
+    it('provides initial null state', async () => {
+        await act(async () => {
+            render(
+                <AuthProvider>
+                    <TestComponent />
+                </AuthProvider>
+            );
+        });
 
         expect(screen.getByTestId('user')).toHaveTextContent('no user');
-        expect(screen.getByTestId('token')).toHaveTextContent('no token');
     });
 
     it('updates state on login', async () => {
-        render(
-            <AuthProvider>
-                <TestComponent />
-            </AuthProvider>
-        );
+        await act(async () => {
+            render(
+                <AuthProvider>
+                    <TestComponent />
+                </AuthProvider>
+            );
+        });
 
         await act(async () => {
             screen.getByText('Login').click();
         });
 
         expect(screen.getByTestId('user')).toHaveTextContent('test');
-        expect(screen.getByTestId('token')).toHaveTextContent('secret-token');
-        expect(window.localStorage.setItem).toHaveBeenCalledWith('token', 'secret-token');
     });
 
     it('clears state on logout', async () => {
-        render(
-            <AuthProvider>
-                <TestComponent />
-            </AuthProvider>
-        );
+        await act(async () => {
+            render(
+                <AuthProvider>
+                    <TestComponent />
+                </AuthProvider>
+            );
+        });
 
+        // Login first
+        await act(async () => {
+            screen.getByText('Login').click();
+        });
+
+        // Then logout
         await act(async () => {
             screen.getByText('Logout').click();
         });
 
         expect(screen.getByTestId('user')).toHaveTextContent('no user');
-        expect(screen.getByTestId('token')).toHaveTextContent('no token');
-        expect(window.localStorage.removeItem).toHaveBeenCalledWith('token');
     });
 });

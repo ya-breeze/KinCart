@@ -3,6 +3,7 @@ package models
 import (
 	"time"
 
+	"github.com/google/uuid"
 	coremodels "github.com/ya-breeze/kin-core/models"
 	"gorm.io/gorm"
 )
@@ -19,17 +20,6 @@ type User struct {
 	coremodels.User
 }
 
-type RefreshToken struct {
-	ID        uint           `gorm:"primaryKey" json:"id"`
-	UserID    uint           `gorm:"not null" json:"user_id"`
-	Token     string         `gorm:"uniqueIndex;not null" json:"token"`
-	ExpiresAt time.Time      `json:"expires_at"`
-	IsRevoked bool           `gorm:"default:false" json:"is_revoked"`
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
-}
-
 type ShoppingList struct {
 	coremodels.TenantModel
 	Title           string     `gorm:"not null" json:"title"`
@@ -43,18 +33,18 @@ type ShoppingList struct {
 
 type Item struct {
 	coremodels.TenantModel
-	Name           string  `gorm:"not null" json:"name"`
-	Description    string  `json:"description"`
-	Quantity       float64 `gorm:"default:1" json:"quantity"`
-	Unit           string  `gorm:"default:'pcs'" json:"unit"` // "pcs", "kg", "100g", etc.
-	IsBought       bool    `gorm:"default:false" json:"is_bought"`
-	Price          float64 `json:"price"`
-	LocalPhotoPath string  `json:"local_photo_path"`
-	IsUrgent       bool    `gorm:"default:false" json:"is_urgent"`
-	ListID         uint    `json:"list_id"`
-	CategoryID     uint    `json:"category_id"`
-	FlyerItemID    *uint   `json:"flyer_item_id"`
-	ReceiptItemID  *uint   `json:"receipt_item_id"`
+	Name           string     `gorm:"not null" json:"name"`
+	Description    string     `json:"description"`
+	Quantity       float64    `gorm:"default:1" json:"quantity"`
+	Unit           string     `gorm:"default:'pcs'" json:"unit"` // "pcs", "kg", "100g", etc.
+	IsBought       bool       `gorm:"default:false" json:"is_bought"`
+	Price          float64    `json:"price"`
+	LocalPhotoPath string     `json:"local_photo_path"`
+	IsUrgent       bool       `gorm:"default:false" json:"is_urgent"`
+	ListID         uuid.UUID  `gorm:"type:uuid;not null" json:"list_id"`
+	CategoryID     uuid.UUID  `gorm:"type:uuid" json:"category_id"`
+	FlyerItemID    *uint      `json:"flyer_item_id"`
+	ReceiptItemID  *uint      `json:"receipt_item_id"`
 }
 
 type Category struct {
@@ -70,18 +60,18 @@ type Shop struct {
 }
 
 type ShopCategoryOrder struct {
-	ID         uint `gorm:"primaryKey" json:"id"`
-	ShopID     uint `json:"shop_id"`
-	CategoryID uint `json:"category_id"`
-	SortOrder  int  `json:"sort_order"`
+	ID         uint      `gorm:"primaryKey" json:"id"`
+	ShopID     uuid.UUID `gorm:"type:uuid" json:"shop_id"`
+	CategoryID uuid.UUID `gorm:"type:uuid" json:"category_id"`
+	SortOrder  int       `json:"sort_order"`
 }
 
 type ItemFrequency struct {
-	ID        uint    `gorm:"primaryKey" json:"id"`
-	FamilyID  uint    `json:"family_id"`
-	ItemName  string  `gorm:"not null" json:"item_name"`
-	Frequency int     `gorm:"default:1" json:"frequency"`
-	LastPrice float64 `json:"last_price"`
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	FamilyID  uuid.UUID `gorm:"type:uuid" json:"family_id"`
+	ItemName  string    `gorm:"not null" json:"item_name"`
+	Frequency int       `gorm:"default:1" json:"frequency"`
+	LastPrice float64   `json:"last_price"`
 }
 
 type Flyer struct {
@@ -141,8 +131,8 @@ type JobStatus struct {
 
 type Receipt struct {
 	coremodels.TenantModel
-	ListID    *uint         `json:"list_id"`
-	ShopID    *uint         `json:"shop_id"` // Optional, if matched to a shop
+	ListID    *uuid.UUID    `gorm:"type:uuid" json:"list_id"`
+	ShopID    *uuid.UUID    `gorm:"type:uuid" json:"shop_id"` // Optional, if matched to a shop
 	Shop      *Shop         `gorm:"foreignKey:ShopID" json:"shop"`
 	Date      time.Time     `json:"date"`
 	Total     float64       `json:"total"`
@@ -152,30 +142,30 @@ type Receipt struct {
 }
 
 type ReceiptItem struct {
-	ID             uint    `gorm:"primaryKey" json:"id"`
-	ReceiptID      uint    `json:"receipt_id"`
-	Name           string  `json:"name"`
-	Quantity       float64 `json:"quantity"`
-	Unit           string  `json:"unit"` // e.g., "pcs", "kg"
-	Price          float64 `json:"price"`
-	TotalPrice     float64 `json:"total_price"`
-	MatchedItemID  *uint   `json:"matched_item_id"`  // planned Item it was matched to
-	MatchStatus    string  `gorm:"default:'unmatched'" json:"match_status"` // "auto","confirmed","manual","unmatched","dismissed"
-	Confidence     int     `json:"confidence"`       // 0-100
-	SuggestedItems string  `json:"suggested_items"`  // JSON: [{"item_id":1,"item_name":"jogurt","confidence":85}]
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	ReceiptID      uuid.UUID `gorm:"type:uuid;not null" json:"receipt_id"`
+	Name           string    `json:"name"`
+	Quantity       float64   `json:"quantity"`
+	Unit           string    `json:"unit"` // e.g., "pcs", "kg"
+	Price          float64   `json:"price"`
+	TotalPrice     float64   `json:"total_price"`
+	MatchedItemID  *uuid.UUID `gorm:"type:uuid" json:"matched_item_id"` // planned Item it was matched to
+	MatchStatus    string    `gorm:"default:'unmatched'" json:"match_status"` // "auto","confirmed","manual","unmatched","dismissed"
+	Confidence     int       `json:"confidence"`       // 0-100
+	SuggestedItems string    `json:"suggested_items"`  // JSON: [{"item_id":"uuid","item_name":"jogurt","confidence":85}]
 }
 
 // ItemAlias records the mapping between a generic planned item name and the
 // specific receipt name it was bought as, building per-family purchase history.
 type ItemAlias struct {
-	ID            uint      `gorm:"primaryKey" json:"id"`
-	FamilyID      uint      `gorm:"not null;index" json:"family_id"`
-	PlannedName   string    `gorm:"not null" json:"planned_name"`  // e.g. "jogurt"
-	ReceiptName   string    `gorm:"not null" json:"receipt_name"`  // e.g. "selský jogurt 2%"
-	ShopID        *uint     `json:"shop_id"`
-	Shop          *Shop     `gorm:"foreignKey:ShopID" json:"shop"`
-	LastPrice     float64   `json:"last_price"`
-	PurchaseCount int       `gorm:"default:1" json:"purchase_count"`
-	LastUsedAt    time.Time `json:"last_used_at"`
-	CreatedAt     time.Time `json:"created_at"`
+	ID            uint       `gorm:"primaryKey" json:"id"`
+	FamilyID      uuid.UUID  `gorm:"type:uuid;not null;index" json:"family_id"`
+	PlannedName   string     `gorm:"not null" json:"planned_name"`  // e.g. "jogurt"
+	ReceiptName   string     `gorm:"not null" json:"receipt_name"`  // e.g. "selský jogurt 2%"
+	ShopID        *uuid.UUID `gorm:"type:uuid" json:"shop_id"`
+	Shop          *Shop      `gorm:"foreignKey:ShopID" json:"shop"`
+	LastPrice     float64    `json:"last_price"`
+	PurchaseCount int        `gorm:"default:1" json:"purchase_count"`
+	LastUsedAt    time.Time  `json:"last_used_at"`
+	CreatedAt     time.Time  `json:"created_at"`
 }

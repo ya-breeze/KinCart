@@ -10,6 +10,7 @@ import (
 	"kincart/internal/ai"
 	"kincart/internal/models"
 
+	"github.com/google/uuid"
 	coremodels "github.com/ya-breeze/kin-core/models"
 
 	"github.com/stretchr/testify/assert"
@@ -19,8 +20,9 @@ import (
 
 // MockParser implements ReceiptParser
 type MockParser struct {
-	ParseFunc     func(ctx context.Context, imagePath string, knownItems []string) (*ai.ParsedReceipt, error)
-	ParseTextFunc func(ctx context.Context, receiptText string, knownItems []string) (*ai.ParsedReceipt, error)
+	ParseFunc      func(ctx context.Context, imagePath string, knownItems []string) (*ai.ParsedReceipt, error)
+	ParseTextFunc  func(ctx context.Context, receiptText string, knownItems []string) (*ai.ParsedReceipt, error)
+	MatchItemsFunc func(ctx context.Context, receiptItems []string, plannedItems []string) (*ai.MatchResult, error)
 }
 
 func (m *MockParser) ParseReceipt(ctx context.Context, imagePath string, knownItems []string) (*ai.ParsedReceipt, error) {
@@ -37,9 +39,16 @@ func (m *MockParser) ParseReceiptText(ctx context.Context, receiptText string, k
 	return nil, nil
 }
 
+func (m *MockParser) MatchReceiptItems(ctx context.Context, receiptItems []string, plannedItems []string) (*ai.MatchResult, error) {
+	if m.MatchItemsFunc != nil {
+		return m.MatchItemsFunc(ctx, receiptItems, plannedItems)
+	}
+	return &ai.MatchResult{}, nil
+}
+
 func setupTestDB() *gorm.DB {
 	db, _ := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	db.AutoMigrate(&models.ShoppingList{}, &models.Item{}, &models.Family{}, &models.Receipt{}, &models.ReceiptItem{}, &models.ItemFrequency{}, &models.Category{}, &models.Shop{})
+	db.AutoMigrate(&models.ShoppingList{}, &models.Item{}, &models.Family{}, &models.Receipt{}, &models.ReceiptItem{}, &models.ItemFrequency{}, &models.Category{}, &models.Shop{}, &models.ItemAlias{})
 	return db
 }
 
@@ -47,27 +56,32 @@ func TestProcessReceipt_Success(t *testing.T) {
 	db := setupTestDB()
 
 	// Setup Data
-	family := models.Family{Family: coremodels.Family{Name: "TestFam"}}
+	family := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "TestFam"}}
 	db.Create(&family)
 
 	list := models.ShoppingList{
-		TenantModel: coremodels.TenantModel{FamilyID: family.ID},
+		TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID},
 		Title:       "Weekly",
 	}
 	db.Create(&list)
 
-	item1 := models.Item{Name: "Milk", ListID: list.ID, IsBought: false}
+	item1 := models.Item{
+		TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID},
+		Name:        "Milk",
+		ListID:      list.ID,
+		IsBought:    false,
+	}
 	db.Create(&item1)
 
 	receipt := models.Receipt{
-		TenantModel: coremodels.TenantModel{FamilyID: family.ID},
+		TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID},
 		ListID:      &list.ID,
 		ImagePath:   "test.jpg",
 		Status:      "new",
 	}
 	db.Create(&receipt)
 
-	// Setup Mock
+	// Setup Mock — Milk gets auto-matched via AI; Bread is unmatched (not on planned list)
 	mock := &MockParser{
 		ParseFunc: func(ctx context.Context, imagePath string, knownItems []string) (*ai.ParsedReceipt, error) {
 			return &ai.ParsedReceipt{
@@ -76,9 +90,22 @@ func TestProcessReceipt_Success(t *testing.T) {
 				Total:     10.5,
 				Items: []ai.ParsedReceiptItem{
 					{Name: "Milk", Price: 2.5, Quantity: 1, TotalPrice: 2.5},
-					{Name: "Bread", Price: 8.0, Quantity: 1, TotalPrice: 8.0}, // New item
+					{Name: "Bread", Price: 8.0, Quantity: 1, TotalPrice: 8.0}, // Not on planned list
 				},
 			}, nil
+		},
+		MatchItemsFunc: func(ctx context.Context, receiptItems []string, plannedItems []string) (*ai.MatchResult, error) {
+			// Return high-confidence match for Milk → Milk
+			result := &ai.MatchResult{}
+			for _, ri := range receiptItems {
+				if ri == "Milk" {
+					result.Suggestions = append(result.Suggestions, ai.MatchSuggestion{
+						ReceiptItemName: "Milk",
+						Matches:         []ai.MatchCandidate{{PlannedItemName: "Milk", Confidence: 95}},
+					})
+				}
+			}
+			return result, nil
 		},
 	}
 
@@ -90,58 +117,56 @@ func TestProcessReceipt_Success(t *testing.T) {
 	// Assert
 	assert.NoError(t, err)
 
-	// Check Receipt Status
+	// Check Receipt Status — "pending_review" because Bread is an unmatched extra item
 	var updatedReceipt models.Receipt
-	db.First(&updatedReceipt, receipt.ID)
-	assert.Equal(t, "parsed", updatedReceipt.Status)
-	assert.NotZero(t, updatedReceipt.ShopID)
+	db.First(&updatedReceipt, "id = ?", receipt.ID)
+	assert.Equal(t, "pending_review", updatedReceipt.Status)
+	assert.NotNil(t, updatedReceipt.ShopID)
 	assert.Equal(t, 10.5, updatedReceipt.Total)
 
-	// Check Items Linked
+	// Check Milk was matched and marked bought
 	var updatedItem1 models.Item
-	db.First(&updatedItem1, item1.ID)
+	db.First(&updatedItem1, "id = ?", item1.ID)
 	assert.True(t, updatedItem1.IsBought)
 	assert.Equal(t, 2.5, updatedItem1.Price)
 	assert.NotNil(t, updatedItem1.ReceiptItemID)
-	assert.Equal(t, 1.0, updatedItem1.Quantity) // Quantity should be updated
+	assert.Equal(t, 1.0, updatedItem1.Quantity)
 
-	// Check New Item Created
-	var newItem models.Item
-	db.Where("name = ?", "Bread").First(&newItem)
-	assert.NotZero(t, newItem.ID)
-	assert.Equal(t, list.ID, newItem.ListID)
-	assert.True(t, newItem.IsBought)
-	assert.NotNil(t, newItem.ReceiptItemID)
+	// Check Bread created a ReceiptItem with "unmatched" status (not a new planned Item)
+	var breadReceiptItem models.ReceiptItem
+	db.Where("name = ?", "Bread").First(&breadReceiptItem)
+	assert.NotZero(t, breadReceiptItem.ID)
+	assert.Equal(t, "unmatched", breadReceiptItem.MatchStatus)
 
 	// Check List Title Updated
 	var updatedList models.ShoppingList
-	db.First(&updatedList, list.ID)
+	db.First(&updatedList, "id = ?", list.ID)
 	assert.True(t, strings.Contains(updatedList.Title, "(2024-01-30)"))
 
-	// Check ActualAmount updated (2.5 + 8.0 = 10.5)
-	assert.Equal(t, 10.5, updatedList.ActualAmount)
+	// Check ActualAmount updated (only Milk is bought: 2.5)
+	assert.Equal(t, 2.5, updatedList.ActualAmount)
 }
 
 func TestProcessPendingReceipts(t *testing.T) {
 	db := setupTestDB()
 
 	// Setup
-	family := models.Family{Family: coremodels.Family{Name: "TestFam"}}
+	family := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "TestFam"}}
 	db.Create(&family)
 	list := models.ShoppingList{
-		TenantModel: coremodels.TenantModel{FamilyID: family.ID},
+		TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID},
 		Title:       "List",
 	}
 	db.Create(&list)
 
 	receipt1 := models.Receipt{
-		TenantModel: coremodels.TenantModel{FamilyID: family.ID},
+		TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID},
 		ListID:      &list.ID,
 		ImagePath:   "r1.jpg",
 		Status:      "new",
 	}
 	receipt2 := models.Receipt{
-		TenantModel: coremodels.TenantModel{FamilyID: family.ID},
+		TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID},
 		ListID:      &list.ID,
 		ImagePath:   "r2.jpg",
 		Status:      "parsed",
@@ -163,7 +188,7 @@ func TestProcessPendingReceipts(t *testing.T) {
 
 	// Assert
 	var r1 models.Receipt
-	db.First(&r1, receipt1.ID)
+	db.First(&r1, "id = ?", receipt1.ID)
 	assert.Equal(t, "parsed", r1.Status)
 }
 
@@ -172,24 +197,24 @@ func TestProcessReceipt_TextFile(t *testing.T) {
 	db := setupTestDB()
 	tmpDir := t.TempDir()
 
-	family := models.Family{Family: coremodels.Family{Name: "TestFam"}}
+	family := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "TestFam"}}
 	db.Create(&family)
 
 	list := models.ShoppingList{
-		TenantModel: coremodels.TenantModel{FamilyID: family.ID},
+		TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID},
 		Title:       "Weekly",
 	}
 	db.Create(&list)
 
 	// Write a real .txt file to the temp directory
 	textContent := "Store: Lidl\nMilk 1,99\nBread 2,49\nTotal 4,48"
-	relPath := filepath.Join("families", "1", "receipts", "2024", "01", "test_receipt.txt")
+	relPath := filepath.Join("families", "test", "receipts", "2024", "01", "test_receipt.txt")
 	fullPath := filepath.Join(tmpDir, relPath)
 	assert.NoError(t, os.MkdirAll(filepath.Dir(fullPath), 0755))
 	assert.NoError(t, os.WriteFile(fullPath, []byte(textContent), 0644))
 
 	receipt := models.Receipt{
-		TenantModel: coremodels.TenantModel{FamilyID: family.ID},
+		TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID},
 		ListID:      &list.ID,
 		ImagePath:   relPath,
 		Status:      "new",
@@ -221,8 +246,9 @@ func TestProcessReceipt_TextFile(t *testing.T) {
 	assert.Equal(t, textContent, receivedText)
 
 	var updated models.Receipt
-	db.First(&updated, receipt.ID)
-	assert.Equal(t, "parsed", updated.Status)
+	db.First(&updated, "id = ?", receipt.ID)
+	// No planned items → Milk is unmatched → pending_review
+	assert.Equal(t, "pending_review", updated.Status)
 }
 
 // TestCreateReceiptFromText verifies text is saved to filesystem and receipt record created.
@@ -230,7 +256,7 @@ func TestCreateReceiptFromText(t *testing.T) {
 	db := setupTestDB()
 	tmpDir := t.TempDir()
 
-	family := models.Family{Family: coremodels.Family{Name: "TestFam"}}
+	family := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "TestFam"}}
 	db.Create(&family)
 
 	storage := NewFileStorageService(tmpDir)
@@ -241,7 +267,7 @@ func TestCreateReceiptFromText(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.NotNil(t, receipt)
-	assert.NotZero(t, receipt.ID)
+	assert.NotEqual(t, uuid.Nil, receipt.ID)
 	assert.True(t, strings.HasSuffix(receipt.ImagePath, ".txt"), "ImagePath should end with .txt")
 
 	// Verify file was written with correct content
@@ -252,7 +278,7 @@ func TestCreateReceiptFromText(t *testing.T) {
 
 	// Verify DB record exists
 	var dbReceipt models.Receipt
-	db.First(&dbReceipt, receipt.ID)
+	db.First(&dbReceipt, "id = ?", receipt.ID)
 	assert.Equal(t, receipt.ImagePath, dbReceipt.ImagePath)
 	assert.Equal(t, family.ID, dbReceipt.FamilyID)
 }
@@ -262,22 +288,22 @@ func TestProcessReceipt_TextFile_ParseError(t *testing.T) {
 	db := setupTestDB()
 	tmpDir := t.TempDir()
 
-	family := models.Family{Family: coremodels.Family{Name: "TestFam"}}
+	family := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "TestFam"}}
 	db.Create(&family)
 
 	list := models.ShoppingList{
-		TenantModel: coremodels.TenantModel{FamilyID: family.ID},
+		TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID},
 		Title:       "List",
 	}
 	db.Create(&list)
 
-	relPath := filepath.Join("families", "1", "receipts", "2024", "01", "bad.txt")
+	relPath := filepath.Join("families", "test", "receipts", "2024", "01", "bad.txt")
 	fullPath := filepath.Join(tmpDir, relPath)
 	assert.NoError(t, os.MkdirAll(filepath.Dir(fullPath), 0755))
 	assert.NoError(t, os.WriteFile(fullPath, []byte("garbage text"), 0644))
 
 	receipt := models.Receipt{
-		TenantModel: coremodels.TenantModel{FamilyID: family.ID},
+		TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID},
 		ListID:      &list.ID,
 		ImagePath:   relPath,
 		Status:      "new",
@@ -296,6 +322,6 @@ func TestProcessReceipt_TextFile_ParseError(t *testing.T) {
 	assert.Error(t, err)
 
 	var updated models.Receipt
-	db.First(&updated, receipt.ID)
+	db.First(&updated, "id = ?", receipt.ID)
 	assert.Equal(t, "error", updated.Status)
 }

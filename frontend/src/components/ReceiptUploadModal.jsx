@@ -3,7 +3,7 @@ import { X, Upload, Check, Loader, FileText, Clock } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import ReceiptMatchModal from './ReceiptMatchModal';
 
-const ReceiptUploadModal = ({ isOpen, onClose, listId, token, onUploadSuccess }) => {
+const ReceiptUploadModal = ({ isOpen, onClose, listId, onUploadSuccess }) => {
     const [inputMode, setInputMode] = useState('upload'); // 'upload' | 'paste'
     const [file, setFile] = useState(null);
     const [previewUrl, setPreviewUrl] = useState(null);
@@ -51,7 +51,6 @@ const ReceiptUploadModal = ({ isOpen, onClose, listId, token, onUploadSuccess })
                 resp = await fetch(`${API_BASE_URL}/api/lists/${listId}/receipts`, {
                     method: 'POST',
                     headers: {
-                        'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({ receipt_text: receiptText }),
@@ -62,7 +61,6 @@ const ReceiptUploadModal = ({ isOpen, onClose, listId, token, onUploadSuccess })
                 resp = await fetch(`${API_BASE_URL}/api/lists/${listId}/receipts`, {
                     method: 'POST',
                     headers: {
-                        'Authorization': `Bearer ${token}`,
                     },
                     body: formData,
                 });
@@ -121,7 +119,7 @@ const ReceiptUploadModal = ({ isOpen, onClose, listId, token, onUploadSuccess })
                 isOpen={true}
                 onClose={handleClose}
                 receiptId={pendingReceiptId}
-                token={token}
+
                 onDone={onUploadSuccess}
             />
         );

@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type FileStorageService struct {
@@ -18,7 +20,7 @@ func NewFileStorageService(baseDir string) *FileStorageService {
 }
 
 // SaveReceipt saves a receipt file to families/{familyID}/receipts/YYYY/MM/filename
-func (s *FileStorageService) SaveReceipt(familyID uint, file *multipart.FileHeader) (string, error) {
+func (s *FileStorageService) SaveReceipt(familyID uuid.UUID, file *multipart.FileHeader) (string, error) {
 	src, err := file.Open()
 	if err != nil {
 		return "", err
@@ -26,7 +28,7 @@ func (s *FileStorageService) SaveReceipt(familyID uint, file *multipart.FileHead
 	defer src.Close()
 
 	now := time.Now()
-	relDir := filepath.Join("families", fmt.Sprintf("%d", familyID), "receipts", now.Format("2006"), now.Format("01"))
+	relDir := filepath.Join("families", familyID.String(), "receipts", now.Format("2006"), now.Format("01"))
 	fullDir := filepath.Join(s.BaseDir, relDir)
 
 	if mkdirErr := os.MkdirAll(fullDir, 0755); mkdirErr != nil {
@@ -53,9 +55,9 @@ func (s *FileStorageService) SaveReceipt(familyID uint, file *multipart.FileHead
 
 // SaveReceiptText saves plain-text receipt content to families/{familyID}/receipts/YYYY/MM/{timestamp}.txt.
 // Returns the relative path (same pattern as SaveReceipt).
-func (s *FileStorageService) SaveReceiptText(familyID uint, text string) (string, error) {
+func (s *FileStorageService) SaveReceiptText(familyID uuid.UUID, text string) (string, error) {
 	now := time.Now()
-	relDir := filepath.Join("families", fmt.Sprintf("%d", familyID), "receipts", now.Format("2006"), now.Format("01"))
+	relDir := filepath.Join("families", familyID.String(), "receipts", now.Format("2006"), now.Format("01"))
 	fullDir := filepath.Join(s.BaseDir, relDir)
 
 	if err := os.MkdirAll(fullDir, 0755); err != nil {

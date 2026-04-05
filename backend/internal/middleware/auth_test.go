@@ -7,75 +7,56 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/ya-breeze/kin-core/auth"
 )
 
 func TestAuthMiddleware(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
+	userID := uuid.New()
+	familyID := uuid.New()
+
+	makeValidToken := func() string {
+		token, _ := auth.GenerateAccessToken(userID, &familyID, JWTSecret, time.Hour)
+		return token
+	}
+
+	makeExpiredToken := func() string {
+		// Use negative duration — GenerateAccessToken sets exp = now + duration
+		token, _ := auth.GenerateAccessToken(userID, &familyID, JWTSecret, -time.Hour)
+		return token
+	}
+
 	tests := []struct {
 		name           string
-		setupHeader    func(req *http.Request)
+		setupRequest   func(req *http.Request)
 		expectedStatus int
 	}{
 		{
-			name: "missing header",
-			setupHeader: func(req *http.Request) {
-			},
+			name:           "missing cookie",
+			setupRequest:   func(req *http.Request) {},
 			expectedStatus: http.StatusUnauthorized,
 		},
 		{
-			name: "invalid format",
-			setupHeader: func(req *http.Request) {
-				req.Header.Set("Authorization", "InvalidToken")
-			},
-			expectedStatus: http.StatusUnauthorized,
-		},
-		{
-			name: "invalid token",
-			setupHeader: func(req *http.Request) {
-				req.Header.Set("Authorization", "Bearer invalid")
+			name: "invalid token in cookie",
+			setupRequest: func(req *http.Request) {
+				req.AddCookie(&http.Cookie{Name: "kin_access", Value: "invalid.token"})
 			},
 			expectedStatus: http.StatusUnauthorized,
 		},
 		{
 			name: "valid token",
-			setupHeader: func(req *http.Request) {
-				token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-					"user_id":   float64(1),
-					"family_id": float64(1),
-					"exp":       time.Now().Add(time.Hour).Unix(),
-				})
-				tokenString, _ := token.SignedString(JWTSecret)
-				req.Header.Set("Authorization", "Bearer "+tokenString)
+			setupRequest: func(req *http.Request) {
+				req.AddCookie(&http.Cookie{Name: "kin_access", Value: makeValidToken()})
 			},
 			expectedStatus: http.StatusOK,
 		},
 		{
 			name: "expired token",
-			setupHeader: func(req *http.Request) {
-				token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-					"user_id":   float64(1),
-					"family_id": float64(1),
-					"exp":       time.Now().Add(-time.Hour).Unix(),
-				})
-				tokenString, _ := token.SignedString(JWTSecret)
-				req.Header.Set("Authorization", "Bearer "+tokenString)
-			},
-			expectedStatus: http.StatusUnauthorized,
-		},
-		{
-			name: "blacklisted token",
-			setupHeader: func(req *http.Request) {
-				token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-					"user_id":   float64(1),
-					"family_id": float64(1),
-					"exp":       time.Now().Add(time.Hour).Unix(),
-				})
-				tokenString, _ := token.SignedString(JWTSecret)
-				BlacklistToken(tokenString, time.Now().Add(time.Hour))
-				req.Header.Set("Authorization", "Bearer "+tokenString)
+			setupRequest: func(req *http.Request) {
+				req.AddCookie(&http.Cookie{Name: "kin_access", Value: makeExpiredToken()})
 			},
 			expectedStatus: http.StatusUnauthorized,
 		},
@@ -84,13 +65,14 @@ func TestAuthMiddleware(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r := gin.New()
-			r.Use(AuthMiddleware())
+			// Pass nil DB — blacklist check is skipped when DB is nil
+			r.Use(AuthMiddleware(nil))
 			r.GET("/test", func(c *gin.Context) {
 				c.Status(http.StatusOK)
 			})
 
 			req, _ := http.NewRequest(http.MethodGet, "/test", nil)
-			tt.setupHeader(req)
+			tt.setupRequest(req)
 			w := httptest.NewRecorder()
 			r.ServeHTTP(w, req)
 

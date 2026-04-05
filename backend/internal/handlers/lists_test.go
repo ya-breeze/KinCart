@@ -11,6 +11,7 @@ import (
 	"kincart/internal/database"
 	"kincart/internal/models"
 
+	"github.com/google/uuid"
 	coremodels "github.com/ya-breeze/kin-core/models"
 
 	"github.com/gin-gonic/gin"
@@ -33,7 +34,7 @@ func TestListsHandlers(t *testing.T) {
 
 	t.Run("CreateList", func(t *testing.T) {
 		setupListTestDBIsolated()
-		family := models.Family{Family: coremodels.Family{Name: "Test Family"}}
+		family := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "Test Family"}}
 		database.DB.Create(&family)
 
 		r := gin.New()
@@ -58,10 +59,10 @@ func TestListsHandlers(t *testing.T) {
 
 	t.Run("GetLists", func(t *testing.T) {
 		setupListTestDBIsolated()
-		family := models.Family{Family: coremodels.Family{Name: "Test Family"}}
+		family := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "Test Family"}}
 		database.DB.Create(&family)
 		list := models.ShoppingList{
-			TenantModel: coremodels.TenantModel{FamilyID: family.ID},
+			TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID},
 			Title:       "List 1",
 		}
 		database.DB.Create(&list)
@@ -85,10 +86,10 @@ func TestListsHandlers(t *testing.T) {
 
 	t.Run("DeleteList", func(t *testing.T) {
 		setupListTestDBIsolated()
-		family := models.Family{Family: coremodels.Family{Name: "Test Family"}}
+		family := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "Test Family"}}
 		database.DB.Create(&family)
 		list := models.ShoppingList{
-			TenantModel: coremodels.TenantModel{FamilyID: family.ID},
+			TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID},
 			Title:       "To Delete",
 		}
 		database.DB.Create(&list)
@@ -100,7 +101,7 @@ func TestListsHandlers(t *testing.T) {
 		})
 		r.DELETE("/lists/:id", DeleteList)
 
-		req, _ := http.NewRequest(http.MethodDelete, fmt.Sprintf("/lists/%d", list.ID), nil)
+		req, _ := http.NewRequest(http.MethodDelete, fmt.Sprintf("/lists/%s", list.ID.String()), nil)
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
 
