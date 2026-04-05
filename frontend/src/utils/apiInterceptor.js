@@ -6,8 +6,8 @@ function subscribeTokenRefresh(cb) {
     refreshSubscribers.push(cb);
 }
 
-function onRefreshed() {
-    refreshSubscribers.map((cb) => cb());
+function onRefreshed(success) {
+    refreshSubscribers.forEach((cb) => cb(success));
     refreshSubscribers = [];
 }
 
@@ -38,23 +38,28 @@ export const setupInterceptor = () => {
                     }).then(refreshResp => {
                         isRefreshing = false;
                         if (refreshResp.ok) {
-                            onRefreshed();
+                            onRefreshed(true);
                         } else {
-                            refreshSubscribers = [];
+                            onRefreshed(false);
                             window.dispatchEvent(new Event('auth:session-expired'));
                         }
                     }).catch(err => {
                         isRefreshing = false;
-                        refreshSubscribers = [];
                         console.error('Refresh request failed', err);
+                        onRefreshed(false);
                         window.dispatchEvent(new Event('auth:session-expired'));
                     });
                 }
 
-                // Wait for refresh then retry original request
+                // Wait for refresh then retry original request (or return original 401 on failure)
+                const originalResponse = response;
                 return new Promise((resolve) => {
-                    subscribeTokenRefresh(() => {
-                        resolve(originalFetch(resource, newConfig));
+                    subscribeTokenRefresh((success) => {
+                        if (success) {
+                            resolve(originalFetch(resource, newConfig));
+                        } else {
+                            resolve(originalResponse);
+                        }
                     });
                 });
             }
