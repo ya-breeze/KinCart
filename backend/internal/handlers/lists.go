@@ -48,7 +48,8 @@ func CreateList(c *gin.Context) {
 		return
 	}
 
-	list.FamilyID = familyID
+	list.TenantModel.ID = uuid.New()
+	list.TenantModel.FamilyID = familyID
 	list.Status = "preparing"
 
 	if err := validateItemsFamily(list.Items, familyID); err != nil {
@@ -107,7 +108,7 @@ func DuplicateList(c *gin.Context) {
 	}
 
 	newList := models.ShoppingList{
-		TenantModel:     coremodels.TenantModel{FamilyID: familyID},
+		TenantModel:     coremodels.TenantModel{ID: uuid.New(), FamilyID: familyID},
 		Title:           originalList.Title + " (Copy)",
 		Status:          "preparing",
 		EstimatedAmount: originalList.EstimatedAmount,
@@ -120,6 +121,7 @@ func DuplicateList(c *gin.Context) {
 
 	for _, item := range originalList.Items {
 		newItem := models.Item{
+			TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: familyID},
 			Name:        item.Name,
 			Description: item.Description,
 			Price:       item.Price,
@@ -127,8 +129,7 @@ func DuplicateList(c *gin.Context) {
 			ListID:      newList.ID,
 			IsBought:    false,
 			IsUrgent:    item.IsUrgent,
-			FlyerItemID: item.FlyerItemID, // Copy flyer link
-			// ReceiptItemID is skipped (set to nil) as per requirement
+			FlyerItemID: item.FlyerItemID,
 		}
 		database.DB.Create(&newItem)
 	}
