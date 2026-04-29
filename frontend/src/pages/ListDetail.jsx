@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useToast, getApiError } from '../context/ToastContext';
 import { ArrowLeft, Check, Send, Trash2, Plus, AlertCircle, ShoppingCart, Image as ImageIcon, Store, Edit2, X, Receipt, Upload, FileText } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import ImageModal from '../components/ImageModal';
@@ -12,6 +13,7 @@ const ListDetail = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     const { mode, currency } = useAuth();
+    const { showToast } = useToast();
     const [list, setList] = useState(null);
     const [categories, setCategories] = useState([]);
     const [shops, setShops] = useState([]);
@@ -78,10 +80,15 @@ const ListDetail = () => {
     };
 
     const fetchList = async () => {
-        const resp = await fetch(`${API_BASE_URL}/api/lists/${id}`, {
-        });
-        if (resp.ok) {
-            setList(await resp.json());
+        try {
+            const resp = await fetch(`${API_BASE_URL}/api/lists/${id}`);
+            if (resp.ok) {
+                setList(await resp.json());
+            } else {
+                showToast(await getApiError(resp, 'Failed to load list'));
+            }
+        } catch {
+            showToast('Network error — could not load list');
         }
     };
 
@@ -92,15 +99,21 @@ const ListDetail = () => {
         e.preventDefault();
         if (!newItem.name) return;
 
-        const resp = await fetch(`${API_BASE_URL}/api/lists/${id}/items`, {
-            method: 'POST',
-            body: JSON.stringify({
-                ...newItem,
-                price: parseFloat(newItem.price) || 0,
-                quantity: parseFloat(newItem.quantity) || 1,
-                category_id: newItem.category_id ? parseInt(newItem.category_id) : undefined
-            })
-        });
+        let resp;
+        try {
+            resp = await fetch(`${API_BASE_URL}/api/lists/${id}/items`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    ...newItem,
+                    price: parseFloat(newItem.price) || 0,
+                    quantity: parseFloat(newItem.quantity) || 1,
+                    category_id: newItem.category_id ? parseInt(newItem.category_id) : undefined
+                })
+            });
+        } catch {
+            showToast('Network error — could not add item');
+            return;
+        }
 
         if (resp.ok) {
             const addedItem = await resp.json();
@@ -109,16 +122,21 @@ const ListDetail = () => {
             if (selectedPhoto) {
                 const formData = new FormData();
                 formData.append('photo', selectedPhoto);
-                await fetch(`${API_BASE_URL}/api/items/${addedItem.id}/photo`, {
+                const photoResp = await fetch(`${API_BASE_URL}/api/items/${addedItem.id}/photo`, {
                     method: 'POST',
                     body: formData
                 });
+                if (!photoResp.ok) {
+                    showToast(await getApiError(photoResp, 'Item added but photo upload failed'));
+                }
             }
 
             setNewItem({ name: '', category_id: '', price: '', description: '', is_urgent: false, quantity: 1, unit: 'pcs' });
             setSelectedPhoto(null);
             fetchList();
             fetchFrequentItems();
+        } else {
+            showToast(await getApiError(resp, 'Failed to add item'));
         }
     };
 
@@ -137,11 +155,16 @@ const ListDetail = () => {
     };
 
     const toggleItem = async (item) => {
-        const resp = await fetch(`${API_BASE_URL}/api/items/${item.id}`, {
-            method: 'PATCH',
-            body: JSON.stringify({ is_bought: !item.is_bought })
-        });
-        if (resp.ok) fetchList();
+        try {
+            const resp = await fetch(`${API_BASE_URL}/api/items/${item.id}`, {
+                method: 'PATCH',
+                body: JSON.stringify({ is_bought: !item.is_bought })
+            });
+            if (resp.ok) fetchList();
+            else showToast(await getApiError(resp, 'Failed to update item'));
+        } catch {
+            showToast('Network error — could not update item');
+        }
     };
 
     const deleteItem = async (itemId) => {
@@ -150,21 +173,30 @@ const ListDetail = () => {
 
     const confirmDeleteItem = async () => {
         if (!itemToDelete) return;
-        const resp = await fetch(`${API_BASE_URL}/api/items/${itemToDelete.id}`, {
-            method: 'DELETE',
-        });
-        if (resp.ok) {
-            fetchList();
-            setItemToDelete(null);
+        try {
+            const resp = await fetch(`${API_BASE_URL}/api/items/${itemToDelete.id}`, { method: 'DELETE' });
+            if (resp.ok) {
+                fetchList();
+                setItemToDelete(null);
+            } else {
+                showToast(await getApiError(resp, 'Failed to delete item'));
+            }
+        } catch {
+            showToast('Network error — could not delete item');
         }
     };
 
     const updateStatus = async (status) => {
-        const resp = await fetch(`${API_BASE_URL}/api/lists/${id}`, {
-            method: 'PATCH',
-            body: JSON.stringify({ status })
-        });
-        if (resp.ok) fetchList();
+        try {
+            const resp = await fetch(`${API_BASE_URL}/api/lists/${id}`, {
+                method: 'PATCH',
+                body: JSON.stringify({ status })
+            });
+            if (resp.ok) fetchList();
+            else showToast(await getApiError(resp, 'Failed to update list status'));
+        } catch {
+            showToast('Network error — could not update status');
+        }
     };
 
     const startEditing = (item) => {
@@ -177,33 +209,45 @@ const ListDetail = () => {
     };
 
     const saveEdit = async () => {
-        const resp = await fetch(`${API_BASE_URL}/api/items/${editingItemId}`, {
-            method: 'PATCH',
-            body: JSON.stringify({
-                ...editItemData,
-                price: parseFloat(editItemData.price) || 0,
-                quantity: parseFloat(editItemData.quantity) || 1,
-                category_id: editItemData.category_id ? parseInt(editItemData.category_id) : undefined
-            })
-        });
-        if (resp.ok) {
-            setEditingItemId(null);
-            fetchList();
+        try {
+            const resp = await fetch(`${API_BASE_URL}/api/items/${editingItemId}`, {
+                method: 'PATCH',
+                body: JSON.stringify({
+                    ...editItemData,
+                    price: parseFloat(editItemData.price) || 0,
+                    quantity: parseFloat(editItemData.quantity) || 1,
+                    category_id: editItemData.category_id ? parseInt(editItemData.category_id) : undefined
+                })
+            });
+            if (resp.ok) {
+                setEditingItemId(null);
+                fetchList();
+            } else {
+                showToast(await getApiError(resp, 'Failed to save item'));
+            }
+        } catch {
+            showToast('Network error — could not save item');
         }
     };
 
     const handleCreateCategory = async () => {
         if (!newCategoryName.trim()) return;
-        const resp = await fetch(`${API_BASE_URL}/api/categories`, {
-            method: 'POST',
-            body: JSON.stringify({ name: newCategoryName.trim() })
-        });
-        if (resp.ok) {
-            const newCat = await resp.json();
-            setCategories([...categories, newCat]);
-            setNewItem({ ...newItem, category_id: newCat.id });
-            setIsCreatingCategory(false);
-            setNewCategoryName('');
+        try {
+            const resp = await fetch(`${API_BASE_URL}/api/categories`, {
+                method: 'POST',
+                body: JSON.stringify({ name: newCategoryName.trim() })
+            });
+            if (resp.ok) {
+                const newCat = await resp.json();
+                setCategories([...categories, newCat]);
+                setNewItem({ ...newItem, category_id: newCat.id });
+                setIsCreatingCategory(false);
+                setNewCategoryName('');
+            } else {
+                showToast(await getApiError(resp, 'Failed to create category'));
+            }
+        } catch {
+            showToast('Network error — could not create category');
         }
     };
 
@@ -212,15 +256,19 @@ const ListDetail = () => {
             setIsRenaming(false);
             return;
         }
-
-        const resp = await fetch(`${API_BASE_URL}/api/lists/${id}`, {
-            method: 'PATCH',
-            body: JSON.stringify({ title: renameValue.trim() })
-        });
-
-        if (resp.ok) {
-            setList({ ...list, title: renameValue.trim() });
-            setIsRenaming(false);
+        try {
+            const resp = await fetch(`${API_BASE_URL}/api/lists/${id}`, {
+                method: 'PATCH',
+                body: JSON.stringify({ title: renameValue.trim() })
+            });
+            if (resp.ok) {
+                setList({ ...list, title: renameValue.trim() });
+                setIsRenaming(false);
+            } else {
+                showToast(await getApiError(resp, 'Failed to rename list'));
+            }
+        } catch {
+            showToast('Network error — could not rename list');
         }
     };
 
@@ -229,12 +277,15 @@ const ListDetail = () => {
     };
 
     const confirmDeleteList = async () => {
-        const resp = await fetch(`${API_BASE_URL}/api/lists/${id}`, {
-            method: 'DELETE',
-        });
-
-        if (resp.ok) {
-            navigate('/');
+        try {
+            const resp = await fetch(`${API_BASE_URL}/api/lists/${id}`, { method: 'DELETE' });
+            if (resp.ok) {
+                navigate('/');
+            } else {
+                showToast(await getApiError(resp, 'Failed to delete list'));
+            }
+        } catch {
+            showToast('Network error — could not delete list');
         }
         setIsDeleteModalOpen(false);
     };

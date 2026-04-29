@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useToast, getApiError } from '../context/ToastContext';
 import { Plus, ShoppingBasket, CheckCircle2, Clock, Copy, Settings, Scroll, AlertCircle, ChevronDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../config';
@@ -7,6 +8,7 @@ import Modal from '../components/Modal';
 
 const Dashboard = () => {
     const { user, mode, currency, toggleMode, logout } = useAuth();
+    const { showToast } = useToast();
     const navigate = useNavigate();
     const [lists, setLists] = useState([]);
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -33,10 +35,15 @@ const Dashboard = () => {
     }, []);
 
     const fetchLists = async () => {
-        const resp = await fetch(`${API_BASE_URL}/api/lists`, {
-        });
-        if (resp.ok) {
-            setLists(await resp.json());
+        try {
+            const resp = await fetch(`${API_BASE_URL}/api/lists`);
+            if (resp.ok) {
+                setLists(await resp.json());
+            } else {
+                showToast(await getApiError(resp, 'Failed to load lists'));
+            }
+        } catch {
+            showToast('Network error — could not load lists');
         }
     };
 
@@ -80,29 +87,35 @@ const Dashboard = () => {
 
     const handleCreateList = async () => {
         if (!newListTitle.trim()) return;
-
-        const resp = await fetch(`${API_BASE_URL}/api/lists`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ title: newListTitle.trim() })
-        });
-
-        if (resp.ok) {
-            setNewListTitle('');
-            setIsCreateModalOpen(false);
-            fetchLists();
+        try {
+            const resp = await fetch(`${API_BASE_URL}/api/lists`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: newListTitle.trim() })
+            });
+            if (resp.ok) {
+                setNewListTitle('');
+                setIsCreateModalOpen(false);
+                fetchLists();
+            } else {
+                showToast(await getApiError(resp, 'Failed to create list'));
+            }
+        } catch {
+            showToast('Network error — could not create list');
         }
     };
 
     const duplicateList = async (e, id) => {
         e.stopPropagation();
-        const resp = await fetch(`${API_BASE_URL}/api/lists/${id}/duplicate`, {
-            method: 'POST',
-        });
-        if (resp.ok) {
-            fetchLists();
+        try {
+            const resp = await fetch(`${API_BASE_URL}/api/lists/${id}/duplicate`, { method: 'POST' });
+            if (resp.ok) {
+                fetchLists();
+            } else {
+                showToast(await getApiError(resp, 'Failed to duplicate list'));
+            }
+        } catch {
+            showToast('Network error — could not duplicate list');
         }
     };
 

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useToast, getApiError } from '../context/ToastContext';
 import { ArrowLeft, BarChart3, FileText, ImageIcon, CheckCircle2, AlertCircle, ShoppingBag, X, ExternalLink, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../config';
@@ -198,7 +199,7 @@ const DetailsModal = ({ isOpen, onClose, title, loading, data, type, selectedDat
 };
 
 const FlyerStatsPage = () => {
-    
+    const { showToast } = useToast();
     const navigate = useNavigate();
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -214,14 +215,14 @@ const FlyerStatsPage = () => {
 
     const fetchStats = async () => {
         try {
-            const resp = await fetch(`${API_BASE_URL}/api/flyers/stats`, {
-            });
+            const resp = await fetch(`${API_BASE_URL}/api/flyers/stats`);
             if (resp.ok) {
-                const data = await resp.json();
-                setStats(data);
+                setStats(await resp.json());
+            } else {
+                showToast(await getApiError(resp, 'Failed to load flyer stats'));
             }
-        } catch (err) {
-            console.error('Failed to fetch stats:', err);
+        } catch {
+            showToast('Network error — could not load flyer stats');
         } finally {
             setLoading(false);
         }
@@ -243,14 +244,16 @@ const FlyerStatsPage = () => {
         else if (type === 'activity') url = `${API_BASE_URL}/api/flyers/activity?date=${date}`;
 
         try {
-            const resp = await fetch(url, {
-            });
+            const resp = await fetch(url);
             if (resp.ok) {
                 const data = await resp.json();
                 setModal(prev => ({ ...prev, loading: false, data }));
+            } else {
+                showToast(await getApiError(resp, 'Failed to load details'));
+                setModal(prev => ({ ...prev, loading: false }));
             }
-        } catch (err) {
-            console.error('Failed to fetch details:', err);
+        } catch {
+            showToast('Network error — could not load details');
             setModal(prev => ({ ...prev, loading: false }));
         }
     };
@@ -261,14 +264,13 @@ const FlyerStatsPage = () => {
         // If no date selected, fetch the latest activity date
         if (!date && ['pages', 'parsed', 'errors', 'items'].includes(card.id)) {
             try {
-                const resp = await fetch(`${API_BASE_URL}/api/flyers/activity-stats`, {
-                });
+                const resp = await fetch(`${API_BASE_URL}/api/flyers/activity-stats`);
                 if (resp.ok) {
                     const data = await resp.json();
                     date = data.latest_date;
                 }
-            } catch (err) {
-                console.error('Failed to fetch activity stats:', err);
+            } catch {
+                // non-critical, fall through to today
             }
         }
 

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useToast, getApiError } from '../context/ToastContext';
 import { Search, Store, Calendar, ArrowLeft, Loader2, Filter, Plus, Check, X, TrendingUp } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { API_BASE_URL } from '../config';
@@ -12,6 +13,7 @@ import Modal from '../components/Modal';
 
 const FlyerItemsPage = () => {
     const { currency } = useAuth();
+    const { showToast } = useToast();
     const navigate = useNavigate();
     const [shops, setShops] = useState([]);
     const [categories, setCategories] = useState([]);
@@ -45,7 +47,6 @@ const FlyerItemsPage = () => {
     const [activeLists, setActiveLists] = useState([]);
     const [showListSelector, setShowListSelector] = useState(null); // flyerItemID
     const [addingTo, setAddingTo] = useState(null); // listId
-    const [message, setMessage] = useState(null);
     const [previewImage, setPreviewImage] = useState(null);
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [newListTitle, setNewListTitle] = useState('');
@@ -154,13 +155,14 @@ const FlyerItemsPage = () => {
             });
 
             if (resp.ok) {
-                setMessage({ type: 'success', text: `Added ${item.name} to list!` });
+                showToast(`Added "${item.name}" to list`, 'success');
                 setShowListSelector(null);
-                clearCache(); // Clear cache when items might change
-                setTimeout(() => setMessage(null), 3000);
+                clearCache();
+            } else {
+                showToast(await getApiError(resp, 'Failed to add item'));
             }
         } catch {
-            setMessage({ type: 'error', text: 'Failed to add item' });
+            showToast('Network error — could not add item');
         } finally {
             setAddingTo(null);
         }
@@ -187,12 +189,14 @@ const FlyerItemsPage = () => {
             if (resp.ok) {
                 const newList = await resp.json();
                 handleAddItemToList(pendingItem, newList.id);
-                fetchActiveLists(); // Refresh active lists
+                fetchActiveLists();
                 setIsCreateModalOpen(false);
                 setPendingItem(null);
+            } else {
+                showToast(await getApiError(resp, 'Failed to create list'));
             }
         } catch {
-            setMessage({ type: 'error', text: 'Failed to create list' });
+            showToast('Network error — could not create list');
         }
     };
 
@@ -213,23 +217,6 @@ const FlyerItemsPage = () => {
                 />
             )}
             <header style={{ marginBottom: '2rem', paddingTop: '1rem', position: 'relative' }}>
-                {message && (
-                    <div className={`badge ${message.type === 'success' ? 'badge-success' : 'badge-error'}`} style={{
-                        position: 'fixed',
-                        top: '20px',
-                        left: '50%',
-                        transform: 'translateX(-50%)',
-                        zIndex: 1000,
-                        padding: '1rem 2rem',
-                        boxShadow: 'var(--shadow-lg)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.5rem'
-                    }}>
-                        {message.type === 'success' ? <Check size={20} /> : <X size={20} />}
-                        {message.text}
-                    </div>
-                )}
                 <button
                     onClick={() => navigate('/')}
                     style={{

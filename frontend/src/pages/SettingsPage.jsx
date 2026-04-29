@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useToast, getApiError } from '../context/ToastContext';
 import { ArrowLeft, Plus, Trash2, Edit2, Check, X, GripVertical, Store, ChevronRight, BarChart3 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../config';
@@ -7,6 +8,7 @@ import Modal from '../components/Modal';
 
 const SettingsPage = () => {
     const { currency, setCurrency } = useAuth();
+    const { showToast } = useToast();
     const navigate = useNavigate();
     const [categories, setCategories] = useState([]);
     const [shops, setShops] = useState([]);
@@ -52,19 +54,30 @@ const SettingsPage = () => {
             shop_id: newAlias.shop_id || null,
             last_price: parseFloat(newAlias.last_price) || 0
         };
-        const resp = await fetch(`${API_BASE_URL}/api/family/aliases`, {
-            method: 'POST',
-            body: JSON.stringify(body)
-        });
-        if (resp.ok) {
-            setNewAlias({ planned_name: '', receipt_name: '', shop_id: '', last_price: '' });
-            fetchAliases(aliasSearch);
+        try {
+            const resp = await fetch(`${API_BASE_URL}/api/family/aliases`, {
+                method: 'POST',
+                body: JSON.stringify(body)
+            });
+            if (resp.ok) {
+                setNewAlias({ planned_name: '', receipt_name: '', shop_id: '', last_price: '' });
+                fetchAliases(aliasSearch);
+            } else {
+                showToast(await getApiError(resp, 'Failed to create alias'));
+            }
+        } catch {
+            showToast('Network error — could not create alias');
         }
     };
 
     const deleteAlias = async (aliasId) => {
-        const resp = await fetch(`${API_BASE_URL}/api/family/aliases/${aliasId}`, { method: 'DELETE' });
-        if (resp.ok) fetchAliases(aliasSearch);
+        try {
+            const resp = await fetch(`${API_BASE_URL}/api/family/aliases/${aliasId}`, { method: 'DELETE' });
+            if (resp.ok) fetchAliases(aliasSearch);
+            else showToast(await getApiError(resp, 'Failed to delete alias'));
+        } catch {
+            showToast('Network error — could not delete alias');
+        }
     };
 
     const toggleGroup = (name) => setExpandedGroups(prev => {
@@ -81,15 +94,20 @@ const SettingsPage = () => {
     });
 
     const saveEditAlias = async () => {
-        const resp = await fetch(`${API_BASE_URL}/api/family/aliases/${editingAlias.id}`, {
-            method: 'PATCH',
-            body: JSON.stringify({
-                receipt_name: editingAlias.receipt_name,
-                shop_id: editingAlias.shop_id || null,
-                last_price: parseFloat(editingAlias.last_price) || 0
-            })
-        });
-        if (resp.ok) { setEditingAlias(null); fetchAliases(aliasSearch); }
+        try {
+            const resp = await fetch(`${API_BASE_URL}/api/family/aliases/${editingAlias.id}`, {
+                method: 'PATCH',
+                body: JSON.stringify({
+                    receipt_name: editingAlias.receipt_name,
+                    shop_id: editingAlias.shop_id || null,
+                    last_price: parseFloat(editingAlias.last_price) || 0
+                })
+            });
+            if (resp.ok) { setEditingAlias(null); fetchAliases(aliasSearch); }
+            else showToast(await getApiError(resp, 'Failed to save alias'));
+        } catch {
+            showToast('Network error — could not save alias');
+        }
     };
 
     const prefillGroup = (groupName) => {
@@ -114,24 +132,33 @@ const SettingsPage = () => {
     };
 
     const updateCurrency = async (newVal) => {
-        const resp = await fetch(`${API_BASE_URL}/api/family/config`, {
-            method: 'PATCH',
-            body: JSON.stringify({ currency: newVal })
-        });
-        if (resp.ok) setCurrency(newVal);
+        try {
+            const resp = await fetch(`${API_BASE_URL}/api/family/config`, {
+                method: 'PATCH',
+                body: JSON.stringify({ currency: newVal })
+            });
+            if (resp.ok) setCurrency(newVal);
+            else showToast(await getApiError(resp, 'Failed to update currency'));
+        } catch {
+            showToast('Network error — could not update currency');
+        }
     };
 
     const addCategory = async () => {
         if (!newCatName) return;
-        const resp = await fetch(`${API_BASE_URL}/api/categories`, {
-            method: 'POST',
-            body: JSON.stringify({ name: newCatName, icon: 'package', sort_order: categories.length + 1 })
-        });
-        if (resp.ok) {
-            setNewCatName('');
-            fetchCategories();
-        } else {
-            alert('Failed to add category');
+        try {
+            const resp = await fetch(`${API_BASE_URL}/api/categories`, {
+                method: 'POST',
+                body: JSON.stringify({ name: newCatName, icon: 'package', sort_order: categories.length + 1 })
+            });
+            if (resp.ok) {
+                setNewCatName('');
+                fetchCategories();
+            } else {
+                showToast(await getApiError(resp, 'Failed to add category'));
+            }
+        } catch {
+            showToast('Network error — could not add category');
         }
     };
 
@@ -142,19 +169,21 @@ const SettingsPage = () => {
 
     const confirmDelete = async () => {
         if (!deleteConfirm) return;
-
         const endpoint = deleteConfirm.type === 'category' ? `categories/${deleteConfirm.id}` : `shops/${deleteConfirm.id}`;
-        const resp = await fetch(`${API_BASE_URL}/api/${endpoint}`, {
-            method: 'DELETE',
-        });
-
-        if (resp.ok) {
-            if (deleteConfirm.type === 'category') {
-                fetchCategories();
+        try {
+            const resp = await fetch(`${API_BASE_URL}/api/${endpoint}`, { method: 'DELETE' });
+            if (resp.ok) {
+                if (deleteConfirm.type === 'category') {
+                    fetchCategories();
+                } else {
+                    if (selectedShop?.id === deleteConfirm.id) setSelectedShop(null);
+                    fetchShops();
+                }
             } else {
-                if (selectedShop?.id === deleteConfirm.id) setSelectedShop(null);
-                fetchShops();
+                showToast(await getApiError(resp, `Failed to delete ${deleteConfirm.type}`));
             }
+        } catch {
+            showToast(`Network error — could not delete ${deleteConfirm.type}`);
         }
         setDeleteConfirm(null);
     };
@@ -165,25 +194,37 @@ const SettingsPage = () => {
     };
 
     const saveEdit = async (cat) => {
-        const resp = await fetch(`${API_BASE_URL}/api/categories/${cat.id}`, {
-            method: 'PATCH',
-            body: JSON.stringify({ ...cat, name: editName })
-        });
-        if (resp.ok) {
-            setEditingCat(null);
-            fetchCategories();
+        try {
+            const resp = await fetch(`${API_BASE_URL}/api/categories/${cat.id}`, {
+                method: 'PATCH',
+                body: JSON.stringify({ ...cat, name: editName })
+            });
+            if (resp.ok) {
+                setEditingCat(null);
+                fetchCategories();
+            } else {
+                showToast(await getApiError(resp, 'Failed to rename category'));
+            }
+        } catch {
+            showToast('Network error — could not rename category');
         }
     };
 
     const addShop = async () => {
         if (!newShopName) return;
-        const resp = await fetch(`${API_BASE_URL}/api/shops`, {
-            method: 'POST',
-            body: JSON.stringify({ name: newShopName })
-        });
-        if (resp.ok) {
-            setNewShopName('');
-            fetchShops();
+        try {
+            const resp = await fetch(`${API_BASE_URL}/api/shops`, {
+                method: 'POST',
+                body: JSON.stringify({ name: newShopName })
+            });
+            if (resp.ok) {
+                setNewShopName('');
+                fetchShops();
+            } else {
+                showToast(await getApiError(resp, 'Failed to add shop'));
+            }
+        } catch {
+            showToast('Network error — could not add shop');
         }
     };
 
@@ -210,21 +251,27 @@ const SettingsPage = () => {
 
         if (isShopSpecific) {
             const orderPayload = updatedList.map(c => ({ category_id: c.id, sort_order: c.sort_order }));
-            const resp = await fetch(`${API_BASE_URL}/api/shops/${selectedShop.id}/order`, {
-                method: 'PATCH',
-                body: JSON.stringify(orderPayload)
-            });
-            if (resp.ok) fetchShopOrder(selectedShop.id);
+            try {
+                const resp = await fetch(`${API_BASE_URL}/api/shops/${selectedShop.id}/order`, {
+                    method: 'PATCH',
+                    body: JSON.stringify(orderPayload)
+                });
+                if (resp.ok) fetchShopOrder(selectedShop.id);
+                else showToast(await getApiError(resp, 'Failed to save shop category order'));
+            } catch {
+                showToast('Network error — could not save order');
+            }
         } else {
-            // Bulk reorder for global categories (needs endpoint implementation or sequential updates)
-            // For now let's assume a patch reorder endpoint exists or implement one
-            // I'll actually just update the categories state and assume it's saved correctly
-            // (Re-using the existing reorder logic if I implemented it, or I'll add the endpoint)
-            const resp = await fetch(`${API_BASE_URL}/api/categories/reorder`, {
-                method: 'PATCH',
-                body: JSON.stringify(updatedList)
-            });
-            if (resp.ok) fetchCategories();
+            try {
+                const resp = await fetch(`${API_BASE_URL}/api/categories/reorder`, {
+                    method: 'PATCH',
+                    body: JSON.stringify(updatedList)
+                });
+                if (resp.ok) fetchCategories();
+                else showToast(await getApiError(resp, 'Failed to reorder categories'));
+            } catch {
+                showToast('Network error — could not reorder categories');
+            }
         }
     };
 
