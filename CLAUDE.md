@@ -2,6 +2,19 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Keeping This File Up to Date
+
+**This file must be updated as part of any session that produces new knowledge.**
+
+Update this file whenever you:
+- Discover that something documented here is wrong or incomplete
+- Learn a non-obvious architectural rule (e.g. a missing hook, an implicit invariant)
+- Add a new pattern that future agents should follow (e.g. a shared utility, a naming convention)
+- Add or remove API routes, environment variables, or models
+- Fix a bug whose root cause reveals a systemic pitfall
+
+When in doubt, add it. Stale or missing documentation is how the same bugs get reintroduced. Commit the updated CLAUDE.md in the same branch as the code change that prompted it.
+
 ## Project Overview
 
 KinCart is an intelligent family shopping assistant that connects users into Families with synchronized data. It supports two primary roles:
