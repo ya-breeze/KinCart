@@ -38,6 +38,8 @@ func AddItemToList(c *gin.Context) {
 		return
 	}
 
+	item.TenantModel.ID = uuid.New()
+	item.TenantModel.FamilyID = familyID
 	item.ListID = list.ID
 
 	// Verify category ownership if provided
