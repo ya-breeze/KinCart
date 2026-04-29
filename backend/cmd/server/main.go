@@ -154,6 +154,10 @@ func main() {
 			protected.GET("/family/config", handlers.GetFamilyConfig)
 			protected.PATCH("/family/config", handlers.UpdateFamilyConfig)
 			protected.GET("/family/frequent-items", handlers.GetFrequentItems)
+			protected.GET("/family/item-suggestions", handlers.GetItemSuggestions)
+			protected.GET("/family/aliases", handlers.GetAliases)
+			protected.POST("/family/aliases", handlers.CreateAlias)
+			protected.DELETE("/family/aliases/:id", handlers.DeleteAlias)
 
 			protected.GET("/shops", handlers.GetShops)
 			protected.POST("/shops", handlers.CreateShop)

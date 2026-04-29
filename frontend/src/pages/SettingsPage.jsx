@@ -17,6 +17,9 @@ const SettingsPage = () => {
     const [editName, setEditName] = useState('');
     const [shopCategoryOrders, setShopCategoryOrders] = useState({}); // { shopId: [ { categoryId, sortOrder } ] }
     const [deleteConfirm, setDeleteConfirm] = useState(null); // { type: 'category'|'shop', id, name }
+    const [aliases, setAliases] = useState([]);
+    const [aliasSearch, setAliasSearch] = useState('');
+    const [newAlias, setNewAlias] = useState({ planned_name: '', receipt_name: '', shop_id: '', last_price: '' });
 
     const fetchShops = async () => {
         const resp = await fetch(`${API_BASE_URL}/api/shops`, {
@@ -30,9 +33,41 @@ const SettingsPage = () => {
         if (resp.ok) setCategories(await resp.json());
     };
 
+    const fetchAliases = async (q = '') => {
+        const url = q.length >= 2
+            ? `${API_BASE_URL}/api/family/aliases?q=${encodeURIComponent(q)}`
+            : `${API_BASE_URL}/api/family/aliases`;
+        const resp = await fetch(url);
+        if (resp.ok) setAliases(await resp.json());
+    };
+
+    const createAlias = async () => {
+        if (!newAlias.planned_name || !newAlias.receipt_name) return;
+        const body = {
+            planned_name: newAlias.planned_name,
+            receipt_name: newAlias.receipt_name,
+            shop_id: newAlias.shop_id || null,
+            last_price: parseFloat(newAlias.last_price) || 0
+        };
+        const resp = await fetch(`${API_BASE_URL}/api/family/aliases`, {
+            method: 'POST',
+            body: JSON.stringify(body)
+        });
+        if (resp.ok) {
+            setNewAlias({ planned_name: '', receipt_name: '', shop_id: '', last_price: '' });
+            fetchAliases(aliasSearch);
+        }
+    };
+
+    const deleteAlias = async (aliasId) => {
+        const resp = await fetch(`${API_BASE_URL}/api/family/aliases/${aliasId}`, { method: 'DELETE' });
+        if (resp.ok) fetchAliases(aliasSearch);
+    };
+
     useEffect(() => {
         fetchCategories();
         fetchShops();
+        fetchAliases();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -344,6 +379,80 @@ const SettingsPage = () => {
                         </button>
                     </div>
 
+                </div>
+            </section>
+
+            <section style={{ marginTop: '3rem', marginBottom: '3rem' }}>
+                <h2 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '0.5rem' }}>Item Aliases</h2>
+                <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+                    Map generic list names to specific products. Aliases are also learned automatically from confirmed receipts.
+                </p>
+
+                <input
+                    placeholder="Filter by item name..."
+                    value={aliasSearch}
+                    onChange={e => { setAliasSearch(e.target.value); fetchAliases(e.target.value); }}
+                    style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid var(--border)', outline: 'none', fontWeight: 600, marginBottom: '1rem', boxSizing: 'border-box' }}
+                />
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.5rem' }}>
+                    {aliases.map(alias => (
+                        <div key={alias.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                                <span style={{ fontWeight: 700 }}>{alias.planned_name}</span>
+                                <span style={{ color: 'var(--text-muted)', margin: '0 6px' }}>→</span>
+                                <span style={{ fontWeight: 600 }}>{alias.receipt_name}</span>
+                                {alias.shop && <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: '6px' }}>at {alias.shop.name}</span>}
+                                {alias.last_price > 0 && <span style={{ fontSize: '0.75rem', color: 'var(--success)', marginLeft: '6px' }}>{alias.last_price.toFixed(2)}</span>}
+                                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: '6px' }}>×{alias.purchase_count}</span>
+                            </div>
+                            <button onClick={() => deleteAlias(alias.id)} style={{ color: 'var(--danger)', padding: '0.5rem', background: 'none', border: 'none', cursor: 'pointer' }} title="Delete alias">
+                                <Trash2 size={16} />
+                            </button>
+                        </div>
+                    ))}
+                    {aliases.length === 0 && (
+                        <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', textAlign: 'center', padding: '1rem' }}>
+                            No aliases yet. They are created automatically when you confirm receipts, or add one below.
+                        </p>
+                    )}
+                </div>
+
+                <div className="card" style={{ border: '2px dashed var(--border)', background: 'transparent', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    <p style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', margin: 0 }}>Add Manual Alias</p>
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <input
+                            placeholder="Generic name (e.g. jogurt)"
+                            value={newAlias.planned_name}
+                            onChange={e => setNewAlias({ ...newAlias, planned_name: e.target.value })}
+                            style={{ flex: '1 1 140px', padding: '0.5rem', borderRadius: '8px', border: '1px solid var(--border)', outline: 'none', fontWeight: 600 }}
+                        />
+                        <input
+                            placeholder="Specific product (e.g. selský jogurt 1%)"
+                            value={newAlias.receipt_name}
+                            onChange={e => setNewAlias({ ...newAlias, receipt_name: e.target.value })}
+                            style={{ flex: '2 1 200px', padding: '0.5rem', borderRadius: '8px', border: '1px solid var(--border)', outline: 'none', fontWeight: 600 }}
+                        />
+                        <select
+                            value={newAlias.shop_id}
+                            onChange={e => setNewAlias({ ...newAlias, shop_id: e.target.value })}
+                            style={{ flex: '1 1 120px', padding: '0.5rem', borderRadius: '8px', border: '1px solid var(--border)', outline: 'none', background: 'white', fontWeight: 600 }}
+                        >
+                            <option value="">Any shop</option>
+                            {shops.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                        <input
+                            type="number"
+                            placeholder="Price"
+                            value={newAlias.last_price}
+                            onChange={e => setNewAlias({ ...newAlias, last_price: e.target.value })}
+                            style={{ flex: '0 1 80px', padding: '0.5rem', borderRadius: '8px', border: '1px solid var(--border)', outline: 'none' }}
+                        />
+                        <button onClick={createAlias} className="btn-primary" style={{ padding: '0.5rem 1rem', flex: '0 1 auto', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <Plus size={16} />
+                            Add
+                        </button>
+                    </div>
                 </div>
             </section>
 
