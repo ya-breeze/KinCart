@@ -104,9 +104,20 @@ npm test -- LazyImage.test.jsx
 
 **Key Architectural Patterns:**
 
-1. **Multi-Tenancy via kin-core**: Models embed `coremodels.TenantModel` which includes `FamilyID`. All queries must be scoped by family to ensure data isolation. Use the `github.com/ya-breeze/kin-core/db` package's scoping utilities (e.g., `db.ScopedQuery`, `db.ScopedFirst`) to automatically filter by `FamilyID` from context.
+1. **Multi-Tenancy via kin-core**: Models embed `coremodels.TenantModel` which provides `ID` (uuid.UUID primary key) and `FamilyID` (uuid.UUID). All queries must be scoped by family. The `github.com/ya-breeze/kin-core/db` package provides `db.Scope(familyID)` (a GORM scope) and `db.CheckOwnership(db, model, id, familyID)` — there are no `ScopedQuery`/`ScopedFirst` helpers.
 
-2. **Family ID Context**: The `AuthMiddleware` extracts the JWT, loads the user, and sets `c.Set("family_id", user.FamilyID)` in the Gin context. Handlers retrieve this with `c.GetUint("family_id")`.
+   **Critical**: `TenantModel` has **no `BeforeCreate` hook**. When creating a record, you must set both fields explicitly before calling `database.DB.Create()`:
+   ```go
+   item.TenantModel.ID = uuid.New()
+   item.TenantModel.FamilyID = familyID
+   database.DB.Create(&item)
+   ```
+   Omitting this leaves both as zero UUID (`00000000-0000-0000-0000-000000000000`). The first insert succeeds and creates a poisoned zero-UUID row; every subsequent insert fails with `UNIQUE constraint failed`.
+
+2. **Family ID Context**: The `AuthMiddleware` extracts the JWT, loads the user, and sets `c.Set("family_id", user.FamilyID)` in the Gin context. Handlers retrieve this with:
+   ```go
+   familyID := c.MustGet("family_id").(uuid.UUID)
+   ```
 
 3. **Database Migration Strategy**: On startup, `database.InitDB()` performs:
    - Manual `ALTER TABLE` for `family_id` columns on existing tables (SQLite workaround)
@@ -142,7 +153,24 @@ npm test -- LazyImage.test.jsx
 - `ReceiptUploadModal.jsx` - Receipt upload with camera/file support
 
 **Context:**
-- `context/AuthContext.jsx` - User authentication state
+- `context/AuthContext.jsx` - User authentication state (user, mode, currency, login/logout)
+- `context/ToastContext.jsx` - Global toast notifications. Use `useToast()` → `showToast(message, type?)` to surface errors. `type` defaults to `'error'`; pass `'success'` for confirmations. Also exports `getApiError(resp, fallback)` to extract the `error` field from a failed JSON response.
+
+**Error handling pattern** (all pages follow this):
+```js
+import { useToast, getApiError } from '../context/ToastContext';
+// inside component:
+const { showToast } = useToast();
+// inside mutation:
+try {
+    const resp = await fetch(...);
+    if (resp.ok) { /* success path */ }
+    else showToast(await getApiError(resp, 'Operation failed'));
+} catch {
+    showToast('Network error — ...');
+}
+```
+`useToast()` returns a noop stub when called outside `ToastProvider`, so test renders work without wrapping.
 
 **Styling:**
 - Vanilla CSS only (no CSS frameworks per `.cursorrules`)
@@ -194,6 +222,11 @@ npm test -- LazyImage.test.jsx
 - `GET /api/family/config` - Get family config
 - `PATCH /api/family/config` - Update family config
 - `GET /api/family/frequent-items` - Get frequently purchased items
+- `GET /api/family/item-suggestions?q=` - Autocomplete item names from aliases (min 2 chars)
+- `GET /api/family/aliases` - List item aliases (grouped by planned_name)
+- `POST /api/family/aliases` - Create alias
+- `PATCH /api/family/aliases/:id` - Update alias receipt_name / shop_id / last_price
+- `DELETE /api/family/aliases/:id` - Delete alias
 - `GET /api/shops` - Get shops
 - `POST /api/shops` - Create shop
 - `PATCH /api/shops/:id` - Update shop
@@ -251,20 +284,22 @@ Located in `e2e/tests/`:
 
 ## Important Development Notes
 
-1. **Multi-Tenant Isolation**: Always scope queries by `family_id`. The `isolation_test.go` file validates this. When adding new endpoints, ensure they use the family ID from context.
+1. **Multi-Tenant Isolation**: Always scope queries by `family_id`. The `isolation_test.go` and `aliases_test.go` files validate this. When adding new endpoints, ensure they use `familyID := c.MustGet("family_id").(uuid.UUID)` and include it in all DB queries. **Also set `TenantModel.ID = uuid.New()` and `TenantModel.FamilyID = familyID` before every `Create()` call** — there is no hook that does this automatically.
 
-2. **Styling**: Use vanilla CSS only per `.cursorrules`. No CSS frameworks or component libraries.
+2. **Frontend Error Handling**: Every API call must handle failures — never leave a bare `if (resp.ok)` with no else. Use the `useToast` / `getApiError` pattern from `context/ToastContext.jsx` (see Frontend Structure above). Wrap mutation calls in try/catch for network errors too.
 
-3. **Security**:
+3. **Styling**: Use vanilla CSS only per `.cursorrules`. No CSS frameworks or component libraries.
+
+4. **Security**:
    - Never commit secrets to `.env` files
    - All uploads must go through `UploadSecurityMiddleware`
    - CORS origins must be explicitly configured in production
    - JWT tokens are blacklisted on logout
 
-4. **Database Changes**: After modifying models, restart the backend to trigger auto-migration. For SQLite NOT NULL column additions, see the manual ALTER TABLE pattern in `database/db.go`.
+5. **Database Changes**: After modifying models, restart the backend to trigger auto-migration. For SQLite NOT NULL column additions, see the manual ALTER TABLE pattern in `database/db.go`.
 
-5. **Flyer & Receipt Features**: Require `GEMINI_API_KEY` to be set. These are optional features that gracefully degrade if the API key is missing.
+6. **Flyer & Receipt Features**: Require `GEMINI_API_KEY` to be set. These are optional features that gracefully degrade if the API key is missing.
 
-6. **Docker Deployment**: The app runs behind Nginx reverse proxy. Internal API routes (`/api/internal/*`) should only be accessible within the Docker network.
+7. **Docker Deployment**: The app runs behind Nginx reverse proxy. Internal API routes (`/api/internal/*`) should only be accessible within the Docker network.
 
-7. **Development Plan**: See `development_plan.md` for feature roadmap and implementation status.
+8. **Development Plan**: See `development_plan.md` for feature roadmap and implementation status.
