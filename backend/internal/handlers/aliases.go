@@ -103,6 +103,66 @@ func CreateAlias(c *gin.Context) {
 	c.JSON(http.StatusOK, alias)
 }
 
+type updateAliasRequest struct {
+	ReceiptName *string  `json:"receipt_name"`
+	ShopID      *string  `json:"shop_id"`
+	LastPrice   *float64 `json:"last_price"`
+}
+
+func UpdateAlias(c *gin.Context) {
+	familyID := c.MustGet("family_id").(uuid.UUID)
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid alias id"})
+		return
+	}
+
+	var alias models.ItemAlias
+	if err := database.DB.Where("id = ? AND family_id = ?", id, familyID).First(&alias).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Alias not found"})
+		return
+	}
+
+	var req updateAliasRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if req.ReceiptName != nil {
+		alias.ReceiptName = *req.ReceiptName
+	}
+	if req.LastPrice != nil {
+		alias.LastPrice = *req.LastPrice
+	}
+	if req.ShopID != nil {
+		if *req.ShopID == "" {
+			alias.ShopID = nil
+		} else {
+			parsed, err := uuid.Parse(*req.ShopID)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid shop_id"})
+				return
+			}
+			var shop models.Shop
+			if err := database.DB.Where("id = ? AND family_id = ?", parsed, familyID).First(&shop).Error; err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Shop not found"})
+				return
+			}
+			alias.ShopID = &parsed
+		}
+	}
+
+	if err := database.DB.Save(&alias).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update alias"})
+		return
+	}
+
+	database.DB.Preload("Shop").First(&alias, alias.ID)
+	c.JSON(http.StatusOK, alias)
+}
+
 func DeleteAlias(c *gin.Context) {
 	familyID := c.MustGet("family_id").(uuid.UUID)
 	idStr := c.Param("id")
