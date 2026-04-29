@@ -381,3 +381,72 @@ func GetFrequentItems(c *gin.Context) {
 
 	c.JSON(http.StatusOK, result)
 }
+
+type itemSuggestionVariant struct {
+	AliasID     uint    `json:"alias_id"`
+	ReceiptName string  `json:"receipt_name"`
+	ShopName    string  `json:"shop_name,omitempty"`
+	ShopID      *string `json:"shop_id,omitempty"`
+	LastPrice   float64 `json:"last_price"`
+	Count       int     `json:"count"`
+	LastUsed    string  `json:"last_used"`
+}
+
+type itemSuggestion struct {
+	PlannedName string                  `json:"planned_name"`
+	Variants    []itemSuggestionVariant `json:"variants"`
+}
+
+func GetItemSuggestions(c *gin.Context) {
+	familyID := c.MustGet("family_id").(uuid.UUID)
+	q := strings.TrimSpace(c.Query("q"))
+	if len(q) < 2 {
+		c.JSON(http.StatusOK, []itemSuggestion{})
+		return
+	}
+
+	var aliases []models.ItemAlias
+	if err := database.DB.Preload("Shop").
+		Where("family_id = ? AND LOWER(planned_name) LIKE ?", familyID, strings.ToLower(q)+"%").
+		Order("purchase_count DESC").
+		Limit(20).
+		Find(&aliases).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch suggestions"})
+		return
+	}
+
+	// Group by planned_name preserving order
+	seen := make(map[string]int)
+	result := make([]itemSuggestion, 0)
+	for _, a := range aliases {
+		shopName := ""
+		if a.Shop != nil {
+			shopName = a.Shop.Name
+		}
+		var shopIDStr *string
+		if a.ShopID != nil {
+			s := a.ShopID.String()
+			shopIDStr = &s
+		}
+		variant := itemSuggestionVariant{
+			AliasID:     a.ID,
+			ReceiptName: a.ReceiptName,
+			ShopName:    shopName,
+			ShopID:      shopIDStr,
+			LastPrice:   a.LastPrice,
+			Count:       a.PurchaseCount,
+			LastUsed:    a.LastUsedAt.Format("2006-01-02"),
+		}
+		if idx, ok := seen[a.PlannedName]; ok {
+			result[idx].Variants = append(result[idx].Variants, variant)
+		} else {
+			seen[a.PlannedName] = len(result)
+			result = append(result, itemSuggestion{
+				PlannedName: a.PlannedName,
+				Variants:    []itemSuggestionVariant{variant},
+			})
+		}
+	}
+
+	c.JSON(http.StatusOK, result)
+}

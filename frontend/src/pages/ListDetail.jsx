@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ArrowLeft, Check, Send, Trash2, Plus, AlertCircle, ShoppingCart, Image as ImageIcon, Store, Edit2, X, Receipt, Upload, FileText } from 'lucide-react';
@@ -19,6 +19,9 @@ const ListDetail = () => {
     const [shopOrder, setShopOrder] = useState([]);
     const [frequentItems, setFrequentItems] = useState([]);
     const [newItem, setNewItem] = useState({ name: '', category_id: '', price: '', description: '', is_urgent: false, quantity: 1, unit: 'pcs' });
+    const [suggestions, setSuggestions] = useState([]);
+    const [showSuggestions, setShowSuggestions] = useState(false);
+    const suggestDebounceRef = useRef(null);
     const [selectedPhoto, setSelectedPhoto] = useState(null);
     const [editingItemId, setEditingItemId] = useState(null);
     const [editItemData, setEditItemData] = useState({});
@@ -116,6 +119,20 @@ const ListDetail = () => {
             setSelectedPhoto(null);
             fetchList();
             fetchFrequentItems();
+        }
+    };
+
+    const fetchSuggestions = async (query) => {
+        if (query.length < 2) {
+            setSuggestions([]);
+            setShowSuggestions(false);
+            return;
+        }
+        const resp = await fetch(`${API_BASE_URL}/api/family/item-suggestions?q=${encodeURIComponent(query)}`);
+        if (resp.ok) {
+            const data = await resp.json();
+            setSuggestions(data);
+            setShowSuggestions(data.length > 0);
         }
     };
 
@@ -615,12 +632,18 @@ const ListDetail = () => {
                                             {item.description && (
                                                 <p style={{
                                                     fontSize: '0.95rem',
-                                                    color: 'var(--text-main)',
+                                                    color: isShopper ? 'var(--primary)' : 'var(--text-main)',
                                                     marginTop: '0.6rem',
                                                     paddingTop: '0.4rem',
                                                     borderTop: '1px solid var(--border)',
-                                                    lineHeight: '1.4'
+                                                    lineHeight: '1.4',
+                                                    fontWeight: isShopper ? 600 : 400
                                                 }}>
+                                                    {isShopper && (
+                                                        <span style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--text-muted)', marginRight: '5px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                                            buy:
+                                                        </span>
+                                                    )}
                                                     {item.description}
                                                 </p>
                                             )}
@@ -674,12 +697,76 @@ const ListDetail = () => {
                         <form onSubmit={addItem} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                                 <label style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Item Name</label>
-                                <input
-                                    style={{ padding: '1rem', borderRadius: '12px', border: '1px solid var(--border)', outline: 'none', fontSize: '1.1rem', fontWeight: 700 }}
-                                    placeholder="e.g. Organic Bananas"
-                                    value={newItem.name}
-                                    onChange={e => setNewItem({ ...newItem, name: e.target.value })}
-                                />
+                                <div style={{ position: 'relative' }}>
+                                    <input
+                                        style={{ padding: '1rem', borderRadius: '12px', border: '1px solid var(--border)', outline: 'none', fontSize: '1.1rem', fontWeight: 700, width: '100%', boxSizing: 'border-box' }}
+                                        placeholder="e.g. Organic Bananas"
+                                        value={newItem.name}
+                                        onChange={e => {
+                                            const val = e.target.value;
+                                            setNewItem({ ...newItem, name: val });
+                                            clearTimeout(suggestDebounceRef.current);
+                                            suggestDebounceRef.current = setTimeout(() => fetchSuggestions(val), 250);
+                                        }}
+                                        onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                                        onFocus={() => newItem.name.length >= 2 && suggestions.length > 0 && setShowSuggestions(true)}
+                                        autoComplete="off"
+                                    />
+                                    {showSuggestions && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            top: '100%',
+                                            left: 0,
+                                            right: 0,
+                                            background: 'var(--surface, white)',
+                                            border: '1px solid var(--border)',
+                                            borderRadius: '12px',
+                                            boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+                                            zIndex: 200,
+                                            maxHeight: '260px',
+                                            overflowY: 'auto',
+                                            marginTop: '4px'
+                                        }}>
+                                            {suggestions.map((s, si) => (
+                                                s.variants.map((v, vi) => (
+                                                    <button
+                                                        key={`${si}-${vi}`}
+                                                        type="button"
+                                                        onMouseDown={() => {
+                                                            setNewItem({
+                                                                ...newItem,
+                                                                name: s.planned_name,
+                                                                description: v.receipt_name,
+                                                                price: v.last_price || newItem.price
+                                                            });
+                                                            setShowSuggestions(false);
+                                                        }}
+                                                        style={{
+                                                            display: 'flex',
+                                                            flexDirection: 'column',
+                                                            width: '100%',
+                                                            padding: '0.75rem 1rem',
+                                                            background: 'transparent',
+                                                            border: 'none',
+                                                            borderBottom: '1px solid var(--border)',
+                                                            textAlign: 'left',
+                                                            cursor: 'pointer',
+                                                            gap: '0.2rem'
+                                                        }}
+                                                    >
+                                                        <span style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-dark, #111)' }}>{s.planned_name}</span>
+                                                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted, #888)' }}>
+                                                            usually: {v.receipt_name}
+                                                            {v.shop_name && ` at ${v.shop_name}`}
+                                                            {v.last_price > 0 && ` · ${v.last_price.toFixed(2)}`}
+                                                            {` (×${v.count})`}
+                                                        </span>
+                                                    </button>
+                                                ))
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
 
                             <div className="form-row compact">
