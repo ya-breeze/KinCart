@@ -33,7 +33,8 @@ func CreateShop(c *gin.Context) {
 		return
 	}
 
-	shop.FamilyID = familyID
+	shop.TenantModel.ID = uuid.New()
+	shop.TenantModel.FamilyID = familyID
 	if err := database.DB.Create(&shop).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create shop"})
 		return

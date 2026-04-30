@@ -35,22 +35,29 @@ test.describe('Shopping Lists Flow', () => {
         await expect(listCard).toBeVisible({ timeout: 10000 });
         await listCard.click();
 
-        // 2. Add Item
+        // 2. Add three items
         const nameInput = page.locator('input[placeholder="e.g. Organic Bananas"]');
         await expect(nameInput).toBeVisible({ timeout: 10000 });
-        await nameInput.fill('Apples');
 
-        await page.fill('input[placeholder="1.5"]', '2');
-        // Select unit 'kg'
-        const unitSelect = page.locator('select').first();
-        await expect(unitSelect).toBeVisible();
-        await unitSelect.selectOption('kg');
+        const addItem = async (name: string, qty: string, unit: string, price: string) => {
+            await nameInput.fill(name);
+            await page.fill('input[placeholder="1.5"]', qty);
+            const unitSelect = page.locator('select').first();
+            await unitSelect.selectOption(unit);
+            await page.fill('input[placeholder="$"]', price);
+            await page.click('button:has-text("Add Item to List")');
+            // Wait for the item to appear before adding the next one
+            await expect(page.locator('p.text-break', { hasText: name })).toBeVisible({ timeout: 10000 });
+        };
 
-        await page.fill('input[placeholder="$"]', '2.50');
-        await page.click('button:has-text("Add Item to List")');
+        await addItem('Apples', '2', 'kg', '2.50');
+        await addItem('Milk', '1', 'pcs', '1.20');
+        await addItem('Bread', '3', 'pcs', '0.90');
 
-        // Verify item added
-        await expect(page.locator('p:has-text("Apples")')).toBeVisible();
+        // Verify all three items are present
+        await expect(page.locator('p.text-break', { hasText: 'Apples' })).toBeVisible();
+        await expect(page.locator('p.text-break', { hasText: 'Milk' })).toBeVisible();
+        await expect(page.locator('p.text-break', { hasText: 'Bread' })).toBeVisible();
         await expect(page.locator('span:has-text("2 kg")')).toBeVisible();
 
         // 3. Mark as Ready for Shopping
@@ -70,13 +77,19 @@ test.describe('Shopping Lists Flow', () => {
         await expect(shopperListCard).toBeVisible({ timeout: 10000 });
         await shopperListCard.first().click();
 
-        // Toggle item
-        console.log('Toggling item...');
-        const checkBtn = page.locator('button[title="Mark as bought"]');
-        await expect(checkBtn).toBeVisible({ timeout: 10000 });
-        await checkBtn.click();
+        // Toggle all items as bought (button title changes after each click, so always click .first())
+        console.log('Toggling items...');
+        const checkBtns = page.locator('button[title="Mark as bought"]');
+        await expect(checkBtns.first()).toBeVisible({ timeout: 10000 });
+        while ((await checkBtns.count()) > 0) {
+            await checkBtns.first().click();
+            // Wait for the re-render (toggle is async — fetchList is called after PATCH)
+            await expect(page.locator('button[title="Mark as bought"]').first().or(
+                page.locator('span:has-text("100%")')
+            )).toBeVisible({ timeout: 5000 });
+        }
 
-        // Progress should update
+        // Progress should update to 100%
         console.log('Checking progress...');
         await expect(page.locator('span', { hasText: '100%' })).toBeVisible({ timeout: 10000 });
 

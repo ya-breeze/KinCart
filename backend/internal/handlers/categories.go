@@ -59,7 +59,8 @@ func CreateCategory(c *gin.Context) {
 		return
 	}
 
-	category.FamilyID = familyID
+	category.TenantModel.ID = uuid.New()
+	category.TenantModel.FamilyID = familyID
 	if err := database.DB.Create(&category).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create category"})
 		return

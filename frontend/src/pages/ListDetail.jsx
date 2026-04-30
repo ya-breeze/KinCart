@@ -107,7 +107,7 @@ const ListDetail = () => {
                     ...newItem,
                     price: parseFloat(newItem.price) || 0,
                     quantity: parseFloat(newItem.quantity) || 1,
-                    category_id: newItem.category_id ? parseInt(newItem.category_id) : undefined
+                    category_id: newItem.category_id || undefined
                 })
             });
         } catch {
@@ -311,8 +311,9 @@ const ListDetail = () => {
 
     // Group items by category and sort categories
     const sortedCatIds = getSortedCategoryIds();
+    const ZERO_UUID = '00000000-0000-0000-0000-000000000000';
     const groupedItems = list.items?.reduce((acc, item) => {
-        const catId = item.category_id || 'uncategorized';
+        const catId = (item.category_id && item.category_id !== ZERO_UUID) ? item.category_id : 'uncategorized';
         if (!acc[catId]) acc[catId] = [];
         acc[catId].push(item);
         return acc;
@@ -321,9 +322,8 @@ const ListDetail = () => {
     // Ensure all categories in groupedItems are present in sorted list
     const finalSortedCatIds = [...sortedCatIds];
     Object.keys(groupedItems).forEach(id => {
-        const numId = id === 'uncategorized' ? id : parseInt(id);
-        if (!finalSortedCatIds.includes(numId)) {
-            finalSortedCatIds.push(numId);
+        if (!finalSortedCatIds.includes(id)) {
+            finalSortedCatIds.push(id);
         }
     });
 
