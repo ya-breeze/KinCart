@@ -158,8 +158,8 @@ func DeleteList(c *gin.Context) {
 			return err
 		}
 
-		// Delete the list
-		return tx.Delete(&list).Error
+		// Delete the list — use explicit WHERE string to avoid GORM skipping zero UUID primary key
+		return tx.Where("id = ?", listID).Delete(&models.ShoppingList{}).Error
 	})
 
 	if err != nil {
