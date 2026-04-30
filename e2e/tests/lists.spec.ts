@@ -77,13 +77,19 @@ test.describe('Shopping Lists Flow', () => {
         await expect(shopperListCard).toBeVisible({ timeout: 10000 });
         await shopperListCard.first().click();
 
-        // Toggle item
-        console.log('Toggling item...');
-        const checkBtn = page.locator('button[title="Mark as bought"]');
-        await expect(checkBtn).toBeVisible({ timeout: 10000 });
-        await checkBtn.click();
+        // Toggle all items as bought (button title changes after each click, so always click .first())
+        console.log('Toggling items...');
+        const checkBtns = page.locator('button[title="Mark as bought"]');
+        await expect(checkBtns.first()).toBeVisible({ timeout: 10000 });
+        while ((await checkBtns.count()) > 0) {
+            await checkBtns.first().click();
+            // Wait for the re-render (toggle is async — fetchList is called after PATCH)
+            await expect(page.locator('button[title="Mark as bought"]').first().or(
+                page.locator('span:has-text("100%")')
+            )).toBeVisible({ timeout: 5000 });
+        }
 
-        // Progress should update
+        // Progress should update to 100%
         console.log('Checking progress...');
         await expect(page.locator('span', { hasText: '100%' })).toBeVisible({ timeout: 10000 });
 
