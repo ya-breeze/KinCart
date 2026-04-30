@@ -93,7 +93,7 @@ func CreateAlias(c *gin.Context) {
 			alias.LastPrice = req.LastPrice
 		}
 		alias.LastUsedAt = time.Now()
-		if err := database.DB.Save(&alias).Error; err != nil {
+		if err := database.DB.Where("id = ?", alias.ID).Save(&alias).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update alias"})
 			return
 		}
@@ -154,7 +154,7 @@ func UpdateAlias(c *gin.Context) {
 		}
 	}
 
-	if err := database.DB.Save(&alias).Error; err != nil {
+	if err := database.DB.Where("id = ?", id).Save(&alias).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update alias"})
 		return
 	}
@@ -178,7 +178,7 @@ func DeleteAlias(c *gin.Context) {
 		return
 	}
 
-	if err := database.DB.Delete(&alias).Error; err != nil {
+	if err := database.DB.Where("id = ?", id).Delete(&models.ItemAlias{}).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete alias"})
 		return
 	}

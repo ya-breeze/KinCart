@@ -92,7 +92,10 @@ func UpdateCategory(c *gin.Context) {
 		return
 	}
 
-	database.DB.Save(&category)
+	if err := database.DB.Where("id = ?", categoryIDStr).Save(&category).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update category"})
+		return
+	}
 	slog.Info("Category updated", "category_id", catID, "family_id", familyID)
 	c.JSON(http.StatusOK, category)
 }

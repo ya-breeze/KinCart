@@ -66,7 +66,10 @@ func UpdateShop(c *gin.Context) {
 		return
 	}
 
-	database.DB.Save(&shop)
+	if err := database.DB.Where("id = ?", shopIDStr).Save(&shop).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update shop"})
+		return
+	}
 	slog.Info("Shop updated", "shop_id", shopID, "family_id", familyID)
 	c.JSON(http.StatusOK, shop)
 }
