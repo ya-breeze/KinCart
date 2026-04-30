@@ -93,7 +93,10 @@ func UpdateList(c *gin.Context) {
 		list.CompletedAt = nil
 	}
 
-	database.DB.Save(&list)
+	if err := database.DB.Where("id = ?", listID).Save(&list).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update list"})
+		return
+	}
 	c.JSON(http.StatusOK, list)
 }
 

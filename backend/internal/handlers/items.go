@@ -319,7 +319,10 @@ func AddItemPhoto(c *gin.Context) {
 
 	// Store path with sharding
 	item.LocalPhotoPath = utils.GetShardedPath("/uploads/items", filename)
-	database.DB.Save(&item)
+	if err := database.DB.Where("id = ?", itemID).Save(&item).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save photo metadata"})
+		return
+	}
 
 	c.JSON(http.StatusOK, item)
 }
