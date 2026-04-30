@@ -141,7 +141,8 @@ func DeleteItem(c *gin.Context) {
 		return
 	}
 
-	database.DB.Delete(&item)
+	// Use explicit WHERE string to avoid GORM skipping zero UUID primary key
+	database.DB.Where("id = ?", itemID).Delete(&models.Item{})
 	c.Status(http.StatusNoContent)
 }
 
