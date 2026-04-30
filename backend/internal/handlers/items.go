@@ -16,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"kincart/internal/ai"
 	"kincart/internal/database"
 	"kincart/internal/models"
 	"kincart/internal/utils"
@@ -401,6 +402,162 @@ type itemSuggestionVariant struct {
 type itemSuggestion struct {
 	PlannedName string                  `json:"planned_name"`
 	Variants    []itemSuggestionVariant `json:"variants"`
+}
+
+type parseTextRequest struct {
+	Text   string `json:"text" binding:"required"`
+	ShopID string `json:"shop_id"`
+}
+
+type parsedItemVariant struct {
+	ReceiptName string  `json:"receipt_name"`
+	ShopName    string  `json:"shop_name,omitempty"`
+	LastPrice   float64 `json:"last_price"`
+	Count       int     `json:"count"`
+}
+
+type parsedItemResult struct {
+	ai.ParsedShoppingItem
+	SuggestedPrice float64              `json:"suggested_price,omitempty"`
+	AliasCount     int                  `json:"alias_count,omitempty"`
+	Variants       []parsedItemVariant  `json:"variants,omitempty"`
+}
+
+func ParseListText(c *gin.Context) {
+	listID := c.Param("id")
+	familyID := c.MustGet("family_id").(uuid.UUID)
+
+	var list models.ShoppingList
+	if err := database.DB.Where("id = ? AND family_id = ?", listID, familyID).First(&list).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "List not found"})
+		return
+	}
+
+	var req parseTextRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	geminiClient, err := ai.NewGeminiClient(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "AI parsing not available: " + err.Error()})
+		return
+	}
+
+	parsedItems, err := geminiClient.ParseShoppingText(c.Request.Context(), req.Text)
+	if err != nil {
+		slog.Error("Failed to parse shopping text", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse shopping list"})
+		return
+	}
+
+	// Batch-load aliases for all parsed names (avoids N+1 queries)
+	names := make([]string, len(parsedItems))
+	for i, item := range parsedItems {
+		names[i] = strings.ToLower(item.Name)
+	}
+
+	var aliases []models.ItemAlias
+	if len(names) > 0 {
+		database.DB.Preload("Shop").
+			Where("family_id = ? AND LOWER(planned_name) IN ?", familyID, names).
+			Order("purchase_count DESC").
+			Find(&aliases)
+	}
+
+	byName := make(map[string][]models.ItemAlias)
+	for _, a := range aliases {
+		key := strings.ToLower(a.PlannedName)
+		byName[key] = append(byName[key], a)
+	}
+
+	var shopID *uuid.UUID
+	if req.ShopID != "" {
+		if parsed, err := uuid.Parse(req.ShopID); err == nil {
+			shopID = &parsed
+		}
+	}
+
+	results := make([]parsedItemResult, len(parsedItems))
+	for i, item := range parsedItems {
+		matched := byName[strings.ToLower(item.Name)]
+		result := parsedItemResult{ParsedShoppingItem: item, AliasCount: len(matched)}
+		if len(matched) > 0 {
+			// Reorder so shop-preferred alias is first (becomes default variant)
+			if shopID != nil {
+				for j, a := range matched {
+					if a.ShopID != nil && *a.ShopID == *shopID {
+						matched[0], matched[j] = matched[j], matched[0]
+						break
+					}
+				}
+			}
+			result.SuggestedPrice = matched[0].LastPrice
+			result.Variants = make([]parsedItemVariant, len(matched))
+			for j, a := range matched {
+				shopName := ""
+				if a.Shop != nil {
+					shopName = a.Shop.Name
+				}
+				result.Variants[j] = parsedItemVariant{
+					ReceiptName: a.ReceiptName,
+					ShopName:    shopName,
+					LastPrice:   a.LastPrice,
+					Count:       a.PurchaseCount,
+				}
+			}
+		}
+		results[i] = result
+	}
+
+	c.JSON(http.StatusOK, results)
+}
+
+func BulkAddItems(c *gin.Context) {
+	listID := c.Param("id")
+	familyID := c.MustGet("family_id").(uuid.UUID)
+
+	var list models.ShoppingList
+	if err := database.DB.Where("id = ? AND family_id = ?", listID, familyID).First(&list).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "List not found"})
+		return
+	}
+
+	var items []models.Item
+	if err := c.ShouldBindJSON(&items); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if len(items) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No items provided"})
+		return
+	}
+
+	for i := range items {
+		items[i].TenantModel.ID = uuid.New()
+		items[i].TenantModel.FamilyID = familyID
+		items[i].ListID = list.ID
+	}
+
+	if err := database.DB.Create(&items).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add items"})
+		return
+	}
+
+	for _, item := range items {
+		var freq models.ItemFrequency
+		result := database.DB.Where("family_id = ? AND item_name = ?", familyID, item.Name).First(&freq)
+		if result.Error != nil {
+			freq = models.ItemFrequency{FamilyID: familyID, ItemName: item.Name, Frequency: 1}
+			database.DB.Create(&freq)
+		} else {
+			database.DB.Model(&freq).Update("frequency", freq.Frequency+1)
+		}
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"created": len(items), "items": items})
 }
 
 func GetItemSuggestions(c *gin.Context) {

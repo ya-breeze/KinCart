@@ -14,6 +14,8 @@ services:
       KINCART_SEED_USERS: ${KINCART_SEED_USERS:-}
       KINCART_SEED_FLYERS: ${KINCART_SEED_FLYERS:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      ENABLE_FLYER_SCHEDULER: ${ENABLE_FLYER_SCHEDULER:-true}
+      ENABLE_RECEIPT_SCHEDULER: ${ENABLE_RECEIPT_SCHEDULER:-true}
       FLYER_ITEMS_PATH: /data/flyer_items
     networks:
       - kincart-network

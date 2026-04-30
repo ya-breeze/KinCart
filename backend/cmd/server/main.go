@@ -57,54 +57,55 @@ func main() {
 	// Start token cleanup routine (blacklist + refresh tokens)
 	middleware.CleanupTokens(database.DB)
 
-	// Initialize Flyer Manager and start scheduler
+	// Initialize Flyer Manager and start scheduler (disabled only if ENABLE_FLYER_SCHEDULER=false)
 	geminiKey := os.Getenv("GEMINI_API_KEY")
-	if geminiKey != "" {
-		parser, err := flyers.NewParser(geminiKey)
-		if err != nil {
-			slog.Error("Failed to initialize flyer parser", "error", err)
+	if os.Getenv("ENABLE_FLYER_SCHEDULER") != "false" {
+		if geminiKey == "" {
+			slog.Info("Flyer scheduler skipped — GEMINI_API_KEY not set")
 		} else {
-			manager := flyers.NewManager(database.DB, parser)
-
-			manager.OutputDir = flyerItemsPath
-
-			flyers.StartScheduler(database.DB, manager)
+			parser, err := flyers.NewParser(geminiKey)
+			if err != nil {
+				slog.Error("Failed to initialize flyer parser", "error", err)
+			} else {
+				manager := flyers.NewManager(database.DB, parser)
+				manager.OutputDir = flyerItemsPath
+				flyers.StartScheduler(database.DB, manager)
+			}
 		}
-	} else {
-		slog.Warn("GEMINI_API_KEY not set, flyer download scheduler will not start")
 	}
 
-	// Start Receipt Processing Scheduler (every 10 minutes)
-	go func() {
-		ticker := time.NewTicker(10 * time.Minute)
-		defer ticker.Stop()
+	// Start Receipt Processing Scheduler every 10 minutes (disabled only if ENABLE_RECEIPT_SCHEDULER=false)
+	if os.Getenv("ENABLE_RECEIPT_SCHEDULER") != "false" {
+		if geminiKey == "" {
+			slog.Info("Receipt scheduler skipped — GEMINI_API_KEY not set")
+		} else {
+			go func() {
+				ticker := time.NewTicker(10 * time.Minute)
+				defer ticker.Stop()
 
-		for {
-			select {
-			case <-ticker.C:
-			case <-ctx.Done():
-				return
-			}
+				for {
+					select {
+					case <-ticker.C:
+					case <-ctx.Done():
+						return
+					}
 
-			geminiKey := os.Getenv("GEMINI_API_KEY")
-			if geminiKey == "" {
-				continue
-			}
+					gemClient, err := ai.NewGeminiClient(ctx)
+					if err != nil {
+						slog.Error("Failed to init Gemini for background receipts", "error", err)
+						continue
+					}
 
-			gemClient, err := ai.NewGeminiClient(ctx)
-			if err != nil {
-				slog.Error("Failed to init Gemini for background receipts", "error", err)
-				continue
-			}
+					fileStorage := services.NewFileStorageService(dataPath)
+					svc := services.NewReceiptService(database.DB, gemClient, fileStorage, dataPath)
 
-			fileStorage := services.NewFileStorageService(dataPath)
-			svc := services.NewReceiptService(database.DB, gemClient, fileStorage, dataPath)
-
-			if err := svc.ProcessPendingReceipts(ctx); err != nil {
-				slog.Error("Background receipt processing error", "error", err)
-			}
+					if err := svc.ProcessPendingReceipts(ctx); err != nil {
+						slog.Error("Background receipt processing error", "error", err)
+					}
+				}
+			}()
 		}
-	}()
+	}
 
 	r := gin.Default()
 
@@ -134,6 +135,8 @@ func main() {
 			protected.DELETE("/lists/:id", handlers.DeleteList)
 
 			protected.POST("/lists/:id/items", handlers.AddItemToList)
+			protected.POST("/lists/:id/parse-text", handlers.ParseListText)
+			protected.POST("/lists/:id/items/bulk", handlers.BulkAddItems)
 			protected.POST("/lists/:id/receipts", handlers.UploadReceipt)
 			protected.GET("/receipts/:id/file", handlers.GetReceiptFile)
 			protected.GET("/receipts/:id/matches", handlers.GetReceiptMatches)

@@ -8,6 +8,7 @@ import ImageModal from '../components/ImageModal';
 import ReceiptUploadModal from '../components/ReceiptUploadModal';
 import ReceiptViewerModal from '../components/ReceiptViewerModal';
 import Modal from '../components/Modal';
+import PasteItemsPanel from '../components/PasteItemsPanel';
 
 const ListDetail = () => {
     const { id } = useParams();
@@ -36,6 +37,7 @@ const ListDetail = () => {
     const [isReceiptViewerOpen, setIsReceiptViewerOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [itemToDelete, setItemToDelete] = useState(null);
+    const [addMode, setAddMode] = useState('manual');
 
     useEffect(() => {
         fetchList();
@@ -724,9 +726,39 @@ const ListDetail = () => {
 
                 {isManager && (
                     <div className="card" style={{ marginTop: '1rem', border: '2px dashed var(--border)', background: 'transparent' }}>
-                        <h3 style={{ marginBottom: '1rem', fontSize: '1rem', fontWeight: 700 }}>Add New Item</h3>
+                        <div style={{ display: 'flex', gap: '2px', background: 'var(--bg-secondary)', padding: '2px', borderRadius: '8px', marginBottom: '1rem', width: 'fit-content' }}>
+                            {['manual', 'paste'].map(mode => (
+                                <button
+                                    key={mode}
+                                    onClick={() => setAddMode(mode)}
+                                    style={{
+                                        padding: '4px 14px',
+                                        borderRadius: '6px',
+                                        fontSize: '0.75rem',
+                                        fontWeight: 700,
+                                        textTransform: 'uppercase',
+                                        cursor: 'pointer',
+                                        border: 'none',
+                                        background: addMode === mode ? 'var(--primary)' : 'transparent',
+                                        color: addMode === mode ? 'white' : 'var(--text-muted)',
+                                        transition: 'all 0.2s',
+                                        minHeight: 'unset'
+                                    }}
+                                >
+                                    {mode === 'manual' ? 'Manual' : 'Paste list'}
+                                </button>
+                            ))}
+                        </div>
 
-                        {frequentItems.length > 0 && (
+                        {addMode === 'paste' && (
+                            <PasteItemsPanel
+                                listId={id}
+                                shops={shops}
+                                onItemsAdded={() => { fetchList(); fetchFrequentItems(); }}
+                            />
+                        )}
+
+                        {addMode === 'manual' && frequentItems.length > 0 && (
                             <div style={{ marginBottom: '1rem' }}>
                                 <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem', fontWeight: 600 }}>FREQUENTLY USED:</p>
                                 <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -745,7 +777,7 @@ const ListDetail = () => {
                             </div>
                         )}
 
-                        <form onSubmit={addItem} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                        {addMode === 'manual' && <form onSubmit={addItem} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                                 <label style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Item Name</label>
                                 <div style={{ position: 'relative' }}>
@@ -969,7 +1001,7 @@ const ListDetail = () => {
                                 <Plus size={24} />
                                 Add Item to List
                             </button>
-                        </form>
+                        </form>}
                     </div>
                 )}
             </div>

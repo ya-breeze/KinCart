@@ -223,6 +223,8 @@ try {
 - `POST /api/lists/:id/duplicate` - Clone list
 - `DELETE /api/lists/:id` - Delete list
 - `POST /api/lists/:id/items` - Add item to list
+- `POST /api/lists/:id/parse-text` - Parse freeform text into items via Gemini (preview, not saved). Body: `{text, shop_id?}`. Returns `[{name, quantity, unit, suggested_price?, alias_count?}]`. Returns 503 if GEMINI_API_KEY not set.
+- `POST /api/lists/:id/items/bulk` - Bulk add items to list. Body: `[{name, quantity, unit, price?}]`. Returns `{created, items}`.
 - `POST /api/lists/:id/receipts` - Upload receipt
 - `PATCH /api/items/:id` - Update item
 - `DELETE /api/items/:id` - Delete item
@@ -265,7 +267,9 @@ try {
 - `KINCART_DATA_PATH` - Data directory for Docker volume
 - `KINCART_SEED_USERS` - Auto-create users on startup: `Family:user:pass,Family2:user2:pass2`
 - `KINCART_SEED_FLYERS` - Seed flyer data: `Shop:Item1|Price1,Item2|Price2`
-- `GEMINI_API_KEY` - Google Gemini API key for AI features (receipt parsing, flyer parsing)
+- `GEMINI_API_KEY` - Google Gemini API key for AI features (receipt/flyer parsing, paste-list parsing)
+- `ENABLE_FLYER_SCHEDULER` - Set to `false` to disable the background flyer download+parse scheduler (default: on when `GEMINI_API_KEY` is set)
+- `ENABLE_RECEIPT_SCHEDULER` - Set to `false` to disable the background receipt processing scheduler (default: on when `GEMINI_API_KEY` is set)
 - `NGINX_HTTP_PORT` - Nginx HTTP port (default: 80)
 - `NGINX_HTTPS_PORT` - Nginx HTTPS port (default: 443)
 

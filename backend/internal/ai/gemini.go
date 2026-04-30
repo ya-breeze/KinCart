@@ -45,6 +45,83 @@ type MatchCandidate struct {
 	Confidence      int    `json:"confidence"` // 0-100
 }
 
+type ParsedShoppingItem struct {
+	Name     string  `json:"name"`
+	Quantity float64 `json:"quantity"`
+	Unit     string  `json:"unit"`
+}
+
+type parsedShoppingListResponse struct {
+	Items []ParsedShoppingItem `json:"items"`
+}
+
+func buildShoppingListSchema() *genai.Schema {
+	return &genai.Schema{
+		Type: genai.TypeObject,
+		Properties: map[string]*genai.Schema{
+			"items": {
+				Type: genai.TypeArray,
+				Items: &genai.Schema{
+					Type: genai.TypeObject,
+					Properties: map[string]*genai.Schema{
+						"name":     {Type: genai.TypeString, Description: "Clean item name in nominative case"},
+						"quantity": {Type: genai.TypeNumber},
+						"unit":     {Type: genai.TypeString, Description: "One of: pcs, kg, g, 100g, l, ml, pack"},
+					},
+					Required: []string{"name", "quantity", "unit"},
+				},
+			},
+		},
+		Required: []string{"items"},
+	}
+}
+
+func (c *GeminiClient) ParseShoppingText(ctx context.Context, text string) ([]ParsedShoppingItem, error) {
+	prompt := `You are a shopping list parser. Parse the following shopping list text into structured items.
+
+Rules:
+- Items are separated by commas or newlines
+- Quantity can appear before the item name ("2 йогурта") or after ("минералка 5")
+- If a quantity looks like "X+Y" (e.g. "кефир 4+2"), this is a retail promotion — split into TWO separate items with the same name: one with quantity X and one with quantity Y
+- Normalize item names to nominative case (e.g. "йогурта" → "йогурт", "творога" → "творог")
+- Return short generic names without quantity or unit in the name
+- Infer unit from context: кг/kg → "kg"; г/g → "g"; мл/ml → "ml"; л/l → "l"; otherwise → "pcs"
+- If no quantity is specified, assume 1
+
+Shopping list:
+` + text
+
+	content := &genai.Content{
+		Parts: []*genai.Part{{Text: prompt}},
+	}
+
+	resp, err := c.client.Models.GenerateContent(ctx, c.model, []*genai.Content{content}, &genai.GenerateContentConfig{
+		ResponseMIMEType: "application/json",
+		ResponseSchema:   buildShoppingListSchema(),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("gemini parsing error: %w", err)
+	}
+
+	if len(resp.Candidates) == 0 || resp.Candidates[0].Content == nil || len(resp.Candidates[0].Content.Parts) == 0 {
+		return nil, fmt.Errorf("no candidates returned")
+	}
+
+	responseText := ""
+	for _, part := range resp.Candidates[0].Content.Parts {
+		if part.Text != "" {
+			responseText += part.Text
+		}
+	}
+
+	var parsed parsedShoppingListResponse
+	if err := json.Unmarshal([]byte(strings.TrimSpace(responseText)), &parsed); err != nil {
+		return nil, fmt.Errorf("failed to decode shopping list response: %w, response: %s", err, responseText)
+	}
+
+	return parsed.Items, nil
+}
+
 func NewGeminiClient(ctx context.Context) (*GeminiClient, error) {
 	apiKey := os.Getenv("GEMINI_API_KEY")
 	if apiKey == "" {
