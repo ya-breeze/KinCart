@@ -61,10 +61,16 @@ func UpdateShop(c *gin.Context) {
 		return
 	}
 
+	tenantID := shop.TenantModel.ID
+	tenantFamilyID := shop.TenantModel.FamilyID
+
 	if err := c.ShouldBindJSON(&shop); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
+	shop.TenantModel.ID = tenantID
+	shop.TenantModel.FamilyID = tenantFamilyID
 
 	if err := database.DB.Where("id = ?", shopIDStr).Save(&shop).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update shop"})

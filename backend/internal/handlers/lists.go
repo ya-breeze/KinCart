@@ -75,10 +75,18 @@ func UpdateList(c *gin.Context) {
 		return
 	}
 
+	// Remember the tenant fields — ShouldBindJSON would overwrite them if the
+	// client sends id/family_id in the body, which must not be allowed.
+	tenantID := list.TenantModel.ID
+	tenantFamilyID := list.TenantModel.FamilyID
+
 	if err := c.ShouldBindJSON(&list); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
+	list.TenantModel.ID = tenantID
+	list.TenantModel.FamilyID = tenantFamilyID
 
 	if err := validateItemsFamily(list.Items, familyID); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})

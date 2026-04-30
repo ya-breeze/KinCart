@@ -101,4 +101,87 @@ test.describe('Shopping Lists Flow', () => {
         await expect(page).toHaveURL(/\//);
         console.log('Shopping completed successfully!');
     });
+
+    test('create two lists back-to-back — both get unique IDs (UNIQUE constraint regression)', async ({ page }) => {
+        // Regression: CreateList previously didn't set TenantModel.ID = uuid.New().
+        // The first list got zero UUID (succeeded); the second hit UNIQUE constraint and
+        // the "New List" button appeared to do nothing.
+        const title1 = `Regression A ${Date.now()}`;
+        const title2 = `Regression B ${Date.now() + 1}`;
+
+        for (const title of [title1, title2]) {
+            await page.click('button:has-text("New List")');
+            const input = page.locator('input[placeholder*="Weekly Groceries"]');
+            await expect(input).toBeVisible({ timeout: 5000 });
+            await input.fill(title);
+            await page.click('button:has-text("Create List")');
+            await expect(page.locator('.card', { hasText: title })).toBeVisible({ timeout: 10000 });
+        }
+
+        // Both cards must be visible simultaneously on the dashboard
+        await expect(page.locator('.card', { hasText: title1 })).toBeVisible();
+        await expect(page.locator('.card', { hasText: title2 })).toBeVisible();
+    });
+
+    test('manager can delete a list (GORM zero-value delete regression)', async ({ page }) => {
+        // Regression: DeleteList called db.Delete(&list) which GORM silently dropped
+        // the id condition for zero-UUID primary keys, causing a 500. The fix uses
+        // explicit WHERE("id = ?", listID).Delete(&models.ShoppingList{}).
+        const title = `Delete Me ${Date.now()}`;
+
+        // Create the list
+        await page.click('button:has-text("New List")');
+        const input = page.locator('input[placeholder*="Weekly Groceries"]');
+        await expect(input).toBeVisible({ timeout: 5000 });
+        await input.fill(title);
+        await page.click('button:has-text("Create List")');
+        const card = page.locator('.card', { hasText: title });
+        await expect(card).toBeVisible({ timeout: 10000 });
+
+        // Open the list
+        await card.click();
+        await expect(page.locator('h1', { hasText: title })).toBeVisible({ timeout: 5000 });
+
+        // Click the delete button (trash icon in header)
+        await page.click('button[title="Delete List"]');
+
+        // Confirm in the modal
+        await page.click('button:has-text("Confirm Delete")');
+
+        // Should be back on dashboard and the card should be gone
+        await expect(page).toHaveURL(/\/$/);
+        await expect(page.locator('.card', { hasText: title })).not.toBeVisible();
+    });
+
+    test('manager can add and delete individual items', async ({ page }) => {
+        // Covers: AddItemToList (non-zero UUID), DeleteItem (explicit WHERE fix),
+        // and item rendering (zero-UUID category_id treated as uncategorized).
+        const title = `Item Delete Test ${Date.now()}`;
+
+        // Create list
+        await page.click('button:has-text("New List")');
+        const input = page.locator('input[placeholder*="Weekly Groceries"]');
+        await expect(input).toBeVisible({ timeout: 5000 });
+        await input.fill(title);
+        await page.click('button:has-text("Create List")');
+        await page.locator('.card', { hasText: title }).click();
+
+        // Add two items
+        const nameInput = page.locator('input[placeholder="e.g. Organic Bananas"]');
+        await expect(nameInput).toBeVisible({ timeout: 10000 });
+        for (const name of ['KeepMe', 'DeleteMe']) {
+            await nameInput.fill(name);
+            await page.click('button:has-text("Add Item to List")');
+            await expect(page.locator('p.text-break', { hasText: name })).toBeVisible({ timeout: 10000 });
+        }
+
+        // Delete the second item
+        const deleteBtn = page.locator('button[title="Delete Item"]').last();
+        await deleteBtn.click();
+        await page.click('button:has-text("Confirm Delete")');
+
+        // DeleteMe should be gone; KeepMe should remain
+        await expect(page.locator('p.text-break', { hasText: 'DeleteMe' })).not.toBeVisible({ timeout: 5000 });
+        await expect(page.locator('p.text-break', { hasText: 'KeepMe' })).toBeVisible();
+    });
 });

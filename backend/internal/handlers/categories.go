@@ -87,10 +87,16 @@ func UpdateCategory(c *gin.Context) {
 		return
 	}
 
+	tenantID := category.TenantModel.ID
+	tenantFamilyID := category.TenantModel.FamilyID
+
 	if err := c.ShouldBindJSON(&category); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
+	category.TenantModel.ID = tenantID
+	category.TenantModel.FamilyID = tenantFamilyID
 
 	if err := database.DB.Where("id = ?", categoryIDStr).Save(&category).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update category"})
