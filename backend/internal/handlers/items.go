@@ -439,17 +439,17 @@ func ParseListText(c *gin.Context) {
 		return
 	}
 
+	var parsedItems []ai.ParsedShoppingItem
 	geminiClient, err := ai.NewGeminiClient(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "AI parsing not available: " + err.Error()})
-		return
-	}
-
-	parsedItems, err := geminiClient.ParseShoppingText(c.Request.Context(), req.Text)
-	if err != nil {
-		slog.Error("Failed to parse shopping text", "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse shopping list"})
-		return
+		slog.Info("Gemini unavailable, using fallback parser", "reason", err)
+		parsedItems = ai.ParseShoppingTextFallback(req.Text)
+	} else {
+		parsedItems, err = geminiClient.ParseShoppingText(c.Request.Context(), req.Text)
+		if err != nil {
+			slog.Warn("Gemini parsing failed, using fallback parser", "error", err)
+			parsedItems = ai.ParseShoppingTextFallback(req.Text)
+		}
 	}
 
 	// Batch-load aliases for all parsed names (avoids N+1 queries)
