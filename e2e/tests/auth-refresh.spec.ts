@@ -62,29 +62,14 @@ test.describe('Auth Refresh Token Flow', () => {
             }
         });
 
-        // Mock refresh
+        // Mock refresh — auth is cookie-based, no body needed from client
         await page.route('**/api/auth/refresh', async route => {
-            const request = route.request();
-            let postData;
-            try {
-                postData = request.postDataJSON();
-            } catch (e) {
-                console.error('Failed to parse refresh POST data', e);
-            }
-
-            if (postData && postData.refresh_token === 'initial-refresh-token') {
-                refreshCalled = true;
-                await route.fulfill({
-                    status: 200,
-                    contentType: 'application/json',
-                    body: JSON.stringify({
-                        token: 'new-access-token',
-                        user: { username: 'dad' }
-                    })
-                });
-            } else {
-                await route.fulfill({ status: 401 });
-            }
+            refreshCalled = true;
+            await route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify({ message: 'Token refreshed' })
+            });
         });
 
         // Trigger the list fetch by reloading the dashboard
@@ -92,14 +77,11 @@ test.describe('Auth Refresh Token Flow', () => {
         await page.waitForTimeout(100);
         await page.reload();
 
-        // Verify refresh occurred and retry happened
+        // Auth is cookie-based — verify refresh was called and the original request was retried
         await expect(async () => {
-            const token = await page.evaluate(() => localStorage.getItem('token'));
-            expect(token).toBe('new-access-token');
+            expect(refreshCalled).toBe(true);
+            expect(retryCalled).toBe(true);
         }).toPass({ timeout: 10000 });
-
-        expect(refreshCalled).toBe(true);
-        expect(retryCalled).toBe(true);
     });
 
     test('should log out when refresh token is invalid', async ({ page }) => {
@@ -123,9 +105,7 @@ test.describe('Auth Refresh Token Flow', () => {
         await page.waitForTimeout(100);
         await page.reload();
 
-        // Should return to login page
+        // Auth is cookie-based — verify redirect to login page (cookies cleared server-side)
         await expect(page.locator('#username')).toBeVisible({ timeout: 10000 });
-        const token = await page.evaluate(() => localStorage.getItem('token'));
-        expect(token).toBeNull();
     });
 });
