@@ -157,6 +157,7 @@ const ReceiptMatchModal = ({ isOpen, onClose, receiptId, onDone }) => {
                                         <UnmatchedRow
                                             key={item.receipt_item_id}
                                             item={item}
+                                            plannedItems={data.unmatched_planned_items}
                                             busy={busy[item.receipt_item_id]}
                                             onConfirm={(id) => confirmMatch(item.receipt_item_id, id)}
                                             onAddNew={() => confirmMatch(item.receipt_item_id, null)}
@@ -251,15 +252,17 @@ const MatchedRow = ({ item, busy, onUnmatch }) => (
     </div>
 );
 
-const UnmatchedRow = ({ item, busy, onConfirm, onAddNew, onDismiss }) => {
+const UnmatchedRow = ({ item, plannedItems = [], busy, onConfirm, onAddNew, onDismiss }) => {
     const [open, setOpen] = useState(false);
+    const suggestedIds = new Set(item.suggestions.map(s => s.item_id));
+    const otherPlanned = plannedItems.filter(p => !suggestedIds.has(p.id));
     return (
         <div style={{ ...styles.row, borderLeft: '3px solid #d97706', flexDirection: 'column', alignItems: 'stretch', gap: '0.5rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={styles.receiptName}>{item.receipt_name}</span>
                 <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
                     <span style={styles.rowPrice}>{item.price.toFixed(2)}</span>
-                    <button onClick={() => setOpen(o => !o)} style={styles.iconBtn} title="Show suggestions">
+                    <button onClick={() => setOpen(o => !o)} style={styles.iconBtn} title="Show suggestions" data-testid={`unmatch-expand-${item.receipt_item_id}`}>
                         <ChevronDown size={16} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: '0.2s' }} />
                     </button>
                 </div>
@@ -272,12 +275,32 @@ const UnmatchedRow = ({ item, busy, onConfirm, onAddNew, onDismiss }) => {
                             disabled={busy}
                             onClick={() => onConfirm(s.item_id)}
                             style={styles.suggestionBtn}
+                            data-testid={`suggest-${s.item_id}`}
                         >
                             {busy ? <Loader className="spin" size={12} /> : <Check size={14} />}
                             {s.item_name}
                             <span style={styles.confidence}>{s.confidence}%</span>
                         </button>
                     ))}
+                    {otherPlanned.length > 0 && (
+                        <>
+                            {item.suggestions.length > 0 && (
+                                <div style={styles.divider}>from your list</div>
+                            )}
+                            {otherPlanned.map(p => (
+                                <button
+                                    key={p.id}
+                                    disabled={busy}
+                                    onClick={() => onConfirm(p.id)}
+                                    style={styles.plannedBtn}
+                                    data-testid={`link-planned-${p.id}`}
+                                >
+                                    {busy ? <Loader className="spin" size={12} /> : <Check size={14} />}
+                                    {p.name}
+                                </button>
+                            ))}
+                        </>
+                    )}
                     <div style={{ display: 'flex', gap: '0.4rem' }}>
                         <button disabled={busy} onClick={onAddNew} style={{ ...styles.actionBtn, flex: 1, color: '#2563eb', borderColor: '#2563eb' }}>
                             <Plus size={14} /> Add as new
@@ -360,6 +383,17 @@ const styles = {
         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem',
         background: 'none', border: '1px solid var(--border)', borderRadius: '6px',
         padding: '0.35rem 0.7rem', cursor: 'pointer', fontSize: '0.8rem',
+    },
+    divider: {
+        fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase',
+        letterSpacing: '0.05em', padding: '0.15rem 0', textAlign: 'center',
+        borderTop: '1px solid var(--border)',
+    },
+    plannedBtn: {
+        display: 'flex', alignItems: 'center', gap: '0.5rem',
+        background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: '6px',
+        padding: '0.4rem 0.75rem', cursor: 'pointer', fontSize: '0.875rem',
+        color: '#7c3aed', fontWeight: 600, textAlign: 'left',
     },
     unmatchedPlanned: {
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',

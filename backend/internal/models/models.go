@@ -43,9 +43,10 @@ type Item struct {
 	IsUrgent       bool       `gorm:"default:false" json:"is_urgent"`
 	ListID         uuid.UUID  `gorm:"type:uuid;not null" json:"list_id"`
 	CategoryID     uuid.UUID  `gorm:"type:uuid" json:"category_id"`
-	FlyerItemID       *uint `json:"flyer_item_id"`
-	ReceiptItemID     *uint `json:"receipt_item_id"`
-	PreferredAliasID  *uint `json:"preferred_alias_id"`
+	FlyerItemID        *uint `json:"flyer_item_id"`
+	ReceiptItemID      *uint `json:"receipt_item_id"`
+	PreferredAliasID   *uint `json:"preferred_alias_id"`
+	IsReceiptCreated   bool  `gorm:"default:false" json:"is_receipt_created"`
 }
 
 type Category struct {
