@@ -325,3 +325,131 @@ func TestProcessReceipt_TextFile_ParseError(t *testing.T) {
 	db.First(&updated, "id = ?", receipt.ID)
 	assert.Equal(t, "error", updated.Status)
 }
+
+// setupConfirmMatchFixture creates the minimal DB state needed for ConfirmMatch tests:
+// a family, list, receipt, and one receipt item with the given matchStatus.
+func setupConfirmMatchFixture(t *testing.T) (db *gorm.DB, svc *ReceiptService, familyID uuid.UUID, listID uuid.UUID, receiptID uuid.UUID, receiptItemID uint) {
+	t.Helper()
+	db = setupTestDB()
+	svc = NewReceiptService(db, nil, nil, "/tmp")
+
+	family := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "Fam"}}
+	db.Create(&family)
+	familyID = family.ID
+
+	list := models.ShoppingList{
+		TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: familyID},
+		Title:       "List",
+	}
+	db.Create(&list)
+	listID = list.ID
+
+	receipt := models.Receipt{
+		TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: familyID},
+		ListID:      &listID,
+		ImagePath:   "r.jpg",
+		Status:      "pending_review",
+	}
+	db.Create(&receipt)
+	receiptID = receipt.ID
+
+	ri := models.ReceiptItem{
+		ReceiptID:   receiptID,
+		Name:        "PRAŽMA",
+		Price:       369,
+		Quantity:    1,
+		MatchStatus: "unmatched",
+	}
+	db.Create(&ri)
+	receiptItemID = ri.ID
+	return
+}
+
+// TestConfirmMatch_Unmatch_DeletesReceiptCreatedItem verifies that unmatching a receipt-created
+// item (IsReceiptCreated=true) soft-deletes it instead of leaving it as a phantom.
+func TestConfirmMatch_Unmatch_DeletesReceiptCreatedItem(t *testing.T) {
+	db, svc, familyID, _, _, receiptItemID := setupConfirmMatchFixture(t)
+
+	// First call: Add as new (plannedItemID == nil, not previously matched) → creates item
+	err := svc.ConfirmMatch(context.Background(), receiptItemID, nil, familyID)
+	assert.NoError(t, err)
+
+	var ri models.ReceiptItem
+	db.First(&ri, receiptItemID)
+	assert.Equal(t, "confirmed", ri.MatchStatus)
+	assert.NotNil(t, ri.MatchedItemID)
+	createdItemID := *ri.MatchedItemID
+
+	var createdItem models.Item
+	db.First(&createdItem, "id = ?", createdItemID)
+	assert.True(t, createdItem.IsBought)
+	assert.True(t, createdItem.IsReceiptCreated)
+
+	// Second call: Unmatch (plannedItemID == nil on a confirmed item) → should DELETE the created item
+	err = svc.ConfirmMatch(context.Background(), receiptItemID, nil, familyID)
+	assert.NoError(t, err)
+
+	// The receipt-created item must be soft-deleted, not left as a phantom
+	var count int64
+	db.Model(&models.Item{}).Where("id = ?", createdItemID).Count(&count)
+	assert.Equal(t, int64(0), count, "receipt-created item should be soft-deleted after unmatch")
+}
+
+// TestConfirmMatch_Unmatch_KeepsPlannedItem verifies that unmatching a pre-existing planned item
+// (ReceiptItemID != this receipt item) only unlinks it — does not delete it.
+func TestConfirmMatch_Unmatch_KeepsPlannedItem(t *testing.T) {
+	db, svc, familyID, listID, _, receiptItemID := setupConfirmMatchFixture(t)
+
+	// Pre-existing planned item (user added before receipt upload)
+	planned := models.Item{
+		TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: familyID},
+		Name:        "дорадо",
+		ListID:      listID,
+		IsBought:    false,
+	}
+	db.Create(&planned)
+
+	// Confirm: link receipt item to planned item
+	err := svc.ConfirmMatch(context.Background(), receiptItemID, &planned.ID, familyID)
+	assert.NoError(t, err)
+
+	var ri models.ReceiptItem
+	db.First(&ri, receiptItemID)
+	assert.Equal(t, "confirmed", ri.MatchStatus)
+
+	// Unmatch: plannedItemID == nil on a confirmed item
+	err = svc.ConfirmMatch(context.Background(), receiptItemID, nil, familyID)
+	assert.NoError(t, err)
+
+	// Planned item must still exist, just unlinked
+	var stillThere models.Item
+	err = db.First(&stillThere, "id = ?", planned.ID).Error
+	assert.NoError(t, err, "pre-existing planned item must not be deleted on unmatch")
+	assert.Nil(t, stillThere.ReceiptItemID, "ReceiptItemID should be cleared")
+	assert.False(t, stillThere.IsBought, "IsBought should be reverted")
+}
+
+// TestConfirmMatch_RepeatedAddNew_NoPhantomAccumulation is the regression test for the bug
+// where clicking "Add as new" → "Unmatch" → "Add as new" accumulated phantom items.
+func TestConfirmMatch_RepeatedAddNew_NoPhantomAccumulation(t *testing.T) {
+	db, svc, familyID, listID, _, receiptItemID := setupConfirmMatchFixture(t)
+
+	for range 3 {
+		// Add as new
+		err := svc.ConfirmMatch(context.Background(), receiptItemID, nil, familyID)
+		assert.NoError(t, err)
+		// Unmatch
+		err = svc.ConfirmMatch(context.Background(), receiptItemID, nil, familyID)
+		assert.NoError(t, err)
+	}
+	// Final "Add as new" — leaves one item confirmed
+	err := svc.ConfirmMatch(context.Background(), receiptItemID, nil, familyID)
+	assert.NoError(t, err)
+
+	// Exactly one item must exist in the list — no phantoms
+	var items []models.Item
+	db.Where("list_id = ?", listID).Find(&items)
+	assert.Len(t, items, 1, "only the final confirmed item should exist; no phantom duplicates")
+	assert.True(t, items[0].IsBought)
+	assert.NotNil(t, items[0].ReceiptItemID)
+}

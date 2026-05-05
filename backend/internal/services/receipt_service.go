@@ -585,10 +585,18 @@ func (s *ReceiptService) ConfirmMatch(ctx context.Context, receiptItemID uint, p
 		if receiptItem.MatchedItemID != nil {
 			var oldItem models.Item
 			if err := tx.Where("id = ? AND family_id = ?", *receiptItem.MatchedItemID, familyID).First(&oldItem).Error; err == nil {
-				oldItem.ReceiptItemID = nil
-				oldItem.IsBought = false
-				if err := tx.Save(&oldItem).Error; err != nil {
-					return fmt.Errorf("failed to clear previous match: %w", err)
+				if oldItem.IsReceiptCreated {
+					// Item was created by this receipt match (Add as new) — delete it to avoid phantom accumulation
+					if err := tx.Delete(&oldItem).Error; err != nil {
+						return fmt.Errorf("failed to delete orphaned receipt item: %w", err)
+					}
+				} else {
+					// Pre-existing planned item — just unlink it
+					oldItem.ReceiptItemID = nil
+					oldItem.IsBought = false
+					if err := tx.Save(&oldItem).Error; err != nil {
+						return fmt.Errorf("failed to clear previous match: %w", err)
+					}
 				}
 			}
 			receiptItem.MatchedItemID = nil
@@ -627,15 +635,16 @@ func (s *ReceiptService) ConfirmMatch(ctx context.Context, receiptItemID uint, p
 			}
 
 			newItem := models.Item{
-				TenantModel:   coremodels.TenantModel{ID: uuid.New(), FamilyID: familyID},
-				Name:          receiptItem.Name,
-				ListID:        *receipt.ListID,
-				CategoryID:    defaultCategoryID,
-				IsBought:      true,
-				Price:         receiptItem.Price,
-				Quantity:      receiptItem.Quantity,
-				Unit:          receiptItem.Unit,
-				ReceiptItemID: &receiptItemID,
+				TenantModel:      coremodels.TenantModel{ID: uuid.New(), FamilyID: familyID},
+				Name:             receiptItem.Name,
+				ListID:           *receipt.ListID,
+				CategoryID:       defaultCategoryID,
+				IsBought:         true,
+				Price:            receiptItem.Price,
+				Quantity:         receiptItem.Quantity,
+				Unit:             receiptItem.Unit,
+				ReceiptItemID:    &receiptItemID,
+				IsReceiptCreated: true,
 			}
 			if err := tx.Create(&newItem).Error; err != nil {
 				return err
@@ -710,15 +719,16 @@ func (s *ReceiptService) ConfirmAllMatches(ctx context.Context, receiptID uuid.U
 			case "unmatched":
 				// Create new list item (extra buy)
 				newItem := models.Item{
-					TenantModel:   coremodels.TenantModel{ID: uuid.New(), FamilyID: familyID},
-					Name:          ri.Name,
-					ListID:        *receipt.ListID,
-					CategoryID:    defaultCategoryID,
-					IsBought:      true,
-					Price:         ri.Price,
-					Quantity:      ri.Quantity,
-					Unit:          ri.Unit,
-					ReceiptItemID: &ri.ID,
+					TenantModel:      coremodels.TenantModel{ID: uuid.New(), FamilyID: familyID},
+					Name:             ri.Name,
+					ListID:           *receipt.ListID,
+					CategoryID:       defaultCategoryID,
+					IsBought:         true,
+					Price:            ri.Price,
+					Quantity:         ri.Quantity,
+					Unit:             ri.Unit,
+					ReceiptItemID:    &ri.ID,
+					IsReceiptCreated: true,
 				}
 				if err := tx.Create(&newItem).Error; err != nil {
 					return fmt.Errorf("failed to create item from receipt in confirm-all for %q: %w", ri.Name, err)
