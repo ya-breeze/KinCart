@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"mime/multipart"
@@ -760,11 +761,15 @@ func (s *ReceiptService) checkAndUpdateReceiptStatus(db *gorm.DB, receiptID uuid
 	}
 }
 
-// upsertItemAlias creates or increments a planned_name → receipt_name mapping.
-func (s *ReceiptService) upsertItemAlias(tx *gorm.DB, familyID uuid.UUID, plannedName string, receiptName string, price float64, shopID *uuid.UUID) {
+// UpsertItemAlias creates or increments a planned_name → receipt_name mapping for a family.
+// Returns the resulting alias record.
+func UpsertItemAlias(tx *gorm.DB, familyID uuid.UUID, plannedName, receiptName string, price float64, shopID *uuid.UUID) (*models.ItemAlias, error) {
+	plannedLower := strings.ToLower(plannedName)
+	receiptLower := strings.ToLower(receiptName)
+
 	var alias models.ItemAlias
-	q := tx.Where("family_id = ? AND LOWER(planned_name) = ? AND LOWER(receipt_name) = ?",
-		familyID, strings.ToLower(plannedName), strings.ToLower(receiptName))
+	q := tx.Where("family_id = ? AND planned_name_lower = ? AND receipt_name_lower = ?",
+		familyID, plannedLower, receiptLower)
 	if shopID != nil {
 		q = q.Where("shop_id = ?", *shopID)
 	} else {
@@ -772,26 +777,38 @@ func (s *ReceiptService) upsertItemAlias(tx *gorm.DB, familyID uuid.UUID, planne
 	}
 
 	if err := q.First(&alias).Error; err != nil {
-		// Create new
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}
 		alias = models.ItemAlias{
-			FamilyID:      familyID,
-			PlannedName:   plannedName,
-			ReceiptName:   receiptName,
-			ShopID:        shopID,
-			LastPrice:     price,
-			PurchaseCount: 1,
-			LastUsedAt:    time.Now(),
+			FamilyID:         familyID,
+			PlannedName:      plannedName,
+			PlannedNameLower: plannedLower,
+			ReceiptName:      receiptName,
+			ReceiptNameLower: receiptLower,
+			ShopID:           shopID,
+			LastPrice:        price,
+			PurchaseCount:    1,
+			LastUsedAt:       time.Now(),
 		}
 		if err := tx.Create(&alias).Error; err != nil {
-			slog.Warn("Failed to create item alias", "planned", plannedName, "receipt", receiptName, "error", err)
+			return nil, err
 		}
-	} else {
-		alias.PurchaseCount++
-		alias.LastPrice = price
-		alias.LastUsedAt = time.Now()
-		if err := tx.Save(&alias).Error; err != nil {
-			slog.Warn("Failed to update item alias", "planned", plannedName, "receipt", receiptName, "error", err)
-		}
+		return &alias, nil
+	}
+	alias.PurchaseCount++
+	alias.LastPrice = price
+	alias.LastUsedAt = time.Now()
+	if err := tx.Save(&alias).Error; err != nil {
+		return nil, err
+	}
+	return &alias, nil
+}
+
+// upsertItemAlias is the internal wrapper used by receipt processing; swallows errors with a warning.
+func (s *ReceiptService) upsertItemAlias(tx *gorm.DB, familyID uuid.UUID, plannedName string, receiptName string, price float64, shopID *uuid.UUID) {
+	if _, err := UpsertItemAlias(tx, familyID, plannedName, receiptName, price, shopID); err != nil {
+		slog.Warn("Failed to upsert item alias", "planned", plannedName, "receipt", receiptName, "error", err)
 	}
 }
 

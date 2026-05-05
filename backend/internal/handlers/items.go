@@ -19,6 +19,7 @@ import (
 	"kincart/internal/ai"
 	"kincart/internal/database"
 	"kincart/internal/models"
+	"kincart/internal/services"
 	"kincart/internal/utils"
 )
 
@@ -570,7 +571,7 @@ func GetItemSuggestions(c *gin.Context) {
 
 	var aliases []models.ItemAlias
 	if err := database.DB.Preload("Shop").
-		Where("family_id = ? AND LOWER(planned_name) LIKE ?", familyID, strings.ToLower(q)+"%").
+		Where("family_id = ? AND planned_name_lower LIKE ?", familyID, strings.ToLower(q)+"%").
 		Order("purchase_count DESC").
 		Limit(20).
 		Find(&aliases).Error; err != nil {
@@ -578,7 +579,7 @@ func GetItemSuggestions(c *gin.Context) {
 		return
 	}
 
-	// Group by planned_name preserving order
+	// Group by planned_name_lower (case-insensitive) preserving order; display name from first match
 	seen := make(map[string]int)
 	result := make([]itemSuggestion, 0)
 	for _, a := range aliases {
@@ -600,10 +601,14 @@ func GetItemSuggestions(c *gin.Context) {
 			Count:       a.PurchaseCount,
 			LastUsed:    a.LastUsedAt.Format("2006-01-02"),
 		}
-		if idx, ok := seen[a.PlannedName]; ok {
+		key := a.PlannedNameLower
+		if key == "" {
+			key = strings.ToLower(a.PlannedName)
+		}
+		if idx, ok := seen[key]; ok {
 			result[idx].Variants = append(result[idx].Variants, variant)
 		} else {
-			seen[a.PlannedName] = len(result)
+			seen[key] = len(result)
 			result = append(result, itemSuggestion{
 				PlannedName: a.PlannedName,
 				Variants:    []itemSuggestionVariant{variant},
@@ -612,4 +617,109 @@ func GetItemSuggestions(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, result)
+}
+
+type linkAliasRequest struct {
+	PlannedItemID *string `json:"planned_item_id"` // UUID of existing list item → deleted after alias creation
+	PlannedName   *string `json:"planned_name"`    // free-text → alias created only, no deletion
+	ReceiptItemID string  `json:"receipt_item_id" binding:"required"`
+}
+
+// LinkItemAsAlias creates an ItemAlias mapping a planned name to a receipt/store name,
+// then deletes the planned list item if planned_item_id was provided.
+// POST /api/items/link-alias
+func LinkItemAsAlias(c *gin.Context) {
+	familyID := c.MustGet("family_id").(uuid.UUID)
+
+	var body linkAliasRequest
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Validate: exactly one of planned_item_id or planned_name must be set
+	if body.PlannedItemID != nil && body.PlannedName != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "provide either planned_item_id or planned_name, not both"})
+		return
+	}
+	if body.PlannedItemID == nil && body.PlannedName == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "planned_item_id or planned_name is required"})
+		return
+	}
+
+	// Validate planned_name if provided
+	var plannedName string
+	if body.PlannedName != nil {
+		plannedName = strings.TrimSpace(*body.PlannedName)
+		if plannedName == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "planned_name must not be empty"})
+			return
+		}
+	}
+
+	// Parse receipt item UUID
+	scannedItemID, err := uuid.Parse(body.ReceiptItemID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid receipt_item_id"})
+		return
+	}
+
+	// Load the scanned (receipt-side) Item — scope via shopping_lists since items.family_id may be zero
+	var scannedItem models.Item
+	if err := database.DB.Joins("JOIN shopping_lists ON shopping_lists.id = items.list_id").
+		Where("items.id = ? AND shopping_lists.family_id = ?", scannedItemID, familyID).First(&scannedItem).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "receipt item not found"})
+		return
+	}
+
+	// Load the planned Item if planned_item_id was provided
+	var plannedItem models.Item
+	if body.PlannedItemID != nil {
+		plannedItemID, err := uuid.Parse(*body.PlannedItemID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid planned_item_id"})
+			return
+		}
+		if err := database.DB.Joins("JOIN shopping_lists ON shopping_lists.id = items.list_id").
+			Where("items.id = ? AND shopping_lists.family_id = ?", plannedItemID, familyID).First(&plannedItem).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "planned item not found"})
+			return
+		}
+		plannedName = plannedItem.Name
+	}
+
+	// Best-effort shop resolution from the receipt chain; failures fall back to nil shop_id
+	var shopID *uuid.UUID
+	if scannedItem.ReceiptItemID != nil {
+		var ri models.ReceiptItem
+		if err := database.DB.First(&ri, *scannedItem.ReceiptItemID).Error; err != nil {
+			slog.Debug("Could not load receipt item for shop resolution", "receipt_item_id", *scannedItem.ReceiptItemID, "error", err)
+		} else {
+			var receipt models.Receipt
+			if err := database.DB.Where("id = ? AND family_id = ?", ri.ReceiptID, familyID).First(&receipt).Error; err != nil {
+				slog.Debug("Could not load receipt for shop resolution", "receipt_id", ri.ReceiptID, "error", err)
+			} else {
+				shopID = receipt.ShopID
+			}
+		}
+	}
+
+	// Upsert alias
+	alias, err := services.UpsertItemAlias(database.DB, familyID, plannedName, scannedItem.Name, scannedItem.Price, shopID)
+	if err != nil {
+		slog.Error("Failed to upsert item alias", "planned", plannedName, "receipt", scannedItem.Name, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create alias"})
+		return
+	}
+
+	// Delete planned item if one was supplied (done after upsert so alias survives a delete failure)
+	if body.PlannedItemID != nil {
+		if err := database.DB.Delete(&plannedItem).Error; err != nil {
+			slog.Error("Failed to delete planned item after alias creation", "item_id", plannedItem.ID, "error", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "alias created but failed to remove planned item"})
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"alias": alias})
 }

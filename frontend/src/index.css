@@ -283,3 +283,26 @@ button {
 button, input, select, textarea {
     min-height: 44px;
 }
+
+/* Alias-linking combobox suggestions */
+.alias-suggestions {
+    list-style: none;
+    margin: 0 0 0.25rem 0;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    max-height: 180px;
+    overflow-y: auto;
+}
+.alias-suggestions li {
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    font-size: 0.9rem;
+    border-bottom: 1px solid var(--border);
+}
+.alias-suggestions li:last-child {
+    border-bottom: none;
+}
+.alias-suggestions li:hover {
+    background: var(--bg-secondary);
+}

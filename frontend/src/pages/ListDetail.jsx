@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast, getApiError } from '../context/ToastContext';
-import { ArrowLeft, Check, Send, Trash2, Plus, AlertCircle, ShoppingCart, Image as ImageIcon, Store, Edit2, X, Receipt, Upload, FileText } from 'lucide-react';
+import { ArrowLeft, Check, Send, Trash2, Plus, AlertCircle, ShoppingCart, Image as ImageIcon, Store, Edit2, X, Receipt, Upload, FileText, Link2 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import ImageModal from '../components/ImageModal';
 import ReceiptUploadModal from '../components/ReceiptUploadModal';
@@ -21,7 +21,7 @@ const ListDetail = () => {
     const [selectedShopId, setSelectedShopId] = useState('');
     const [shopOrder, setShopOrder] = useState([]);
     const [frequentItems, setFrequentItems] = useState([]);
-    const [newItem, setNewItem] = useState({ name: '', category_id: '', price: '', description: '', is_urgent: false, quantity: 1, unit: 'pcs' });
+    const [newItem, setNewItem] = useState({ name: '', category_id: '', price: '', description: '', is_urgent: false, quantity: 1, unit: 'pcs', preferred_alias_id: null });
     const [suggestions, setSuggestions] = useState([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
     const suggestDebounceRef = useRef(null);
@@ -38,12 +38,19 @@ const ListDetail = () => {
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [itemToDelete, setItemToDelete] = useState(null);
     const [addMode, setAddMode] = useState('manual');
+    const [linkAliasItem, setLinkAliasItem] = useState(null);
+    const [linkAliasTarget, setLinkAliasTarget] = useState('');
+    const [linkAliasInput, setLinkAliasInput] = useState('');
+    const [linkAliasSelected, setLinkAliasSelected] = useState(null);
+    const [linking, setLinking] = useState(false);
+    const [aliases, setAliases] = useState([]);
 
     useEffect(() => {
         fetchList();
         fetchCategories();
         fetchShops();
         fetchFrequentItems();
+        fetchAliases();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [id]);
 
@@ -94,8 +101,35 @@ const ListDetail = () => {
         }
     };
 
+    const fetchAliases = async () => {
+        try {
+            const resp = await fetch(`${API_BASE_URL}/api/family/aliases`);
+            if (resp.ok) setAliases(await resp.json());
+        } catch { /* non-critical */ }
+    };
+
     const isManager = mode === 'manager';
     const isShopper = mode === 'shopper';
+
+    const aliasesByPlanned = useMemo(() => {
+        const m = {};
+        for (const a of aliases) {
+            const k = a.planned_name.toLowerCase();
+            if (!m[k]) m[k] = [];
+            m[k].push(a);
+        }
+        return m;
+    }, [aliases]);
+
+    const aliasesByReceipt = useMemo(() => {
+        const m = {};
+        for (const a of aliases) {
+            const k = a.receipt_name.toLowerCase();
+            if (!m[k]) m[k] = [];
+            m[k].push(a);
+        }
+        return m;
+    }, [aliases]);
 
     const addItem = async (e) => {
         e.preventDefault();
@@ -133,7 +167,7 @@ const ListDetail = () => {
                 }
             }
 
-            setNewItem({ name: '', category_id: '', price: '', description: '', is_urgent: false, quantity: 1, unit: 'pcs' });
+            setNewItem({ name: '', category_id: '', price: '', description: '', is_urgent: false, quantity: 1, unit: 'pcs', preferred_alias_id: null });
             setSelectedPhoto(null);
             fetchList();
             fetchFrequentItems();
@@ -218,7 +252,7 @@ const ListDetail = () => {
                     ...editItemData,
                     price: parseFloat(editItemData.price) || 0,
                     quantity: parseFloat(editItemData.quantity) || 1,
-                    category_id: editItemData.category_id ? parseInt(editItemData.category_id) : undefined
+                    category_id: editItemData.category_id || undefined
                 })
             });
             if (resp.ok) {
@@ -229,6 +263,68 @@ const ListDetail = () => {
             }
         } catch {
             showToast('Network error — could not save item');
+        }
+    };
+
+    const handleLinkAlias = async () => {
+        if (linking) return;
+        const isReceiptItem = !!linkAliasItem.receipt_item_id;
+        let body;
+        if (isReceiptItem) {
+            // Auto-promote: exact case-insensitive match treated as explicit selection
+            const trimmed = linkAliasInput.trim();
+            let resolved = linkAliasSelected;
+            if (!resolved && trimmed !== '') {
+                const exact = (list.items || []).find(i =>
+                    !i.receipt_item_id &&
+                    i.id !== linkAliasItem.id &&
+                    i.name.trim().toLowerCase() === trimmed.toLowerCase()
+                );
+                if (exact) resolved = { id: exact.id, name: exact.name };
+            }
+            body = resolved
+                ? { receipt_item_id: linkAliasItem.id, planned_item_id: resolved.id }
+                : { receipt_item_id: linkAliasItem.id, planned_name: trimmed };
+        } else {
+            body = { receipt_item_id: linkAliasTarget, planned_item_id: linkAliasItem.id };
+        }
+        setLinking(true);
+        try {
+            const resp = await fetch(`${API_BASE_URL}/api/items/link-alias`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            if (resp.ok) {
+                showToast(body.planned_item_id ? 'Alias created, planned item removed' : 'Alias created', 'success');
+                setLinkAliasItem(null);
+                fetchList();
+                fetchAliases();
+            } else {
+                showToast(await getApiError(resp, 'Failed to link alias'));
+            }
+        } catch {
+            showToast('Network error — could not link alias');
+        } finally {
+            setLinking(false);
+        }
+    };
+
+    const handleRemoveAlias = async (aliasId) => {
+        setLinking(true);
+        try {
+            const resp = await fetch(`${API_BASE_URL}/api/family/aliases/${aliasId}`, { method: 'DELETE' });
+            if (resp.ok) {
+                showToast('Alias removed', 'success');
+                setLinkAliasItem(null);
+                fetchAliases();
+            } else {
+                showToast(await getApiError(resp, 'Failed to remove alias'));
+            }
+        } catch {
+            showToast('Network error — could not remove alias');
+        } finally {
+            setLinking(false);
         }
     };
 
@@ -602,7 +698,20 @@ const ListDetail = () => {
                                         </div>
                                     )}
 
-                                    {editingItemId === item.id ? null : (
+                                    {editingItemId === item.id ? null : (() => {
+                                        const itemKey = item.name.toLowerCase();
+                                        const receiptAliases = item.receipt_item_id ? (aliasesByReceipt[itemKey] || []) : [];
+                                        const plannedAliases = !item.receipt_item_id ? (aliasesByPlanned[itemKey] || []) : [];
+                                        const isLinked = receiptAliases.length > 0 || plannedAliases.length > 0;
+                                        // Subtitle for linked items
+                                        let aliasSubtitle = null;
+                                        if (receiptAliases.length > 0) {
+                                            aliasSubtitle = `→ ${receiptAliases[0].planned_name}`;
+                                        } else if (plannedAliases.length > 0) {
+                                            const a = plannedAliases[0];
+                                            aliasSubtitle = `→ ${a.receipt_name}${a.last_price > 0 ? ` · ${a.last_price.toFixed(2)} ${currency}` : ''}${plannedAliases.length > 1 ? ` and ${plannedAliases.length - 1} more` : ''}`;
+                                        }
+                                        return (
                                         <div style={{ flex: 1 }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
@@ -641,6 +750,22 @@ const ListDetail = () => {
                                                         }}>
                                                             <Receipt size={10} />
                                                             Found in Receipt
+                                                        </span>
+                                                    )}
+                                                    {plannedAliases.length > 0 && (
+                                                        <span style={{
+                                                            fontSize: '0.65rem',
+                                                            background: 'var(--primary)',
+                                                            color: 'white',
+                                                            padding: '2px 8px',
+                                                            borderRadius: '6px',
+                                                            fontWeight: 900,
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '4px',
+                                                        }}>
+                                                            <Link2 size={10} />
+                                                            {plannedAliases.length}
                                                         </span>
                                                     )}
                                                     <span style={{
@@ -682,6 +807,11 @@ const ListDetail = () => {
                                                     )}
                                                 </div>
                                             </div>
+                                            {aliasSubtitle && (
+                                                <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.2rem', fontStyle: 'italic' }}>
+                                                    {aliasSubtitle}
+                                                </p>
+                                            )}
                                             {item.description && (
                                                 <p style={{
                                                     fontSize: '0.95rem',
@@ -701,7 +831,8 @@ const ListDetail = () => {
                                                 </p>
                                             )}
                                         </div>
-                                    )}
+                                        );
+                                    })()}
 
                                     {isManager && (
                                         <div style={{ display: 'flex', gap: '0.25rem' }}>
@@ -712,6 +843,7 @@ const ListDetail = () => {
                                                 </>
                                             ) : (
                                                 <>
+                                                    <button onClick={() => { setLinkAliasItem(item); setLinkAliasTarget(''); setLinkAliasInput(''); setLinkAliasSelected(null); }} style={{ color: (item.receipt_item_id ? (aliasesByReceipt[item.name.toLowerCase()]?.length > 0) : (aliasesByPlanned[item.name.toLowerCase()]?.length > 0)) ? 'var(--primary)' : 'var(--text-muted)', padding: '0.5rem' }} title="Link as alias"><Link2 size={18} /></button>
                                                     <button onClick={() => startEditing(item)} style={{ color: 'var(--primary)', padding: '0.5rem' }} title="Edit Item"><Edit2 size={18} /></button>
                                                     <button onClick={() => deleteItem(item.id)} style={{ color: 'var(--danger)', padding: '0.5rem' }} title="Delete Item"><Trash2 size={18} /></button>
                                                 </>
@@ -765,7 +897,7 @@ const ListDetail = () => {
                                     {frequentItems.map(fi => (
                                         <button
                                             key={fi.id}
-                                            onClick={() => setNewItem({ ...newItem, name: fi.item_name })}
+                                            onClick={() => setNewItem({ ...newItem, name: fi.item_name, preferred_alias_id: null })}
                                             className="glass"
                                             style={{ padding: '4px 10px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 600 }}
                                             title={`Quick add ${fi.item_name}`}
@@ -787,7 +919,7 @@ const ListDetail = () => {
                                         value={newItem.name}
                                         onChange={e => {
                                             const val = e.target.value;
-                                            setNewItem({ ...newItem, name: val });
+                                            setNewItem({ ...newItem, name: val, preferred_alias_id: null });
                                             clearTimeout(suggestDebounceRef.current);
                                             suggestDebounceRef.current = setTimeout(() => fetchSuggestions(val), 250);
                                         }}
@@ -819,8 +951,8 @@ const ListDetail = () => {
                                                             setNewItem({
                                                                 ...newItem,
                                                                 name: s.planned_name,
-                                                                description: v.receipt_name,
-                                                                price: v.last_price || newItem.price
+                                                                price: v.last_price || newItem.price,
+                                                                preferred_alias_id: v.alias_id
                                                             });
                                                             setShowSuggestions(false);
                                                         }}
@@ -851,6 +983,35 @@ const ListDetail = () => {
                                     )}
                                 </div>
                             </div>
+                            {(() => {
+                                const nameAliases = aliasesByPlanned[(newItem.name || '').toLowerCase()] || [];
+                                if (nameAliases.length === 0) return null;
+                                return (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginTop: '0.5rem' }}>
+                                        <label style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Receipt Variant</label>
+                                        <select
+                                            style={{ padding: '0.75rem', borderRadius: '12px', border: '1px solid var(--border)', background: 'white', fontWeight: 600 }}
+                                            value={newItem.preferred_alias_id || ''}
+                                            onChange={e => {
+                                                const aliasId = e.target.value ? parseInt(e.target.value) : null;
+                                                const alias = nameAliases.find(a => a.id === aliasId);
+                                                setNewItem({
+                                                    ...newItem,
+                                                    preferred_alias_id: aliasId,
+                                                    price: alias ? alias.last_price : newItem.price
+                                                });
+                                            }}
+                                        >
+                                            <option value="">— no preference —</option>
+                                            {nameAliases.map(a => (
+                                                <option key={a.id} value={a.id}>
+                                                    {a.receipt_name}{a.shop?.name ? ` @ ${a.shop.name}` : ''}{a.last_price > 0 ? ` · ${a.last_price.toFixed(2)} ${currency}` : ''}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                );
+                            })()}
 
                             <div className="form-row compact">
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
@@ -1036,7 +1197,7 @@ const ListDetail = () => {
                             disabled={!!editItemData.flyer_item_id}
                             style={{ padding: '0.75rem', borderRadius: '12px', border: '1px solid var(--border)', fontWeight: 700, background: editItemData.flyer_item_id ? 'var(--bg-secondary)' : 'white' }}
                             value={editItemData.name}
-                            onChange={e => setEditItemData({ ...editItemData, name: e.target.value })}
+                            onChange={e => setEditItemData({ ...editItemData, name: e.target.value, preferred_alias_id: null })}
                         />
                     </div>
 
@@ -1084,6 +1245,36 @@ const ListDetail = () => {
                         </select>
                     </div>
 
+                    {!editItemData.receipt_item_id && !editItemData.flyer_item_id && (() => {
+                        const itemAliases = aliasesByPlanned[(editItemData.name || '').toLowerCase()] || [];
+                        if (itemAliases.length === 0) return null;
+                        return (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                <label className="input-label">Receipt Variant</label>
+                                <select
+                                    style={{ padding: '0.75rem', borderRadius: '12px', border: '1px solid var(--border)', background: 'white', fontWeight: 600 }}
+                                    value={editItemData.preferred_alias_id || ''}
+                                    onChange={e => {
+                                        const aliasId = e.target.value ? parseInt(e.target.value) : null;
+                                        const alias = itemAliases.find(a => a.id === aliasId);
+                                        setEditItemData({
+                                            ...editItemData,
+                                            preferred_alias_id: aliasId,
+                                            price: alias ? alias.last_price : editItemData.price
+                                        });
+                                    }}
+                                >
+                                    <option value="">— no preference —</option>
+                                    {itemAliases.map(a => (
+                                        <option key={a.id} value={a.id}>
+                                            {a.receipt_name}{a.shop?.name ? ` @ ${a.shop.name}` : ''}{a.last_price > 0 ? ` · ${a.last_price.toFixed(2)} ${currency}` : ''}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        );
+                    })()}
+
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                         <label className="input-label">Description</label>
                         <textarea
@@ -1127,6 +1318,112 @@ const ListDetail = () => {
                     Are you sure you want to delete <strong style={{ color: 'var(--text-dark)' }}>{itemToDelete?.name}</strong>?
                 </p>
             </Modal>
+
+            {/* Link as alias modal */}
+            {linkAliasItem && (() => {
+                const isReceiptItem = !!linkAliasItem.receipt_item_id;
+                const existingAliases = isReceiptItem ? (aliasesByReceipt[linkAliasItem.name.toLowerCase()] || []) : [];
+                const trimmedInput = linkAliasInput.trim();
+                // Mirrors auto-promote logic in handleLinkAlias — keep in sync
+                const willRemovePlanned = isReceiptItem
+                    ? (linkAliasSelected !== null
+                        || (trimmedInput !== '' && (list?.items || []).some(i =>
+                            !i.receipt_item_id &&
+                            i.id !== linkAliasItem.id &&
+                            i.name.trim().toLowerCase() === trimmedInput.toLowerCase())))
+                    : true;
+                const confirmDisabled = linking || (isReceiptItem ? !trimmedInput : !linkAliasTarget);
+                const confirmLabel = willRemovePlanned ? 'Create alias & remove planned item' : 'Create alias';
+
+                let modalBody;
+                if (isReceiptItem) {
+                    const suggestions = (list?.items || []).filter(i =>
+                        !i.receipt_item_id &&
+                        i.id !== linkAliasItem.id &&
+                        (linkAliasInput === '' || i.name.toLowerCase().includes(linkAliasInput.toLowerCase()))
+                    );
+                    modalBody = (
+                        <>
+                            {existingAliases.length > 0 && (
+                                <div style={{ marginBottom: '0.75rem', padding: '0.5rem 0.75rem', background: 'var(--bg-secondary)', borderRadius: '6px', border: '1px solid var(--border)' }}>
+                                    {existingAliases.map(ea => (
+                                        <div key={ea.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <span style={{ fontSize: '0.85rem' }}>Currently linked to: <strong>{ea.planned_name}</strong></span>
+                                            <button onClick={() => handleRemoveAlias(ea.id)} disabled={linking}
+                                                    style={{ color: 'var(--danger)', padding: '2px 6px', fontSize: '0.75rem', border: '1px solid var(--danger)', borderRadius: '4px', background: 'transparent', minHeight: 'unset' }}>
+                                                Remove
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            <p style={{ marginBottom: '0.5rem', fontSize: '0.9rem' }}>{existingAliases.length > 0 ? 'Change link to:' : `"${linkAliasItem.name}" is the receipt/store name for:`}</p>
+                            <input
+                                value={linkAliasInput}
+                                onChange={e => { setLinkAliasInput(e.target.value); setLinkAliasSelected(null); }}
+                                placeholder="Type planned name or pick from list…"
+                                autoFocus
+                                style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border)', marginBottom: '0.25rem' }}
+                            />
+                            {suggestions.length > 0 && (
+                                <ul className="alias-suggestions">
+                                    {suggestions.map(s => (
+                                        <li key={s.id} onClick={() => { setLinkAliasInput(s.name); setLinkAliasSelected(s); }}>
+                                            {s.name}
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                            {willRemovePlanned && trimmedInput !== '' && (
+                                <p style={{ color: 'var(--text-secondary)', fontSize: '0.85em', marginTop: '0.5rem' }}>
+                                    Will remove the matching planned item from the list after creating alias.
+                                </p>
+                            )}
+                        </>
+                    );
+                } else {
+                    const candidates = (list?.items || []).filter(i =>
+                        !!i.receipt_item_id && i.id !== linkAliasItem.id
+                    );
+                    modalBody = (
+                        <>
+                            <p style={{ marginBottom: '0.75rem' }}>"{linkAliasItem.name}" maps to which receipt item?</p>
+                            {candidates.length === 0
+                                ? <p style={{ color: 'var(--text-secondary)' }}>No receipt items in this list.</p>
+                                : <select value={linkAliasTarget} onChange={e => setLinkAliasTarget(e.target.value)}
+                                          style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border)' }}>
+                                      <option value="">— select —</option>
+                                      {candidates.map(c => (
+                                          <option key={c.id} value={c.id}>{c.name}</option>
+                                      ))}
+                                  </select>
+                            }
+                        </>
+                    );
+                }
+
+                return (
+                    <Modal
+                        isOpen={true}
+                        onClose={() => setLinkAliasItem(null)}
+                        title={isReceiptItem ? 'Link as alias' : 'Assign alias'}
+                        footer={(
+                            <>
+                                <button onClick={() => setLinkAliasItem(null)} disabled={linking}
+                                        className="btn-secondary" style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid var(--border)', background: 'white' }}>
+                                    Cancel
+                                </button>
+                                <button onClick={handleLinkAlias} disabled={confirmDisabled}
+                                        className="btn-primary" style={{ padding: '0.5rem 1.5rem', borderRadius: '8px', background: 'var(--primary)' }}>
+                                    {linking ? 'Linking…' : confirmLabel}
+                                </button>
+                            </>
+                        )}
+                    >
+                        {modalBody}
+                    </Modal>
+                );
+            })()}
 
             <ImageModal
                 src={previewImage?.src}

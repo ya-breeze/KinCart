@@ -63,6 +63,65 @@ func InitDB() {
 		os.Exit(1)
 	}
 
+	// Backfill PlannedNameLower / ReceiptNameLower for existing aliases (Cyrillic-safe search)
+	var aliasCount int64
+	DB.Model(&models.ItemAlias{}).Where("planned_name_lower = '' OR planned_name_lower IS NULL").Count(&aliasCount)
+	if aliasCount > 0 {
+		slog.Info("Backfilling lower-case search columns for item aliases", "count", aliasCount)
+		var aliasRows []models.ItemAlias
+		DB.Where("planned_name_lower = '' OR planned_name_lower IS NULL").Find(&aliasRows)
+		for _, a := range aliasRows {
+			DB.Model(&a).Updates(map[string]interface{}{
+				"planned_name_lower": strings.ToLower(a.PlannedName),
+				"receipt_name_lower": strings.ToLower(a.ReceiptName),
+			})
+		}
+	}
+	// Also backfill receipt_name_lower for rows that already have planned_name_lower
+	DB.Model(&models.ItemAlias{}).Where("receipt_name_lower = '' OR receipt_name_lower IS NULL").Count(&aliasCount)
+	if aliasCount > 0 {
+		var aliasRows []models.ItemAlias
+		DB.Where("receipt_name_lower = '' OR receipt_name_lower IS NULL").Find(&aliasRows)
+		for _, a := range aliasRows {
+			DB.Model(&a).Update("receipt_name_lower", strings.ToLower(a.ReceiptName))
+		}
+	}
+	// Merge exact case-insensitive duplicates: same (family_id, planned_name_lower, receipt_name_lower, shop_id)
+	var allAliases []models.ItemAlias
+	DB.Find(&allAliases)
+	type aliasKey struct {
+		FamilyID         string
+		PlannedNameLower string
+		ReceiptNameLower string
+		ShopID           string
+	}
+	seen := make(map[aliasKey]models.ItemAlias)
+	for _, a := range allAliases {
+		shopStr := ""
+		if a.ShopID != nil {
+			shopStr = a.ShopID.String()
+		}
+		key := aliasKey{a.FamilyID.String(), strings.ToLower(a.PlannedName), strings.ToLower(a.ReceiptName), shopStr}
+		if existing, ok := seen[key]; ok {
+			// Merge: accumulate purchase count, keep latest price/date on the winner
+			merged := existing
+			merged.PurchaseCount += a.PurchaseCount
+			if a.LastUsedAt.After(merged.LastUsedAt) {
+				merged.LastPrice = a.LastPrice
+				merged.LastUsedAt = a.LastUsedAt
+			}
+			DB.Model(&merged).Updates(map[string]interface{}{
+				"purchase_count": merged.PurchaseCount,
+				"last_price":     merged.LastPrice,
+				"last_used_at":   merged.LastUsedAt,
+			})
+			DB.Delete(&a)
+			seen[key] = merged
+		} else {
+			seen[key] = a
+		}
+	}
+
 	// Backfill SearchText for existing flyer items
 	var count int64
 	DB.Model(&models.FlyerItem{}).Where("search_text = ? OR search_text IS NULL", "").Count(&count)

@@ -226,6 +226,7 @@ try {
 - `POST /api/lists/:id/parse-text` - Parse freeform text into items via Gemini (preview, not saved). Body: `{text, shop_id?}`. Returns `[{name, quantity, unit, suggested_price?, alias_count?}]`. Returns 503 if GEMINI_API_KEY not set.
 - `POST /api/lists/:id/items/bulk` - Bulk add items to list. Body: `[{name, quantity, unit, price?}]`. Returns `{created, items}`.
 - `POST /api/lists/:id/receipts` - Upload receipt
+- `POST /api/items/link-alias` - Create ItemAlias mapping planned→receipt name. Body: `{receipt_item_id, planned_item_id?|planned_name?}`. Exactly one of `planned_item_id` or `planned_name` must be set. If `planned_item_id` is set, the planned item is deleted after alias creation. Best-effort shop resolution via receipt chain. Items are scoped via `shopping_lists.family_id` JOIN (not `items.family_id` which may be zero in legacy rows).
 - `PATCH /api/items/:id` - Update item
 - `DELETE /api/items/:id` - Delete item
 - `POST /api/items/:id/photo` - Upload item photo

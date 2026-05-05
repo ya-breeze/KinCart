@@ -143,6 +143,7 @@ func main() {
 			protected.PATCH("/receipts/:id/matches/:receipt_item_id", handlers.ConfirmReceiptItemMatch)
 			protected.POST("/receipts/:id/matches/:receipt_item_id/dismiss", handlers.DismissReceiptItem)
 			protected.POST("/receipts/:id/matches/confirm-all", handlers.ConfirmAllMatches)
+			protected.POST("/items/link-alias", handlers.LinkItemAsAlias)
 			protected.PATCH("/items/:id", handlers.UpdateItem)
 			protected.DELETE("/items/:id", handlers.DeleteItem)
 

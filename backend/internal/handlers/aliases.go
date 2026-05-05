@@ -19,7 +19,7 @@ func GetAliases(c *gin.Context) {
 
 	tx := database.DB.Preload("Shop").Where("family_id = ?", familyID).Order("planned_name ASC, purchase_count DESC")
 	if len(q) >= 2 {
-		tx = tx.Where("LOWER(planned_name) LIKE ?", strings.ToLower(q)+"%")
+		tx = tx.Where("planned_name_lower LIKE ?", strings.ToLower(q)+"%")
 	}
 
 	var aliases []models.ItemAlias
@@ -64,9 +64,11 @@ func CreateAlias(c *gin.Context) {
 	}
 
 	// Upsert: find existing or create
+	plannedLower := strings.ToLower(req.PlannedName)
+	receiptLower := strings.ToLower(req.ReceiptName)
 	var alias models.ItemAlias
-	q := database.DB.Where("family_id = ? AND LOWER(planned_name) = ? AND LOWER(receipt_name) = ?",
-		familyID, strings.ToLower(req.PlannedName), strings.ToLower(req.ReceiptName))
+	q := database.DB.Where("family_id = ? AND planned_name_lower = ? AND receipt_name_lower = ?",
+		familyID, plannedLower, receiptLower)
 	if shopID != nil {
 		q = q.Where("shop_id = ?", *shopID)
 	} else {
@@ -75,13 +77,15 @@ func CreateAlias(c *gin.Context) {
 
 	if err := q.First(&alias).Error; err != nil {
 		alias = models.ItemAlias{
-			FamilyID:      familyID,
-			PlannedName:   req.PlannedName,
-			ReceiptName:   req.ReceiptName,
-			ShopID:        shopID,
-			LastPrice:     req.LastPrice,
-			PurchaseCount: 1,
-			LastUsedAt:    time.Now(),
+			FamilyID:         familyID,
+			PlannedName:      req.PlannedName,
+			PlannedNameLower: plannedLower,
+			ReceiptName:      req.ReceiptName,
+			ReceiptNameLower: receiptLower,
+			ShopID:           shopID,
+			LastPrice:        req.LastPrice,
+			PurchaseCount:    1,
+			LastUsedAt:       time.Now(),
 		}
 		if err := database.DB.Create(&alias).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create alias"})
@@ -132,6 +136,7 @@ func UpdateAlias(c *gin.Context) {
 
 	if req.ReceiptName != nil {
 		alias.ReceiptName = *req.ReceiptName
+		alias.ReceiptNameLower = strings.ToLower(*req.ReceiptName)
 	}
 	if req.LastPrice != nil {
 		alias.LastPrice = *req.LastPrice
