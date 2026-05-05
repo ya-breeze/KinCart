@@ -20,11 +20,11 @@ test.describe('Flyer Interactions', () => {
         await page.click('button:has-text("Flyer Items")');
         await expect(page).toHaveURL(/\/flyers/);
 
-        // Filter by shop
-        await page.selectOption('select[name="shop"]', 'Lidl');
+        // Filter by shop (shop names are stored/displayed in lowercase)
+        await page.selectOption('select[name="shop"]', 'lidl');
 
         // Wait for results
-        const flyerCard = page.locator('.card').filter({ has: page.locator('span:has-text("Lidl")') }).first();
+        const flyerCard = page.locator('.card').filter({ has: page.locator('span:has-text("lidl")') }).first();
         await expect(flyerCard).toBeVisible({ timeout: 20000 });
 
         const itemNameLocator = flyerCard.locator('h4');
@@ -46,9 +46,9 @@ test.describe('Flyer Interactions', () => {
         await titleInput.fill(newListTitle);
         await page.click('button:has-text("Create & Add")');
 
-        // Success message
+        // Success toast appears (no CSS class — inline-styled by ToastContext)
         console.log('Waiting for success message...');
-        await expect(page.locator('.badge-success')).toBeVisible({ timeout: 10000 });
+        await expect(page.getByText(/Added .* to list/)).toBeVisible({ timeout: 10000 });
 
         // Verify in dashboard
         await page.click('button:has-text("Back to Dashboard")');

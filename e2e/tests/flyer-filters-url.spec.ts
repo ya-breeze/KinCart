@@ -25,9 +25,9 @@ test.describe('Flyer Filters URL Synchronization', () => {
         await page.waitForTimeout(500); // Wait for debounce/sync
         await expect(page).toHaveURL(/q=milk/);
 
-        // Filter by shop
-        await page.selectOption('select[name="shop"]', 'Lidl');
-        await expect(page).toHaveURL(/shop=Lidl/);
+        // Filter by shop (shop names are stored/displayed in lowercase)
+        await page.selectOption('select[name="shop"]', 'lidl');
+        await expect(page).toHaveURL(/shop=lidl/);
         await expect(page).toHaveURL(/q=milk/); // q should persist
 
         // Filter by activity
@@ -38,7 +38,7 @@ test.describe('Flyer Filters URL Synchronization', () => {
         // The clear button is the only button inside the relative container after the input
         await page.locator('.input-group', { hasText: 'Search' }).locator('button').click();
         await expect(page).not.toHaveURL(/q=milk/);
-        await expect(page).toHaveURL(/shop=Lidl/);
+        await expect(page).toHaveURL(/shop=lidl/);
         await expect(page).toHaveURL(/activity=future/);
 
         // Reset activity to 'now'
@@ -48,15 +48,15 @@ test.describe('Flyer Filters URL Synchronization', () => {
 
     test('deep links correctly restore filter state', async ({ page }) => {
         // Navigate directly with query params
-        // Using 'Lidl' as it's known to exist in E2E seed data
-        await page.goto('/flyers?q=cheese&shop=Lidl&activity=all');
+        // Using 'lidl' as it's known to exist in E2E seed data (shop names are lowercase)
+        await page.goto('/flyers?q=cheese&shop=lidl&activity=all');
 
         // Check search input
         await expect(page.locator('input[name="q"]')).toHaveValue('cheese');
 
         // Wait for shop options to load from API (attached to DOM, not necessarily visible)
-        await page.waitForSelector('select[name="shop"] option[value="Lidl"]', { state: 'attached', timeout: 10000 });
-        await expect(page.locator('select[name="shop"]')).toHaveValue('Lidl');
+        await page.waitForSelector('select[name="shop"] option[value="lidl"]', { state: 'attached', timeout: 10000 });
+        await expect(page.locator('select[name="shop"]')).toHaveValue('lidl');
 
         await expect(page.locator('select[name="activity"]')).toHaveValue('all');
     });
