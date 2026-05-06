@@ -324,3 +324,103 @@ func TestLinkItemAsAlias_orphanReceipt(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Nil(t, alias.ShopID)
 }
+
+func frequentItemsRouter(familyID uuid.UUID) *gin.Engine {
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("family_id", familyID)
+		c.Next()
+	})
+	r.GET("/family/frequent-items", GetFrequentItems)
+	r.DELETE("/family/frequent-items/:id", DeleteFrequentItem)
+	return r
+}
+
+func TestFrequentItems(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	t.Run("GetFrequentItems_FiltersLowFrequency", func(t *testing.T) {
+		setupItemTestDBIsolated()
+		family := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "Test Family"}}
+		database.DB.Create(&family)
+
+		// freq=1 should be excluded; freq=3 should be included
+		database.DB.Create(&models.ItemFrequency{FamilyID: family.ID, ItemName: "sleva", Frequency: 1})
+		database.DB.Create(&models.ItemFrequency{FamilyID: family.ID, ItemName: "mleko", Frequency: 3})
+
+		req, _ := http.NewRequest(http.MethodGet, "/family/frequent-items", nil)
+		w := httptest.NewRecorder()
+		frequentItemsRouter(family.ID).ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		var result []map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &result)
+		assert.Equal(t, 1, len(result))
+		assert.Equal(t, "mleko", result[0]["item_name"])
+	})
+
+	t.Run("GetFrequentItems_Limit", func(t *testing.T) {
+		setupItemTestDBIsolated()
+		family := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "Test Family"}}
+		database.DB.Create(&family)
+
+		for i := 0; i < 15; i++ {
+			database.DB.Create(&models.ItemFrequency{
+				FamilyID:  family.ID,
+				ItemName:  fmt.Sprintf("item%d", i),
+				Frequency: 2,
+			})
+		}
+
+		req, _ := http.NewRequest(http.MethodGet, "/family/frequent-items", nil)
+		w := httptest.NewRecorder()
+		frequentItemsRouter(family.ID).ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		var result []map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &result)
+		assert.LessOrEqual(t, len(result), 10)
+	})
+
+	t.Run("DeleteFrequentItem_Success", func(t *testing.T) {
+		setupItemTestDBIsolated()
+		family := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "Test Family"}}
+		database.DB.Create(&family)
+
+		freq := models.ItemFrequency{FamilyID: family.ID, ItemName: "chleb", Frequency: 5}
+		database.DB.Create(&freq)
+
+		req, _ := http.NewRequest(http.MethodDelete, fmt.Sprintf("/family/frequent-items/%d", freq.ID), nil)
+		w := httptest.NewRecorder()
+		frequentItemsRouter(family.ID).ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNoContent, w.Code)
+
+		var check models.ItemFrequency
+		err := database.DB.First(&check, freq.ID).Error
+		assert.Error(t, err, "row should be deleted")
+	})
+
+	t.Run("DeleteFrequentItem_WrongFamily", func(t *testing.T) {
+		setupItemTestDBIsolated()
+		familyA := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "Family A"}}
+		familyB := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "Family B"}}
+		database.DB.Create(&familyA)
+		database.DB.Create(&familyB)
+
+		freq := models.ItemFrequency{FamilyID: familyA.ID, ItemName: "vejce", Frequency: 4}
+		database.DB.Create(&freq)
+
+		// authenticate as familyB, try to delete familyA's item
+		req, _ := http.NewRequest(http.MethodDelete, fmt.Sprintf("/family/frequent-items/%d", freq.ID), nil)
+		w := httptest.NewRecorder()
+		frequentItemsRouter(familyB.ID).ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+
+		// item must still exist
+		var check models.ItemFrequency
+		err := database.DB.First(&check, freq.ID).Error
+		assert.NoError(t, err)
+	})
+}

@@ -34,6 +34,7 @@ func setupTestDB() {
 		&models.Category{},
 		&models.Shop{},
 		&models.ShopCategoryOrder{},
+		&models.ItemFrequency{},
 	)
 }
 
@@ -197,5 +198,30 @@ func TestDataIsolation(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		assert.Contains(t, w.Body.String(), "Invalid category ID")
+	})
+
+	t.Run("GetFrequentItems - Family Isolation", func(t *testing.T) {
+		// Seed frequent items for both families (freq >= 2 to pass the filter)
+		database.DB.Create(&models.ItemFrequency{FamilyID: familyA.ID, ItemName: "mleko", Frequency: 5})
+		database.DB.Create(&models.ItemFrequency{FamilyID: familyB.ID, ItemName: "chleb", Frequency: 3})
+
+		r := gin.New()
+		r.Use(func(c *gin.Context) {
+			c.Set("family_id", familyB.ID)
+			c.Next()
+		})
+		r.GET("/family/frequent-items", GetFrequentItems)
+
+		req, _ := http.NewRequest(http.MethodGet, "/family/frequent-items", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		var result []map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &result)
+
+		for _, item := range result {
+			assert.NotEqual(t, "mleko", item["item_name"], "familyA item must not appear for familyB")
+		}
 	})
 }

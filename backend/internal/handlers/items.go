@@ -349,7 +349,7 @@ func GetFrequentItems(c *gin.Context) {
 	familyID := c.MustGet("family_id").(uuid.UUID)
 
 	var freqItems []models.ItemFrequency
-	if err := database.DB.Where("family_id = ?", familyID).Order("frequency DESC").Limit(20).Find(&freqItems).Error; err != nil {
+	if err := database.DB.Where("family_id = ? AND frequency >= 2", familyID).Order("frequency DESC").Limit(10).Find(&freqItems).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch frequent items"})
 		return
 	}
@@ -388,6 +388,26 @@ func GetFrequentItems(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, result)
+}
+
+func DeleteFrequentItem(c *gin.Context) {
+	familyID := c.MustGet("family_id").(uuid.UUID)
+
+	idParam := c.Param("id")
+	var id uint
+	if _, err := fmt.Sscanf(idParam, "%d", &id); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid id"})
+		return
+	}
+
+	var freq models.ItemFrequency
+	if err := database.DB.Where("id = ? AND family_id = ?", id, familyID).First(&freq).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Not found"})
+		return
+	}
+
+	database.DB.Delete(&freq)
+	c.Status(http.StatusNoContent)
 }
 
 type itemSuggestionVariant struct {

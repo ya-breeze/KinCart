@@ -82,6 +82,19 @@ const ListDetail = () => {
         if (resp.ok) setFrequentItems(await resp.json());
     };
 
+    const dismissFrequentItem = async (id) => {
+        try {
+            const resp = await fetch(`${API_BASE_URL}/api/family/frequent-items/${id}`, {
+                method: 'DELETE',
+                credentials: 'include',
+            });
+            if (resp.ok) setFrequentItems(prev => prev.filter(fi => fi.id !== id));
+            else showToast(await getApiError(resp, 'Could not remove suggestion'));
+        } catch {
+            showToast('Network error — could not remove suggestion');
+        }
+    };
+
     const fetchCategories = async () => {
         const resp = await fetch(`${API_BASE_URL}/api/categories`, {
         });
@@ -893,17 +906,24 @@ const ListDetail = () => {
                         {addMode === 'manual' && frequentItems.length > 0 && (
                             <div style={{ marginBottom: '1rem' }}>
                                 <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem', fontWeight: 600 }}>FREQUENTLY USED:</p>
-                                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto', flexWrap: 'nowrap', paddingBottom: '4px' }}>
                                     {frequentItems.map(fi => (
-                                        <button
-                                            key={fi.id}
-                                            onClick={() => setNewItem({ ...newItem, name: fi.item_name, preferred_alias_id: null })}
-                                            className="glass"
-                                            style={{ padding: '4px 10px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 600 }}
-                                            title={`Quick add ${fi.item_name}`}
-                                        >
-                                            {fi.item_name}
-                                        </button>
+                                        <div key={fi.id} style={{ position: 'relative', display: 'inline-flex', flexShrink: 0 }}>
+                                            <button
+                                                onClick={() => setNewItem({ ...newItem, name: fi.item_name, preferred_alias_id: null })}
+                                                className="glass"
+                                                style={{ padding: '4px 26px 4px 10px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 600, whiteSpace: 'nowrap' }}
+                                                title={`Quick add ${fi.item_name}`}
+                                            >
+                                                {fi.item_name}
+                                            </button>
+                                            <button
+                                                onClick={e => { e.stopPropagation(); dismissFrequentItem(fi.id); }}
+                                                style={{ position: 'absolute', right: '7px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: '0.7rem', color: 'var(--text-muted)', lineHeight: 1 }}
+                                                title="Remove suggestion"
+                                                aria-label={`Remove ${fi.item_name} from suggestions`}
+                                            >×</button>
+                                        </div>
                                     ))}
                                 </div>
                             </div>
@@ -1207,7 +1227,7 @@ const ListDetail = () => {
                             <input
                                 type="number"
                                 step="0.1"
-                                style={{ padding: '0.5rem', borderRadius: '12px', border: '1px solid var(--border)', fontWeight: 700 }}
+                                style={{ padding: '0.5rem', borderRadius: '12px', border: '1px solid var(--border)', fontWeight: 700, width: '100%', boxSizing: 'border-box' }}
                                 value={editItemData.quantity}
                                 onChange={e => setEditItemData({ ...editItemData, quantity: e.target.value })}
                             />
@@ -1215,7 +1235,7 @@ const ListDetail = () => {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                             <label className="input-label">Unit</label>
                             <select
-                                style={{ padding: '0.5rem', borderRadius: '12px', border: '1px solid var(--border)', background: 'white', fontWeight: 600 }}
+                                style={{ padding: '0.5rem', borderRadius: '12px', border: '1px solid var(--border)', background: 'white', fontWeight: 600, width: '100%', boxSizing: 'border-box' }}
                                 value={editItemData.unit}
                                 onChange={e => setEditItemData({ ...editItemData, unit: e.target.value })}
                             >
@@ -1227,7 +1247,7 @@ const ListDetail = () => {
                             <input
                                 disabled={!!editItemData.flyer_item_id}
                                 type="number"
-                                style={{ padding: '0.5rem', borderRadius: '12px', border: '1px solid var(--border)', background: editItemData.flyer_item_id ? 'var(--bg-secondary)' : 'white' }}
+                                style={{ padding: '0.5rem', borderRadius: '12px', border: '1px solid var(--border)', background: editItemData.flyer_item_id ? 'var(--bg-secondary)' : 'white', width: '100%', boxSizing: 'border-box' }}
                                 value={editItemData.price}
                                 onChange={e => setEditItemData({ ...editItemData, price: e.target.value })}
                             />
