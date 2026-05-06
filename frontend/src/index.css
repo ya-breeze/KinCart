@@ -253,6 +253,9 @@ button {
     .form-row.compact {
         grid-template-columns: 2fr 1.5fr 2fr; /* Optimized for Qty/Unit/Price */
     }
+    .form-row.compact > * {
+        min-width: 0;
+    }
 }
 
 .input-label {
