@@ -194,4 +194,53 @@ test.describe('Shopping Lists Flow', () => {
         await expect(page.locator('[data-testid="item-name"]', { hasText: 'DeleteMe' })).not.toBeVisible({ timeout: 5000 });
         await expect(page.locator('[data-testid="item-name"]', { hasText: 'KeepMe' })).toBeVisible();
     });
+
+    test('inline edit does not overwrite modal save (startEditing clears expandedEdits)', async ({ page }) => {
+        // Regression: startEditing previously left expandedEdits intact. When the row
+        // was collapsed after the modal saved, toggleExpand compared stale expandedEdits
+        // against the freshly-fetched item and sent another PATCH, overwriting the modal's values.
+        const title = `Edit Conflict Test ${Date.now()}`;
+
+        await page.click('button:has-text("New List")');
+        const input = page.locator('input[placeholder*="Weekly Groceries"]');
+        await expect(input).toBeVisible({ timeout: 5000 });
+        await input.fill(title);
+        await page.click('button:has-text("Create List")');
+        await page.locator('.card', { hasText: title }).click();
+
+        // Add one item
+        const searchInput = page.locator('input[placeholder="Add item — type, paste, or pick a chip…"]');
+        await expect(searchInput).toBeVisible({ timeout: 10000 });
+        await searchInput.fill('Conflict Item');
+        await searchInput.press('Enter');
+        await expect(page.locator('button:has-text("Add to List")').last()).toBeVisible({ timeout: 5000 });
+        await page.locator('button:has-text("Add to List")').last().click();
+        await expect(page.locator('[data-testid="item-name"]', { hasText: 'Conflict Item' })).toBeVisible({ timeout: 10000 });
+
+        // Expand the row and change inline qty to 5
+        await page.locator('[data-testid="item-name"]', { hasText: 'Conflict Item' }).click();
+        await expect(page.locator('[data-testid="inline-qty-input"]')).toBeVisible({ timeout: 3000 });
+        await page.locator('[data-testid="inline-qty-input"]').fill('5');
+
+        // Open the Edit Item modal WITHOUT collapsing the row first
+        await page.locator('button[title="Edit Item"]').first().click();
+        const editModal = page.locator('.modal-content');
+        await expect(editModal.locator('h2:has-text("Edit Item")')).toBeVisible({ timeout: 3000 });
+
+        // Modal must pre-fill qty from the inline edit (5), not from server state (1)
+        await expect(editModal.locator('input[type="number"]').first()).toHaveValue('5');
+
+        // Now change qty to 3 in the modal and save
+        await editModal.locator('input[type="number"]').first().fill('3');
+        await editModal.locator('button:has-text("Save Changes")').click();
+        await expect(editModal).not.toBeVisible({ timeout: 5000 });
+
+        // Collapse the row — must NOT fire another PATCH (expandedEdits was cleared on modal open)
+        await page.locator('[data-testid="item-name"]', { hasText: 'Conflict Item' }).click();
+        await page.waitForTimeout(400);
+
+        // Final state must reflect the modal's save (3), not the inline edit (5) or original (1)
+        await expect(page.locator('span', { hasText: '3 pcs' })).toBeVisible({ timeout: 5000 });
+        await expect(page.locator('span', { hasText: '5 pcs' })).not.toBeVisible();
+    });
 });

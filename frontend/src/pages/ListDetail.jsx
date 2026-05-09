@@ -8,7 +8,6 @@ import ImageModal from '../components/ImageModal';
 import ReceiptUploadModal from '../components/ReceiptUploadModal';
 import ReceiptViewerModal from '../components/ReceiptViewerModal';
 import Modal from '../components/Modal';
-import PasteItemsPanel from '../components/PasteItemsPanel';
 import ConfirmSheet from '../components/ConfirmSheet';
 import { getCategoryEmoji } from '../utils/categoryEmoji';
 
@@ -304,8 +303,18 @@ const ListDetail = () => {
     };
 
     const startEditing = (item) => {
+        // Merge any in-progress inline edits into the modal's initial state, then
+        // clear them so collapsing the row after the modal saves is a no-op.
+        const pending = expandedEdits[item.id] || {};
+        setExpandedEdits(prev => { const next = { ...prev }; delete next[item.id]; return next; });
         setEditingItemId(item.id);
-        setEditItemData({ ...item, quantity: item.quantity || 1, unit: item.unit || 'pcs' });
+        setEditItemData({
+            ...item,
+            quantity:    pending.quantity    ?? item.quantity    ?? 1,
+            unit:        pending.unit        ?? item.unit        ?? 'pcs',
+            price:       pending.price       ?? item.price       ?? 0,
+            category_id: pending.category_id ?? item.category_id,
+        });
     };
 
     const saveEdit = async () => {
@@ -678,13 +687,14 @@ const ListDetail = () => {
                                                         {/* Qty / Unit / Price */}
                                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, paddingTop: 10 }}>
                                                             {[
-                                                                { label: 'QTY', key: 'quantity', value: edits.quantity ?? item.quantity ?? 1 },
-                                                                { label: 'UNIT', key: 'unit', value: edits.unit ?? item.unit ?? 'pcs' },
-                                                                { label: 'PRICE', key: 'price', value: edits.price ?? item.price ?? 0 },
-                                                            ].map(({ label, key, value }) => (
+                                                                { label: 'QTY', key: 'quantity', value: edits.quantity ?? item.quantity ?? 1, testid: 'inline-qty-input' },
+                                                                { label: 'UNIT', key: 'unit', value: edits.unit ?? item.unit ?? 'pcs', testid: 'inline-unit-input' },
+                                                                { label: 'PRICE', key: 'price', value: edits.price ?? item.price ?? 0, testid: 'inline-price-input' },
+                                                            ].map(({ label, key, value, testid }) => (
                                                                 <div key={key}>
                                                                     <div style={{ fontSize: 9.5, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 4 }}>{label}</div>
                                                                     <input
+                                                                        data-testid={testid}
                                                                         value={value}
                                                                         onChange={e => setExpandedEdits(prev => ({ ...prev, [item.id]: { ...prev[item.id], [key]: e.target.value } }))}
                                                                         style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #e2e8f0', fontFamily: 'Inter, system-ui, sans-serif', fontSize: 13, fontWeight: 600, outline: 'none', boxSizing: 'border-box', minHeight: 'unset' }}
@@ -786,7 +796,7 @@ const ListDetail = () => {
                                     </div>
                                     {suggestions.slice(0, 3).map((s, i) => (
                                         <button key={i} onMouseDown={() => openDraftFromSuggestion(s)} style={{ width: '100%', padding: '9px 12px', background: '#fff', border: 'none', borderTop: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', textAlign: 'left', minHeight: 'unset' }}>
-                                            <div style={{ width: 32, height: 32, borderRadius: 8, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, flexShrink: 0 }}>📦</div>
+                                            <div style={{ width: 32, height: 32, borderRadius: 8, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, flexShrink: 0 }}>{getCategoryEmoji(s.planned_name)}</div>
                                             <div style={{ flex: 1, minWidth: 0 }}>
                                                 <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{s.planned_name}</div>
                                                 {s.variants?.[0] && (

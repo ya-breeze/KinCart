@@ -21,6 +21,11 @@ const ConfirmSheet = ({ draft, onChange, onCancel, onConfirm, categories, curren
 
     const isNew = draft.source === 'new';
 
+    const selectedCat = categories.find(c => c.id === draft.category_id) || null;
+    const headerEmoji = selectedCat
+        ? getCategoryEmoji(selectedCat.name, selectedCat.icon)
+        : (draft.emoji || '📦');
+
     return (
         <div
             onClick={onCancel}
@@ -51,7 +56,7 @@ const ConfirmSheet = ({ draft, onChange, onCancel, onConfirm, categories, curren
                 {/* header: emoji + name + source + close */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
                     <div style={{ width: 44, height: 44, borderRadius: 12, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>
-                        {draft.emoji || '📦'}
+                        {headerEmoji}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                         <input

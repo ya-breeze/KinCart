@@ -6,8 +6,8 @@ import { test, expect, Page } from '@playwright/test';
 
 async function loginAsManager(page: Page) {
     await page.goto('/');
-    await page.fill('#username', 'testuser');
-    await page.fill('#password', 'testpass');
+    await page.fill('#username', 'dad');
+    await page.fill('#password', 'pass1');
     await page.click('button:has-text("Sign In")');
     await expect(page.locator('h1').first()).toHaveText('KinCart');
     const modeLabel = page.locator('p', { hasText: /Mode/i });

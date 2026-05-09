@@ -444,7 +444,7 @@ const SettingsPage = () => {
                                             value={editIcon}
                                             onChange={e => setEditIcon(e.target.value)}
                                             placeholder="📦"
-                                            maxLength={4}
+                                            maxLength={8}
                                             style={{ width: '3rem', textAlign: 'center', fontSize: '1.25rem', padding: '0.25rem', borderRadius: '8px', border: '1px solid var(--border)', outline: 'none', background: 'transparent' }}
                                             title="Emoji (leave blank for auto)"
                                         />
@@ -491,7 +491,7 @@ const SettingsPage = () => {
                                 value={newCatIcon}
                                 onChange={e => setNewCatIcon(e.target.value)}
                                 placeholder="📦"
-                                maxLength={4}
+                                maxLength={8}
                                 style={{ width: '3rem', textAlign: 'center', fontSize: '1.25rem', padding: '0.5rem', background: 'transparent', border: '1px solid var(--border)', borderRadius: '8px', outline: 'none' }}
                                 title="Emoji (leave blank for auto)"
                             />
