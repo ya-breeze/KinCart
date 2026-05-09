@@ -56,7 +56,7 @@ test.describe('Flyer Interactions', () => {
         await expect(listCard).toBeVisible();
         await listCard.click();
 
-        await expect(page.locator('p', { hasText: itemName || "" })).toBeVisible();
+        await expect(page.locator('[data-testid="item-name"]', { hasText: itemName || "" })).toBeVisible();
         await expect(page.locator('span:has-text("Sale Deal")')).toBeVisible();
     });
 });

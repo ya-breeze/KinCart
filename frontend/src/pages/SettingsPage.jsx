@@ -5,6 +5,9 @@ import { ArrowLeft, Plus, Trash2, Edit2, Check, X, GripVertical, Store, ChevronR
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../config';
 import Modal from '../components/Modal';
+import { getCategoryEmoji } from '../utils/categoryEmoji';
+
+const QUICK_EMOJIS = ['🥬','🍎','🥩','🐟','🥛','🧀','🍞','🥚','🥤','🧴','🍿','❄️','🌾','🍝','💧'];
 
 const SettingsPage = () => {
     const { currency, setCurrency } = useAuth();
@@ -14,9 +17,11 @@ const SettingsPage = () => {
     const [shops, setShops] = useState([]);
     const [selectedShop, setSelectedShop] = useState(null);
     const [newCatName, setNewCatName] = useState('');
+    const [newCatIcon, setNewCatIcon] = useState('');
     const [newShopName, setNewShopName] = useState('');
     const [editingCat, setEditingCat] = useState(null);
     const [editName, setEditName] = useState('');
+    const [editIcon, setEditIcon] = useState('');
     const [shopCategoryOrders, setShopCategoryOrders] = useState({}); // { shopId: [ { categoryId, sortOrder } ] }
     const [deleteConfirm, setDeleteConfirm] = useState(null); // { type: 'category'|'shop', id, name }
     const [aliases, setAliases] = useState([]);
@@ -149,10 +154,11 @@ const SettingsPage = () => {
         try {
             const resp = await fetch(`${API_BASE_URL}/api/categories`, {
                 method: 'POST',
-                body: JSON.stringify({ name: newCatName, icon: 'package', sort_order: categories.length + 1 })
+                body: JSON.stringify({ name: newCatName, icon: newCatIcon.trim(), sort_order: categories.length + 1 })
             });
             if (resp.ok) {
                 setNewCatName('');
+                setNewCatIcon('');
                 fetchCategories();
             } else {
                 showToast(await getApiError(resp, 'Failed to add category'));
@@ -191,13 +197,14 @@ const SettingsPage = () => {
     const startEdit = (cat) => {
         setEditingCat(cat.id);
         setEditName(cat.name);
+        setEditIcon(cat.icon && cat.icon !== 'package' ? cat.icon : '');
     };
 
     const saveEdit = async (cat) => {
         try {
             const resp = await fetch(`${API_BASE_URL}/api/categories/${cat.id}`, {
                 method: 'PATCH',
-                body: JSON.stringify({ ...cat, name: editName })
+                body: JSON.stringify({ ...cat, name: editName, icon: editIcon.trim() })
             });
             if (resp.ok) {
                 setEditingCat(null);
@@ -421,15 +428,37 @@ const SettingsPage = () => {
                             </div>
 
                             {editingCat === cat.id ? (
-                                <input
-                                    autoFocus
-                                    className="card"
-                                    style={{ flex: 1, padding: '0.25rem 0.5rem', outline: 'none' }}
-                                    value={editName}
-                                    onChange={(e) => setEditName(e.target.value)}
-                                />
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 6 }}>
+                                        {QUICK_EMOJIS.map(e => (
+                                            <button key={e} onClick={() => setEditIcon(e)} style={{
+                                                fontSize: 18, padding: '2px 4px', borderRadius: 6, border: 'none',
+                                                background: editIcon === e ? '#eff6ff' : 'transparent',
+                                                cursor: 'pointer', minHeight: 'unset',
+                                            }}>{e}</button>
+                                        ))}
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                        <input
+                                            data-testid="cat-emoji-input"
+                                            value={editIcon}
+                                            onChange={e => setEditIcon(e.target.value)}
+                                            placeholder="📦"
+                                            maxLength={4}
+                                            style={{ width: '3rem', textAlign: 'center', fontSize: '1.25rem', padding: '0.25rem', borderRadius: '8px', border: '1px solid var(--border)', outline: 'none', background: 'transparent' }}
+                                            title="Emoji (leave blank for auto)"
+                                        />
+                                        <input
+                                            autoFocus
+                                            className="card"
+                                            style={{ flex: 1, padding: '0.25rem 0.5rem', outline: 'none' }}
+                                            value={editName}
+                                            onChange={(e) => setEditName(e.target.value)}
+                                        />
+                                    </div>
+                                </div>
                             ) : (
-                                <span style={{ flex: 1, fontWeight: 600 }}>{cat.name}</span>
+                                <span style={{ flex: 1, fontWeight: 600 }}>{getCategoryEmoji(cat.name, cat.icon)} {cat.name}</span>
                             )}
 
                             {editingCat === cat.id ? (
@@ -446,17 +475,38 @@ const SettingsPage = () => {
                         </div>
                     ))}
 
-                    <div className="card" style={{ border: '2px dashed var(--border)', background: 'transparent', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                        <input
-                            placeholder="New category..."
-                            value={newCatName}
-                            onChange={(e) => setNewCatName(e.target.value)}
-                            style={{ flex: '1 1 150px', background: 'transparent', border: 'none', outline: 'none', fontWeight: 600, padding: '0.5rem' }}
-                        />
-                        <button onClick={addCategory} className="btn-primary" style={{ padding: '0.5rem 1rem', flex: '1 1 auto' }} title="Add a new category">
-                            <Plus size={18} />
-                            Add
-                        </button>
+                    <div className="card" style={{ border: '2px dashed var(--border)', background: 'transparent' }}>
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', padding: '4px 8px 0' }}>
+                            {QUICK_EMOJIS.map(e => (
+                                <button key={e} onClick={() => setNewCatIcon(e)} style={{
+                                    fontSize: 18, padding: '2px 4px', borderRadius: 6, border: 'none',
+                                    background: newCatIcon === e ? '#eff6ff' : 'transparent',
+                                    cursor: 'pointer', minHeight: 'unset',
+                                }}>{e}</button>
+                            ))}
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                            <input
+                                data-testid="new-cat-emoji-input"
+                                value={newCatIcon}
+                                onChange={e => setNewCatIcon(e.target.value)}
+                                placeholder="📦"
+                                maxLength={4}
+                                style={{ width: '3rem', textAlign: 'center', fontSize: '1.25rem', padding: '0.5rem', background: 'transparent', border: '1px solid var(--border)', borderRadius: '8px', outline: 'none' }}
+                                title="Emoji (leave blank for auto)"
+                            />
+                            <input
+                                placeholder="New category..."
+                                value={newCatName}
+                                onChange={(e) => setNewCatName(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter') addCategory(); }}
+                                style={{ flex: '1 1 150px', background: 'transparent', border: 'none', outline: 'none', fontWeight: 600, padding: '0.5rem' }}
+                            />
+                            <button onClick={addCategory} className="btn-primary" style={{ padding: '0.5rem 1rem', flex: '1 1 auto' }} title="Add a new category">
+                                <Plus size={18} />
+                                Add
+                            </button>
+                        </div>
                     </div>
 
                 </div>

@@ -35,19 +35,25 @@ test.describe('Shopping Lists Flow', () => {
         await expect(listCard).toBeVisible({ timeout: 10000 });
         await listCard.click();
 
-        // 2. Add three items
-        const nameInput = page.locator('input[placeholder="e.g. Organic Bananas"]');
-        await expect(nameInput).toBeVisible({ timeout: 10000 });
+        // 2. Add three items via the new quick-add bar + ConfirmSheet
+        const searchInput = page.locator('input[placeholder="Add item — type, paste, or pick a chip…"]');
+        await expect(searchInput).toBeVisible({ timeout: 10000 });
 
         const addItem = async (name: string, qty: string, unit: string, price: string) => {
-            await nameInput.fill(name);
-            await page.fill('input[placeholder="1.5"]', qty);
-            const unitSelect = page.locator('select').first();
-            await unitSelect.selectOption(unit);
-            await page.fill('input[placeholder="$"]', price);
-            await page.click('button:has-text("Add Item to List")');
-            // Wait for the item to appear before adding the next one
-            await expect(page.locator('p.text-break', { hasText: name })).toBeVisible({ timeout: 10000 });
+            await searchInput.fill(name);
+            await searchInput.press('Enter');
+            // ConfirmSheet slides up — wait for "Add to List" button
+            const addToListBtn = page.locator('button:has-text("Add to List")').last();
+            await expect(addToListBtn).toBeVisible({ timeout: 5000 });
+            // Set qty in the stepper input
+            await page.locator('[data-testid="sheet-qty-input"]').fill(qty);
+            // Set unit
+            await page.locator('select').first().selectOption(unit);
+            // Set price
+            await page.locator('input[placeholder="—"]').fill(price);
+            await addToListBtn.click();
+            // Wait for item to appear in the list
+            await expect(page.locator('[data-testid="item-name"]', { hasText: name })).toBeVisible({ timeout: 10000 });
         };
 
         await addItem('Apples', '2', 'kg', '2.50');
@@ -55,14 +61,14 @@ test.describe('Shopping Lists Flow', () => {
         await addItem('Bread', '3', 'pcs', '0.90');
 
         // Verify all three items are present
-        await expect(page.locator('p.text-break', { hasText: 'Apples' })).toBeVisible();
-        await expect(page.locator('p.text-break', { hasText: 'Milk' })).toBeVisible();
-        await expect(page.locator('p.text-break', { hasText: 'Bread' })).toBeVisible();
+        await expect(page.locator('[data-testid="item-name"]', { hasText: 'Apples' })).toBeVisible();
+        await expect(page.locator('[data-testid="item-name"]', { hasText: 'Milk' })).toBeVisible();
+        await expect(page.locator('[data-testid="item-name"]', { hasText: 'Bread' })).toBeVisible();
         await expect(page.locator('span:has-text("2 kg")')).toBeVisible();
 
-        // 3. Mark as Ready for Shopping
+        // 3. Mark as Ready for Shopping (click status badge to cycle from PREPARING → READY)
         console.log('Marking as ready...');
-        await page.click('button:has-text("ready")');
+        await page.click('[data-testid="status-badge"]');
 
         // 4. Switch to Shopper and toggle
         console.log('Returning to dashboard...');
@@ -166,22 +172,26 @@ test.describe('Shopping Lists Flow', () => {
         await page.click('button:has-text("Create List")');
         await page.locator('.card', { hasText: title }).click();
 
-        // Add two items
-        const nameInput = page.locator('input[placeholder="e.g. Organic Bananas"]');
-        await expect(nameInput).toBeVisible({ timeout: 10000 });
+        // Add two items via the new quick-add flow
+        const searchInput = page.locator('input[placeholder="Add item — type, paste, or pick a chip…"]');
+        await expect(searchInput).toBeVisible({ timeout: 10000 });
         for (const name of ['KeepMe', 'DeleteMe']) {
-            await nameInput.fill(name);
-            await page.click('button:has-text("Add Item to List")');
-            await expect(page.locator('p.text-break', { hasText: name })).toBeVisible({ timeout: 10000 });
+            await searchInput.fill(name);
+            await searchInput.press('Enter');
+            const addToListBtn = page.locator('button:has-text("Add to List")').last();
+            await expect(addToListBtn).toBeVisible({ timeout: 5000 });
+            await addToListBtn.click();
+            await expect(page.locator('[data-testid="item-name"]', { hasText: name })).toBeVisible({ timeout: 10000 });
         }
 
-        // Delete the second item
+        // Delete the second item — expand the row first, then click Delete
+        await page.locator('[data-testid="item-name"]', { hasText: 'DeleteMe' }).click();
         const deleteBtn = page.locator('button[title="Delete Item"]').last();
         await deleteBtn.click();
         await page.click('button:has-text("Confirm Delete")');
 
         // DeleteMe should be gone; KeepMe should remain
-        await expect(page.locator('p.text-break', { hasText: 'DeleteMe' })).not.toBeVisible({ timeout: 5000 });
-        await expect(page.locator('p.text-break', { hasText: 'KeepMe' })).toBeVisible();
+        await expect(page.locator('[data-testid="item-name"]', { hasText: 'DeleteMe' })).not.toBeVisible({ timeout: 5000 });
+        await expect(page.locator('[data-testid="item-name"]', { hasText: 'KeepMe' })).toBeVisible();
     });
 });

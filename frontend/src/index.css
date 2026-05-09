@@ -278,6 +278,17 @@ button {
   to { transform: rotate(360deg); }
 }
 
+@keyframes kcSheetUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes kcRowPop {
+  0% { transform: scale(.97); opacity: .4; }
+  60% { transform: scale(1.01); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
 .spin {
   animation: spin 1s linear infinite;
 }

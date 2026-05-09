@@ -31,14 +31,17 @@ async function createList(page: Page, title: string): Promise<string> {
     return page.url().split('/list/')[1];
 }
 
-/** Adds a planned item via the UI form. */
+/** Adds a planned item via the new quick-add bar + ConfirmSheet. */
 async function addPlannedItem(page: Page, name: string, price?: number) {
-    const nameInput = page.locator('input[placeholder="e.g. Organic Bananas"]');
-    await expect(nameInput).toBeVisible({ timeout: 5000 });
-    await nameInput.fill(name);
-    if (price !== undefined) await page.locator('input[placeholder="$"]').fill(String(price));
-    await page.click('button:has-text("Add Item to List")');
-    await expect(page.locator('p.text-break', { hasText: name })).toBeVisible({ timeout: 5000 });
+    const searchInput = page.locator('input[placeholder="Add item — type, paste, or pick a chip…"]');
+    await expect(searchInput).toBeVisible({ timeout: 5000 });
+    await searchInput.fill(name);
+    await searchInput.press('Enter');
+    const addToListBtn = page.locator('button:has-text("Add to List")').last();
+    await expect(addToListBtn).toBeVisible({ timeout: 5000 });
+    if (price !== undefined) await page.locator('input[placeholder="—"]').fill(String(price));
+    await addToListBtn.click();
+    await expect(page.locator('[data-testid="item-name"]', { hasText: name })).toBeVisible({ timeout: 5000 });
 }
 
 /**
@@ -75,16 +78,19 @@ async function deleteAliasViaAPI(page: Page, aliasId: number) {
 }
 
 /**
- * Clicks an item action button (by title) for the item with the given name.
- * Uses DOM index to scope correctly even when many items are on screen.
+ * Expands an item row (if not already expanded) then clicks an action button by title.
+ * In the new design, action buttons are only visible in the expanded panel.
  */
 async function clickItemButton(page: Page, itemName: string, buttonTitle: string) {
-    const idx = await page.locator('p.text-break').evaluateAll(
-        (els, name) => els.findIndex(el => el.textContent?.trim() === name.trim()),
-        itemName,
-    );
-    expect(idx, `Item "${itemName}" not found in list`).toBeGreaterThanOrEqual(0);
-    await page.locator(`button[title="${buttonTitle}"]`).nth(idx).click();
+    const nameSpan = page.locator('[data-testid="item-name"]', { hasText: itemName }).first();
+    await expect(nameSpan, `Item "${itemName}" not found in list`).toBeVisible({ timeout: 5000 });
+    const btn = page.locator(`button[title="${buttonTitle}"]`).first();
+    // Only click name to expand if button is not already visible (avoids toggling closed)
+    if (!(await btn.isVisible())) {
+        await nameSpan.click();
+    }
+    await expect(btn).toBeVisible({ timeout: 5000 });
+    await btn.click();
 }
 
 // ---------------------------------------------------------------------------
@@ -110,7 +116,7 @@ test.describe('Alias linking', () => {
         // Add a "receipt item" via API (any non-null receipt_item_id marks it as one)
         await addItemViaAPI(page, listId, { name: receiptName, price: 89.9, receipt_item_id: 9999 });
         await page.reload();
-        await expect(page.locator('p.text-break', { hasText: receiptName })).toBeVisible({ timeout: 5000 });
+        await expect(page.locator('[data-testid="item-name"]', { hasText: receiptName })).toBeVisible({ timeout: 5000 });
 
         // Click 🔗 on the receipt item
         await clickItemButton(page, receiptName, 'Link as alias');
@@ -130,9 +136,9 @@ test.describe('Alias linking', () => {
 
         // Modal closes; planned item removed; receipt item remains with subtitle
         await expect(modal).not.toBeVisible({ timeout: 5000 });
-        await expect(page.locator('p.text-break', { hasText: plannedName })).not.toBeVisible({ timeout: 5000 });
-        await expect(page.locator('p.text-break', { hasText: receiptName })).toBeVisible();
-        await expect(page.locator('p', { hasText: `→ ${plannedName}` })).toBeVisible();
+        await expect(page.locator('[data-testid="item-name"]', { hasText: plannedName })).not.toBeVisible({ timeout: 5000 });
+        await expect(page.locator('[data-testid="item-name"]', { hasText: receiptName })).toBeVisible();
+        await expect(page.locator('[data-testid="item-alias-label"]', { hasText: `→ ${plannedName}` })).toBeVisible();
 
         // Verify in Settings → Aliases that the alias exists
         await page.goto('/settings');
@@ -154,22 +160,24 @@ test.describe('Alias linking', () => {
 
         await createList(page, `Alias T2 ${ts}`);
 
-        // Type enough characters to trigger the debounced suggestion fetch (min 2)
-        const nameInput = page.locator('input[placeholder="e.g. Organic Bananas"]');
-        await nameInput.fill('Milk ');  // prefix that matches plannedName
+        // Type a prefix into the quick-add search bar to trigger debounced suggestion fetch (min 2 chars)
+        const searchInput = page.locator('input[placeholder="Add item — type, paste, or pick a chip…"]');
+        await searchInput.fill('Milk ');
 
-        // Suggestion button appears with "usually: {receiptName} ..."
-        const suggestionBtn = page.locator('button').filter({ hasText: `usually: ${receiptName}` });
-        await expect(suggestionBtn).toBeVisible({ timeout: 5000 });
+        // Autocomplete dropdown appears — button shows the planned name
+        const suggestionBtn = page.locator('button').filter({ hasText: plannedName });
+        await expect(suggestionBtn.first()).toBeVisible({ timeout: 5000 });
 
-        // Click the suggestion
-        await suggestionBtn.click();
+        // Click the suggestion — opens the ConfirmSheet with pre-filled details
+        await suggestionBtn.first().click();
 
-        // Name field filled with the canonical planned name
+        // ConfirmSheet should open with name pre-filled
+        const nameInput = page.locator('[data-testid="sheet-name-input"]');
+        await expect(nameInput).toBeVisible({ timeout: 5000 });
         await expect(nameInput).toHaveValue(plannedName);
 
         // Price field pre-filled from alias last_price
-        await expect(page.locator('input[placeholder="$"]')).toHaveValue('25.9');
+        await expect(page.locator('input[placeholder="—"]')).toHaveValue('25.9');
 
         await deleteAliasViaAPI(page, alias.id);
     });
@@ -177,7 +185,7 @@ test.describe('Alias linking', () => {
     // -----------------------------------------------------------------------
     // Test 3: Receipt Variant dropdown appears and pre-fills price on change
     // -----------------------------------------------------------------------
-    test('Receipt Variant dropdown appears and updates price when selection changes', async ({ page }) => {
+    test('Receipt Variant cards appear in ConfirmSheet and update price on selection', async ({ page }) => {
         const ts = Date.now();
         const plannedName = `Yogurt ${ts}`;
         const v1 = { receipt: `SELSKÝ JOGURT 2% ${ts}`, price: 19.9 };
@@ -188,25 +196,27 @@ test.describe('Alias linking', () => {
 
         await createList(page, `Alias T3 ${ts}`);
 
-        const nameInput = page.locator('input[placeholder="e.g. Organic Bananas"]');
-        await nameInput.fill(plannedName);
+        // Type the full planned name to trigger autocomplete
+        const searchInput = page.locator('input[placeholder="Add item — type, paste, or pick a chip…"]');
+        await searchInput.fill(plannedName);
 
-        // Receipt Variant dropdown should appear with both options
-        const variantSelect = page.locator('select').filter({ has: page.locator(`option[value="${a1.id}"]`) });
-        await expect(variantSelect).toBeVisible({ timeout: 5000 });
-        await expect(variantSelect.locator(`option[value="${a2.id}"]`)).toBeAttached();
+        // Autocomplete suggestion appears — click it to open ConfirmSheet with both variants
+        const suggestionBtn = page.locator('button').filter({ hasText: plannedName });
+        await expect(suggestionBtn.first()).toBeVisible({ timeout: 5000 });
+        await suggestionBtn.first().click();
 
-        // Selecting variant 1 pre-fills its price
-        await variantSelect.selectOption(String(a1.id));
-        await expect(page.locator('input[placeholder="$"]')).toHaveValue(String(v1.price));
+        // ConfirmSheet should show receipt variant cards for both aliases
+        const v1Card = page.locator('button').filter({ hasText: v1.receipt });
+        const v2Card = page.locator('button').filter({ hasText: v2.receipt });
+        await expect(v1Card).toBeVisible({ timeout: 5000 });
+        await expect(v2Card).toBeVisible();
 
-        // Switching to variant 2 updates the price
-        await variantSelect.selectOption(String(a2.id));
-        await expect(page.locator('input[placeholder="$"]')).toHaveValue(String(v2.price));
+        // First variant is auto-selected — price is pre-filled from v1
+        await expect(page.locator('input[placeholder="—"]')).toHaveValue(String(v1.price));
 
-        // Reset to no preference clears the price back to the variant-2 value (price stays, selection cleared)
-        await variantSelect.selectOption('');  // "— no preference —"
-        // Price is unchanged (clearing selection doesn't reset price, only next variant change does)
+        // Click variant 2 card — price updates to v2's price
+        await v2Card.click();
+        await expect(page.locator('input[placeholder="—"]')).toHaveValue(String(v2.price));
 
         await deleteAliasViaAPI(page, a1.id);
         await deleteAliasViaAPI(page, a2.id);
@@ -249,10 +259,10 @@ test.describe('Alias linking', () => {
         await expect(editModal).not.toBeVisible({ timeout: 5000 });
 
         // Verify item has new name and no alias subtitle
-        await expect(page.locator('p.text-break', { hasText: newName })).toBeVisible({ timeout: 5000 });
-        await expect(page.locator('p.text-break', { hasText: plannedName })).not.toBeVisible();
+        await expect(page.locator('[data-testid="item-name"]', { hasText: newName })).toBeVisible({ timeout: 5000 });
+        await expect(page.locator('[data-testid="item-name"]', { hasText: plannedName })).not.toBeVisible();
         // No alias subtitle for the renamed item (no alias for the new name)
-        await expect(page.locator('p', { hasText: /^→/ })).not.toBeVisible();
+        await expect(page.locator('[data-testid="item-alias-label"]')).not.toBeVisible();
 
         // Verify via API: preferred_alias_id should be null on the saved item
         const listResp = await page.request.get(`/api/lists/${listId}`);
@@ -280,7 +290,7 @@ test.describe('Alias linking', () => {
         await addPlannedItem(page, plannedB);
         await addItemViaAPI(page, listId, { name: receiptName, price: 10.0, receipt_item_id: 9998 });
         await page.reload();
-        await expect(page.locator('p.text-break', { hasText: receiptName })).toBeVisible({ timeout: 5000 });
+        await expect(page.locator('[data-testid="item-name"]', { hasText: receiptName })).toBeVisible({ timeout: 5000 });
 
         // — Step 1: Link receipt item → plannedA —
         await clickItemButton(page, receiptName, 'Link as alias');
@@ -292,8 +302,8 @@ test.describe('Alias linking', () => {
         await expect(modal).not.toBeVisible({ timeout: 5000 });
 
         // plannedA removed, subtitle shows → plannedA
-        await expect(page.locator('p.text-break', { hasText: plannedA })).not.toBeVisible({ timeout: 5000 });
-        await expect(page.locator('p', { hasText: `→ ${plannedA}` })).toBeVisible();
+        await expect(page.locator('[data-testid="item-name"]', { hasText: plannedA })).not.toBeVisible({ timeout: 5000 });
+        await expect(page.locator('[data-testid="item-alias-label"]', { hasText: `→ ${plannedA}` })).toBeVisible();
 
         // — Step 2: Re-open modal and Remove the old alias —
         await clickItemButton(page, receiptName, 'Link as alias');
@@ -306,7 +316,7 @@ test.describe('Alias linking', () => {
         // Modal closes after removal
         await expect(modal).not.toBeVisible({ timeout: 5000 });
         // Subtitle gone (alias deleted)
-        await expect(page.locator('p', { hasText: `→ ${plannedA}` })).not.toBeVisible({ timeout: 5000 });
+        await expect(page.locator('[data-testid="item-alias-label"]', { hasText: `→ ${plannedA}` })).not.toBeVisible({ timeout: 5000 });
 
         // — Step 3: Link receipt item → plannedB —
         await clickItemButton(page, receiptName, 'Link as alias');
@@ -319,9 +329,9 @@ test.describe('Alias linking', () => {
         await expect(modal).not.toBeVisible({ timeout: 5000 });
 
         // plannedB removed from list; subtitle shows → plannedB
-        await expect(page.locator('p.text-break', { hasText: plannedB })).not.toBeVisible({ timeout: 5000 });
-        await expect(page.locator('p', { hasText: `→ ${plannedB}` })).toBeVisible();
-        await expect(page.locator('p', { hasText: `→ ${plannedA}` })).not.toBeVisible();
+        await expect(page.locator('[data-testid="item-name"]', { hasText: plannedB })).not.toBeVisible({ timeout: 5000 });
+        await expect(page.locator('[data-testid="item-alias-label"]', { hasText: `→ ${plannedB}` })).toBeVisible();
+        await expect(page.locator('[data-testid="item-alias-label"]', { hasText: `→ ${plannedA}` })).not.toBeVisible();
 
         // API: exactly one alias for this receipt name
         const aliasesResp = await page.request.get('/api/family/aliases');
@@ -383,12 +393,12 @@ test.describe('Alias linking', () => {
 
         // Navigate to a list and verify autocomplete reflects the update
         await createList(page, `Alias T6 ${ts}`);
-        const nameInput = page.locator('input[placeholder="e.g. Organic Bananas"]');
-        await nameInput.fill(plannedName.substring(0, 7));
+        const searchInput = page.locator('input[placeholder="Add item — type, paste, or pick a chip…"]');
+        await searchInput.fill(plannedName.substring(0, 7));
 
-        // Suggestion should show the updated receipt name, not the old one
-        await expect(page.locator('button').filter({ hasText: `usually: ${updatedReceipt}` })).toBeVisible({ timeout: 5000 });
-        await expect(page.locator('button').filter({ hasText: `usually: ${originalReceipt}` })).not.toBeVisible();
+        // Suggestion should show updated receipt name in its subtitle, not the old one
+        await expect(page.locator('button').filter({ hasText: updatedReceipt })).toBeVisible({ timeout: 5000 });
+        await expect(page.locator('button').filter({ hasText: originalReceipt })).not.toBeVisible();
 
         // Cleanup
         const aliasesResp = await page.request.get('/api/family/aliases');
