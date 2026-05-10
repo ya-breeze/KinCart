@@ -55,6 +55,8 @@ const ListDetail = () => {
     const [linkAliasSelected, setLinkAliasSelected] = useState(null);
     const [linking, setLinking] = useState(false);
     const [chipsExpanded, setChipsExpanded] = useState(false);
+    const [chipsOverflow, setChipsOverflow] = useState(false);
+    const chipsContainerRef = useRef(null);
 
     // ── manager quick-add ──
     const [query, setQuery] = useState('');
@@ -76,6 +78,18 @@ const ListDetail = () => {
         fetchAliases();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [id]);
+
+    useEffect(() => { setChipsExpanded(false); }, [id]);
+
+    useEffect(() => {
+        const el = chipsContainerRef.current;
+        if (!el) return;
+        const check = () => setChipsOverflow(el.scrollHeight > 64);
+        check();
+        const ro = new ResizeObserver(check);
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, [frequentItems]);
 
     // ── fetch helpers ──────────────────────────────────────────────────────────
 
@@ -752,7 +766,7 @@ const ListDetail = () => {
                         {/* Frequent-use chip grid */}
                         {frequentItems.length > 0 && (
                             <div style={{ marginBottom: 8 }}>
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, maxHeight: chipsExpanded ? 'none' : 64, overflow: 'hidden', paddingBottom: 1 }}>
+                                <div ref={chipsContainerRef} style={{ display: 'flex', flexWrap: 'wrap', gap: 5, maxHeight: chipsExpanded ? 'none' : 64, overflow: 'hidden', paddingBottom: 1 }}>
                                     {frequentItems.map(fi => (
                                         <button key={fi.id} onClick={() => openDraftNew(fi.item_name)} style={{ padding: '5px 10px', borderRadius: 9999, background: '#fff', border: '1px solid #e2e8f0', fontFamily: 'Inter, system-ui, sans-serif', fontSize: 12, fontWeight: 600, color: '#0f172a', cursor: 'pointer', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 3, boxShadow: '0 1px 1px rgba(0,0,0,.03)', minHeight: 'unset' }}>
                                             <span style={{ color: '#22c55e', display: 'flex', alignItems: 'center' }}><Plus size={11} /></span>
@@ -760,7 +774,7 @@ const ListDetail = () => {
                                         </button>
                                     ))}
                                 </div>
-                                {frequentItems.length > 5 && (
+                                {chipsOverflow && (
                                     <button onClick={() => setChipsExpanded(e => !e)} style={{ marginTop: 3, padding: '2px 6px', borderRadius: 6, background: 'none', border: 'none', fontSize: 11, color: '#64748b', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 2, minHeight: 'unset' }}>
                                         <ChevronDown size={12} style={{ transform: chipsExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
                                         {chipsExpanded ? 'show less' : 'show more'}
