@@ -116,27 +116,29 @@ const ConfirmSheet = ({ draft, onChange, onCancel, onConfirm, categories, curren
                     </div>
                 )}
 
-                {/* Qty / Unit / Price */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr', gap: 8, marginBottom: 14 }}>
-                    <div>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 4 }}>Qty</div>
-                        <div style={{ display: 'flex', alignItems: 'stretch', borderRadius: 10, border: '1px solid #e2e8f0', overflow: 'hidden', background: '#fff' }}>
-                            <button onClick={() => bumpQty(-1)} style={{ width: 30, background: '#f8fafc', border: 'none', color: '#475569', fontSize: 18, fontWeight: 700, cursor: 'pointer', flexShrink: 0, minHeight: 'unset' }}>−</button>
-                            <input
-                                data-testid="sheet-qty-input"
-                                value={draft.qty}
-                                onChange={e => set('qty', e.target.value)}
-                                style={{ flex: 1, minWidth: 0, padding: '8px 4px', border: 'none', textAlign: 'center', fontFamily: 'Inter, system-ui, sans-serif', fontSize: 14, fontWeight: 700, fontVariantNumeric: 'tabular-nums', outline: 'none', minHeight: 'unset' }}
-                            />
-                            <button onClick={() => bumpQty(1)} style={{ width: 30, background: '#f8fafc', border: 'none', color: '#475569', fontSize: 18, fontWeight: 700, cursor: 'pointer', flexShrink: 0, minHeight: 'unset' }}>+</button>
-                        </div>
+                {/* Qty row */}
+                <div style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 4 }}>Qty</div>
+                    <div style={{ display: 'flex', alignItems: 'stretch', borderRadius: 10, border: '1px solid #e2e8f0', overflow: 'hidden', background: '#fff' }}>
+                        <button onClick={() => bumpQty(-1)} style={{ width: 44, background: '#f8fafc', border: 'none', color: '#475569', fontSize: 20, fontWeight: 700, cursor: 'pointer', flexShrink: 0, minHeight: 'unset' }}>−</button>
+                        <input
+                            data-testid="sheet-qty-input"
+                            value={draft.qty}
+                            onChange={e => set('qty', e.target.value)}
+                            style={{ flex: 1, minWidth: 0, padding: '10px 4px', border: 'none', textAlign: 'center', fontFamily: 'Inter, system-ui, sans-serif', fontSize: 16, fontWeight: 700, fontVariantNumeric: 'tabular-nums', outline: 'none', minHeight: 'unset' }}
+                        />
+                        <button onClick={() => bumpQty(1)} style={{ width: 44, background: '#f8fafc', border: 'none', color: '#475569', fontSize: 20, fontWeight: 700, cursor: 'pointer', flexShrink: 0, minHeight: 'unset' }}>+</button>
                     </div>
+                </div>
+
+                {/* Unit / Price row */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
                     <div>
                         <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 4 }}>Unit</div>
                         <select
                             value={draft.unit}
                             onChange={e => set('unit', e.target.value)}
-                            style={{ width: '100%', padding: '9px 8px', borderRadius: 10, border: '1px solid #e2e8f0', fontFamily: 'Inter, system-ui, sans-serif', fontSize: 13, fontWeight: 600, outline: 'none', background: '#fff', minHeight: 'unset' }}
+                            style={{ width: '100%', padding: '9px 8px', borderRadius: 10, border: '1px solid #e2e8f0', fontFamily: 'Inter, system-ui, sans-serif', fontSize: 14, fontWeight: 600, outline: 'none', background: '#fff', minHeight: 'unset' }}
                         >
                             {UNITS.map(u => <option key={u}>{u}</option>)}
                         </select>
@@ -147,7 +149,7 @@ const ConfirmSheet = ({ draft, onChange, onCancel, onConfirm, categories, curren
                             value={draft.price}
                             onChange={e => set('price', e.target.value)}
                             placeholder="—"
-                            style={{ width: '100%', padding: '9px 10px', borderRadius: 10, border: '1px solid #e2e8f0', fontFamily: 'Inter, system-ui, sans-serif', fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums', outline: 'none', minHeight: 'unset' }}
+                            style={{ width: '100%', padding: '9px 10px', borderRadius: 10, border: '1px solid #e2e8f0', fontFamily: 'Inter, system-ui, sans-serif', fontSize: 14, fontWeight: 600, fontVariantNumeric: 'tabular-nums', outline: 'none', minHeight: 'unset', boxSizing: 'border-box' }}
                         />
                     </div>
                 </div>
