@@ -5,6 +5,8 @@
 //
 //	go run ./cmd/migrate --db /path/to/kincart.db
 //	go run ./cmd/migrate --db /path/to/kincart.db --dry-run
+
+//nolint:errcheck
 package main
 
 import (
@@ -19,35 +21,37 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("\nMigration complete.")
+}
+
+func run() error {
 	dbPath := flag.String("db", "", "Path to kincart.db (required)")
 	dryRun := flag.Bool("dry-run", false, "Print what would happen without modifying the DB")
 	flag.Parse()
 
 	if *dbPath == "" {
-		fmt.Fprintln(os.Stderr, "Usage: migrate --db /path/to/kincart.db [--dry-run]")
-		os.Exit(1)
+		return fmt.Errorf("missing --db flag; usage: migrate --db /path/to/kincart.db [--dry-run]")
 	}
 
 	if _, err := os.Stat(*dbPath); os.IsNotExist(err) {
-		log.Fatalf("DB file not found: %s", *dbPath)
+		return fmt.Errorf("DB file not found: %s", *dbPath)
 	}
 
 	db, err := sql.Open("sqlite3", *dbPath+"?_foreign_keys=off")
 	if err != nil {
-		log.Fatalf("open db: %v", err)
+		return fmt.Errorf("open db: %w", err)
 	}
-	defer db.Close()
+	defer db.Close() //nolint:errcheck
 
 	if *dryRun {
 		fmt.Println("=== DRY RUN — no changes will be written ===")
 	}
 
 	m := &migrator{db: db, dryRun: *dryRun}
-	if err := m.run(); err != nil {
-		log.Fatalf("migration failed: %v", err)
-	}
-
-	fmt.Println("\nMigration complete.")
+	return m.run()
 }
 
 type migrator struct {
@@ -175,11 +179,11 @@ func (m *migrator) migrateFamilies(tx *sql.Tx) error {
 		return err
 	}
 	type row struct {
-		id        int64
-		ca, ua    string
-		da        sql.NullString
-		name      string
-		currency  sql.NullString
+		id       int64
+		ca, ua   string
+		da       sql.NullString
+		name     string
+		currency sql.NullString
 	}
 	var data []row
 	for rows.Next() {
@@ -211,10 +215,10 @@ func (m *migrator) migrateUsers(tx *sql.Tx) error {
 		return err
 	}
 	type row struct {
-		id, fid  int64
-		ca, ua   string
-		da       sql.NullString
-		un, pw   string
+		id, fid int64
+		ca, ua  string
+		da      sql.NullString
+		un, pw  string
 	}
 	var data []row
 	for rows.Next() {
@@ -279,10 +283,10 @@ func (m *migrator) migrateCategories(tx *sql.Tx) error {
 		return err
 	}
 	type row struct {
-		id, fid       int64
-		ca, ua, name  string
-		da, icon      sql.NullString
-		sortOrder     int
+		id, fid      int64
+		ca, ua, name string
+		da, icon     sql.NullString
+		sortOrder    int
 	}
 	var data []row
 	for rows.Next() {
@@ -346,13 +350,13 @@ func (m *migrator) migrateItems(tx *sql.Tx) error {
 		return err
 	}
 	type row struct {
-		id, fid, lid    int64
-		catid           sql.NullInt64
-		flyerid, recid  sql.NullInt64
+		id, fid, lid       int64
+		catid              sql.NullInt64
+		flyerid, recid     sql.NullInt64
 		ca, ua, name, unit string
-		da, photo, desc sql.NullString
-		bought, urgent  bool
-		price, qty      sql.NullFloat64
+		da, photo, desc    sql.NullString
+		bought, urgent     bool
+		price, qty         sql.NullFloat64
 	}
 	var data []row
 	for rows.Next() {
@@ -466,10 +470,10 @@ func (m *migrator) migrateItemFrequencies(tx *sql.Tx) error {
 		return err
 	}
 	type row struct {
-		id, fid   int64
-		name      string
-		freq      int
-		lp        sql.NullFloat64
+		id, fid int64
+		name    string
+		freq    int
+		lp      sql.NullFloat64
 	}
 	var data []row
 	for rows.Next() {
@@ -536,12 +540,12 @@ func (m *migrator) migrateItemAliases(tx *sql.Tx) error {
 		return nil
 	}
 	type row struct {
-		id, fid      int64
-		sid          sql.NullInt64
-		pn, rn       string
-		lp           sql.NullFloat64
-		pc           int
-		lua, ca      sql.NullString
+		id, fid int64
+		sid     sql.NullInt64
+		pn, rn  string
+		lp      sql.NullFloat64
+		pc      int
+		lua, ca sql.NullString
 	}
 	var data []row
 	for rows.Next() {

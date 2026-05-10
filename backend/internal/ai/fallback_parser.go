@@ -7,9 +7,9 @@ import (
 )
 
 var (
-	reNumUnit    = regexp.MustCompile(`^(\d+(?:[.,]\d+)?)([a-zа-яёА-ЯЁA-Z]+)$`)
-	reNum        = regexp.MustCompile(`^\d+(?:[.,]\d+)?$`)
-	rePlusQty    = regexp.MustCompile(`^(\d+)\+(\d+)$`)
+	reNumUnit      = regexp.MustCompile(`^(\d+(?:[.,]\d+)?)([a-zа-яёА-ЯЁA-Z]+)$`)
+	reNum          = regexp.MustCompile(`^\d+(?:[.,]\d+)?$`)
+	rePlusQty      = regexp.MustCompile(`^(\d+)\+(\d+)$`)
 	reDecimalComma = regexp.MustCompile(`(\d),(\d)`) // "0,5" → "0.5"
 )
 
@@ -18,17 +18,17 @@ var unitMap = map[string]string{
 	// Russian
 	"кг": "kg", "кило": "kg",
 	"г": "g", "гр": "g",
-	"л":  "l", "литр": "l", "литра": "l", "литров": "l", "литре": "l",
-	"мл": "ml",
+	"л": "l", "литр": "l", "литра": "l", "литров": "l", "литре": "l",
+	"мл":    "ml",
 	"пачка": "pack", "пачку": "pack", "пачки": "pack", "пачек": "pack",
 	"шт": "pcs", "штук": "pcs", "штуки": "pcs", "штука": "pcs", "шт.": "pcs",
 	// Latin
-	"kg":    "kg",
-	"g":     "g",
-	"l":     "l",
-	"ml":    "ml",
-	"pack":  "pack", "packs": "pack", "pkg": "pack",
-	"pcs":   "pcs", "pc": "pcs",
+	"kg":   "kg",
+	"g":    "g",
+	"l":    "l",
+	"ml":   "ml",
+	"pack": "pack", "packs": "pack", "pkg": "pack",
+	"pcs": "pcs", "pc": "pcs",
 }
 
 // ParseShoppingTextFallback parses freeform shopping list text without AI.
@@ -52,6 +52,7 @@ func ParseShoppingTextFallback(text string) []ParsedShoppingItem {
 	return result
 }
 
+//nolint:gocognit
 func parseOneFallbackItem(raw string) []ParsedShoppingItem {
 	tokens := strings.Fields(raw)
 	if len(tokens) == 0 {
@@ -82,7 +83,7 @@ func parseOneFallbackItem(raw string) []ParsedShoppingItem {
 
 	var qty float64 = -1
 	var unit string
-	var nameParts []string
+	nameParts := make([]string, 0, len(tokens))
 
 	for _, tok := range tokens {
 		tl := strings.ToLower(tok)

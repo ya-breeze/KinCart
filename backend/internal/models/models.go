@@ -33,20 +33,20 @@ type ShoppingList struct {
 
 type Item struct {
 	coremodels.TenantModel
-	Name           string     `gorm:"not null" json:"name"`
-	Description    string     `json:"description"`
-	Quantity       float64    `gorm:"default:1" json:"quantity"`
-	Unit           string     `gorm:"default:'pcs'" json:"unit"` // "pcs", "kg", "100g", etc.
-	IsBought       bool       `gorm:"default:false" json:"is_bought"`
-	Price          float64    `json:"price"`
-	LocalPhotoPath string     `json:"local_photo_path"`
-	IsUrgent       bool       `gorm:"default:false" json:"is_urgent"`
-	ListID         uuid.UUID  `gorm:"type:uuid;not null" json:"list_id"`
-	CategoryID     uuid.UUID  `gorm:"type:uuid" json:"category_id"`
-	FlyerItemID        *uint `json:"flyer_item_id"`
-	ReceiptItemID      *uint `json:"receipt_item_id"`
-	PreferredAliasID   *uint `json:"preferred_alias_id"`
-	IsReceiptCreated   bool  `gorm:"default:false" json:"is_receipt_created"`
+	Name             string    `gorm:"not null" json:"name"`
+	Description      string    `json:"description"`
+	Quantity         float64   `gorm:"default:1" json:"quantity"`
+	Unit             string    `gorm:"default:'pcs'" json:"unit"` // "pcs", "kg", "100g", etc.
+	IsBought         bool      `gorm:"default:false" json:"is_bought"`
+	Price            float64   `json:"price"`
+	LocalPhotoPath   string    `json:"local_photo_path"`
+	IsUrgent         bool      `gorm:"default:false" json:"is_urgent"`
+	ListID           uuid.UUID `gorm:"type:uuid;not null" json:"list_id"`
+	CategoryID       uuid.UUID `gorm:"type:uuid" json:"category_id"`
+	FlyerItemID      *uint     `json:"flyer_item_id"`
+	ReceiptItemID    *uint     `json:"receipt_item_id"`
+	PreferredAliasID *uint     `json:"preferred_alias_id"`
+	IsReceiptCreated bool      `gorm:"default:false" json:"is_receipt_created"`
 }
 
 type Category struct {
@@ -144,17 +144,17 @@ type Receipt struct {
 }
 
 type ReceiptItem struct {
-	ID             uint      `gorm:"primaryKey" json:"id"`
-	ReceiptID      uuid.UUID `gorm:"type:uuid;not null" json:"receipt_id"`
-	Name           string    `json:"name"`
-	Quantity       float64   `json:"quantity"`
-	Unit           string    `json:"unit"` // e.g., "pcs", "kg"
-	Price          float64   `json:"price"`
-	TotalPrice     float64   `json:"total_price"`
-	MatchedItemID  *uuid.UUID `gorm:"type:uuid" json:"matched_item_id"` // planned Item it was matched to
-	MatchStatus    string    `gorm:"default:'unmatched'" json:"match_status"` // "auto","confirmed","manual","unmatched","dismissed"
-	Confidence     int       `json:"confidence"`       // 0-100
-	SuggestedItems string    `json:"suggested_items"`  // JSON: [{"item_id":"uuid","item_name":"jogurt","confidence":85}]
+	ID             uint       `gorm:"primaryKey" json:"id"`
+	ReceiptID      uuid.UUID  `gorm:"type:uuid;not null" json:"receipt_id"`
+	Name           string     `json:"name"`
+	Quantity       float64    `json:"quantity"`
+	Unit           string     `json:"unit"` // e.g., "pcs", "kg"
+	Price          float64    `json:"price"`
+	TotalPrice     float64    `json:"total_price"`
+	MatchedItemID  *uuid.UUID `gorm:"type:uuid" json:"matched_item_id"`        // planned Item it was matched to
+	MatchStatus    string     `gorm:"default:'unmatched'" json:"match_status"` // "auto","confirmed","manual","unmatched","dismissed"
+	Confidence     int        `json:"confidence"`                              // 0-100
+	SuggestedItems string     `json:"suggested_items"`                         // JSON: [{"item_id":"uuid","item_name":"jogurt","confidence":85}]
 }
 
 // ItemAlias records the mapping between a generic planned item name and the
@@ -162,10 +162,10 @@ type ReceiptItem struct {
 type ItemAlias struct {
 	ID               uint       `gorm:"primaryKey" json:"id"`
 	FamilyID         uuid.UUID  `gorm:"type:uuid;not null;index" json:"family_id"`
-	PlannedName      string     `gorm:"not null" json:"planned_name"`        // e.g. "jogurt"
-	PlannedNameLower string     `gorm:"index" json:"-"`                      // Go-lowercased for Cyrillic-safe search
-	ReceiptName      string     `gorm:"not null" json:"receipt_name"`        // e.g. "selský jogurt 2%"
-	ReceiptNameLower string     `gorm:"index" json:"-"`                      // Go-lowercased for Cyrillic-safe dedup
+	PlannedName      string     `gorm:"not null" json:"planned_name"` // e.g. "jogurt"
+	PlannedNameLower string     `gorm:"index" json:"-"`               // Go-lowercased for Cyrillic-safe search
+	ReceiptName      string     `gorm:"not null" json:"receipt_name"` // e.g. "selský jogurt 2%"
+	ReceiptNameLower string     `gorm:"index" json:"-"`               // Go-lowercased for Cyrillic-safe dedup
 	ShopID           *uuid.UUID `gorm:"type:uuid" json:"shop_id"`
 	Shop             *Shop      `gorm:"foreignKey:ShopID" json:"shop"`
 	LastPrice        float64    `json:"last_price"`

@@ -328,7 +328,7 @@ func TestProcessReceipt_TextFile_ParseError(t *testing.T) {
 
 // setupConfirmMatchFixture creates the minimal DB state needed for ConfirmMatch tests:
 // a family, list, receipt, and one receipt item with the given matchStatus.
-func setupConfirmMatchFixture(t *testing.T) (db *gorm.DB, svc *ReceiptService, familyID uuid.UUID, listID uuid.UUID, receiptID uuid.UUID, receiptItemID uint) {
+func setupConfirmMatchFixture(t *testing.T) (db *gorm.DB, svc *ReceiptService, familyID uuid.UUID, listID uuid.UUID, receiptItemID uint) {
 	t.Helper()
 	db = setupTestDB()
 	svc = NewReceiptService(db, nil, nil, "/tmp")
@@ -351,7 +351,7 @@ func setupConfirmMatchFixture(t *testing.T) (db *gorm.DB, svc *ReceiptService, f
 		Status:      "pending_review",
 	}
 	db.Create(&receipt)
-	receiptID = receipt.ID
+	receiptID := receipt.ID
 
 	ri := models.ReceiptItem{
 		ReceiptID:   receiptID,
@@ -362,13 +362,13 @@ func setupConfirmMatchFixture(t *testing.T) (db *gorm.DB, svc *ReceiptService, f
 	}
 	db.Create(&ri)
 	receiptItemID = ri.ID
-	return
+	return db, svc, familyID, listID, receiptItemID
 }
 
 // TestConfirmMatch_Unmatch_DeletesReceiptCreatedItem verifies that unmatching a receipt-created
 // item (IsReceiptCreated=true) soft-deletes it instead of leaving it as a phantom.
 func TestConfirmMatch_Unmatch_DeletesReceiptCreatedItem(t *testing.T) {
-	db, svc, familyID, _, _, receiptItemID := setupConfirmMatchFixture(t)
+	db, svc, familyID, _, receiptItemID := setupConfirmMatchFixture(t)
 
 	// First call: Add as new (plannedItemID == nil, not previously matched) → creates item
 	err := svc.ConfirmMatch(context.Background(), receiptItemID, nil, familyID)
@@ -398,7 +398,7 @@ func TestConfirmMatch_Unmatch_DeletesReceiptCreatedItem(t *testing.T) {
 // TestConfirmMatch_Unmatch_KeepsPlannedItem verifies that unmatching a pre-existing planned item
 // (ReceiptItemID != this receipt item) only unlinks it — does not delete it.
 func TestConfirmMatch_Unmatch_KeepsPlannedItem(t *testing.T) {
-	db, svc, familyID, listID, _, receiptItemID := setupConfirmMatchFixture(t)
+	db, svc, familyID, listID, receiptItemID := setupConfirmMatchFixture(t)
 
 	// Pre-existing planned item (user added before receipt upload)
 	planned := models.Item{
@@ -432,7 +432,7 @@ func TestConfirmMatch_Unmatch_KeepsPlannedItem(t *testing.T) {
 // TestConfirmMatch_RepeatedAddNew_NoPhantomAccumulation is the regression test for the bug
 // where clicking "Add as new" → "Unmatch" → "Add as new" accumulated phantom items.
 func TestConfirmMatch_RepeatedAddNew_NoPhantomAccumulation(t *testing.T) {
-	db, svc, familyID, listID, _, receiptItemID := setupConfirmMatchFixture(t)
+	db, svc, familyID, listID, receiptItemID := setupConfirmMatchFixture(t)
 
 	for range 3 {
 		// Add as new

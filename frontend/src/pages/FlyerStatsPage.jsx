@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
 import { useToast, getApiError } from '../context/ToastContext';
 import { ArrowLeft, BarChart3, FileText, ImageIcon, CheckCircle2, AlertCircle, ShoppingBag, X, ExternalLink, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';

@@ -124,9 +124,9 @@ const AliasesPage = () => {
     };
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         fetchShops();
         fetchAliases();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const aliasGroups = aliases.reduce((acc, a) => {

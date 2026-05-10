@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"log/slog"
 	"net/http"
 	"os"
 	"time"
@@ -66,8 +67,12 @@ func CleanupTokens(db *gorm.DB) {
 	go func() {
 		ticker := newHourlyTicker()
 		for range ticker.C {
-			authdb.CleanupExpiredBlacklist(db)
-			authdb.CleanupExpiredRefreshTokens(db)
+			if err := authdb.CleanupExpiredBlacklist(db); err != nil {
+				slog.Warn("Failed to cleanup expired blacklist", "error", err)
+			}
+			if err := authdb.CleanupExpiredRefreshTokens(db); err != nil {
+				slog.Warn("Failed to cleanup expired refresh tokens", "error", err)
+			}
 		}
 	}()
 }

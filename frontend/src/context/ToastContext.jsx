@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useRef } from 
 
 const ToastContext = createContext(null);
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const getApiError = async (resp, fallback = 'Something went wrong') => {
     try {
         const data = await resp.json();

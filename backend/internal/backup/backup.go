@@ -211,7 +211,7 @@ func addFileToTar(tw *tar.Writer, srcPath, archiveName string) error {
 		Mode:    int64(info.Mode()),
 		ModTime: info.ModTime(),
 	}
-	if err := tw.WriteHeader(hdr); err != nil {
+	if err = tw.WriteHeader(hdr); err != nil {
 		return err
 	}
 	_, err = io.Copy(tw, f)
@@ -238,7 +238,7 @@ func addDirToTar(tw *tar.Writer, srcDir, archiveBase string) error {
 		if d.IsDir() {
 			hdr.Name += "/"
 		}
-		if err := tw.WriteHeader(hdr); err != nil {
+		if err = tw.WriteHeader(hdr); err != nil {
 			return err
 		}
 		if d.IsDir() {

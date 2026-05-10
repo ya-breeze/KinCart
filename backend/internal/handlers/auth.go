@@ -83,14 +83,18 @@ func Logout(c *gin.Context) {
 		claims, err := auth.ParseToken(tokenString, middleware.JWTSecret)
 		if err == nil {
 			expiresAt := claims.ExpiresAt.Time
-			authdb.BlacklistToken(database.DB, tokenString, expiresAt)
+			if err := authdb.BlacklistToken(database.DB, tokenString, expiresAt); err != nil {
+				slog.Warn("Failed to blacklist access token", "error", err)
+			}
 		}
 	}
 
 	// Revoke the refresh token
 	refreshToken := cookies.GetRefreshToken(c.Request)
 	if refreshToken != "" {
-		authdb.RevokeRefreshToken(database.DB, refreshToken)
+		if err := authdb.RevokeRefreshToken(database.DB, refreshToken); err != nil {
+			slog.Warn("Failed to revoke refresh token", "error", err)
+		}
 	}
 
 	cookies.ClearAuthCookies(c.Writer, middleware.CookieConfig)
@@ -119,7 +123,7 @@ func Refresh(c *gin.Context) {
 	}
 
 	var user models.User
-	if err := database.DB.First(&user, "id = ?", newRT.UserID).Error; err != nil {
+	if err = database.DB.First(&user, "id = ?", newRT.UserID).Error; err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
 		return
 	}

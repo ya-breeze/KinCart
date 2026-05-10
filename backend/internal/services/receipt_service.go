@@ -22,7 +22,12 @@ import (
 	coremodels "github.com/ya-breeze/kin-core/models"
 )
 
-const autoMatchThreshold = 90 // confidence >= this → auto-accept
+const (
+	autoMatchThreshold   = 90 // confidence >= this → auto-accept
+	matchStatusAuto      = "auto"
+	matchStatusConfirmed = "confirmed"
+	matchStatusUnmatched = "unmatched"
+)
 
 // ErrGeminiUnavailable is returned when the Gemini AI client is not configured.
 var ErrGeminiUnavailable = fmt.Errorf("gemini client not available")
@@ -79,7 +84,7 @@ type ReceiptMatchResponse struct {
 	ShopName              string             `json:"shop_name,omitempty"`
 	Date                  string             `json:"date"`
 	Total                 float64            `json:"total"`
-	Items                 []ReceiptItemMatch  `json:"items"`
+	Items                 []ReceiptItemMatch `json:"items"`
 	UnmatchedPlannedItems []PlannedItemRef   `json:"unmatched_planned_items"`
 }
 
@@ -208,7 +213,7 @@ func (s *ReceiptService) ProcessReceipt(ctx context.Context, receiptID uuid.UUID
 
 		s.updateListTitle(tx, listID, receipt.Date)
 
-		needsReview, err := s.applyItemMatches(tx, receipt.ID, listID, receipt.FamilyID, parsed.Items, matchPlans, listItems)
+		needsReview, err := s.applyItemMatches(tx, receipt.ID, receipt.FamilyID, parsed.Items, matchPlans, listItems)
 		if err != nil {
 			return err
 		}
@@ -241,6 +246,8 @@ func (s *ReceiptService) ProcessReceipt(ctx context.Context, receiptID uuid.UUID
 // buildItemMatches computes how each parsed receipt item should be matched.
 // It first checks ItemAlias, then falls back to AI for unresolved items.
 // Returns a slice parallel to parsedItems.
+//
+//nolint:gocognit,gocyclo
 func (s *ReceiptService) buildItemMatches(ctx context.Context, familyID uuid.UUID, listItems []models.Item, parsedItems []ai.ParsedReceiptItem) []receiptItemMatchPlan {
 	plans := make([]receiptItemMatchPlan, len(parsedItems))
 	usedPlannedIDs := map[uuid.UUID]bool{}
@@ -279,7 +286,7 @@ func (s *ReceiptService) buildItemMatches(ctx context.Context, familyID uuid.UUI
 			if ok && !usedPlannedIDs[item.ID] {
 				plans[i] = receiptItemMatchPlan{
 					PlannedItemID: &item.ID,
-					MatchStatus:   "auto",
+					MatchStatus:   matchStatusAuto,
 					Confidence:    100,
 					Suggestions:   []MatchSuggestionItem{{ItemID: item.ID, ItemName: item.Name, Confidence: 100}},
 				}
@@ -297,11 +304,11 @@ func (s *ReceiptService) buildItemMatches(ctx context.Context, familyID uuid.UUI
 		return plans
 	}
 
-	// If context was cancelled, explicitly mark remaining items as unmatched
+	// If context was canceled, explicitly mark remaining items as unmatched
 	if ctx.Err() != nil {
 		for _, idx := range unresolvedIdxs {
 			plans[idx] = receiptItemMatchPlan{
-				MatchStatus: "unmatched",
+				MatchStatus: matchStatusUnmatched,
 				Suggestions: []MatchSuggestionItem{},
 			}
 		}
@@ -326,7 +333,7 @@ func (s *ReceiptService) buildItemMatches(ctx context.Context, familyID uuid.UUI
 		slog.Warn("AI item matching failed, leaving items unmatched", "error", err)
 		for _, idx := range unresolvedIdxs {
 			plans[idx] = receiptItemMatchPlan{
-				MatchStatus: "unmatched",
+				MatchStatus: matchStatusUnmatched,
 				Suggestions: []MatchSuggestionItem{},
 			}
 		}
@@ -377,14 +384,14 @@ func (s *ReceiptService) buildItemMatches(ctx context.Context, familyID uuid.UUI
 			confidence := suggestions[0].Confidence
 			plans[idx] = receiptItemMatchPlan{
 				PlannedItemID: autoID,
-				MatchStatus:   "auto",
+				MatchStatus:   matchStatusAuto,
 				Confidence:    confidence,
 				Suggestions:   suggestions,
 			}
 			usedPlannedIDs[*autoID] = true
 		} else {
 			plans[idx] = receiptItemMatchPlan{
-				MatchStatus: "unmatched",
+				MatchStatus: matchStatusUnmatched,
 				Suggestions: suggestions,
 			}
 		}
@@ -406,7 +413,7 @@ func collectMatchedItemIDs(plans []receiptItemMatchPlan) map[uuid.UUID]bool {
 
 // applyItemMatches creates ReceiptItem records and links/creates planned items.
 // Returns true if the receipt needs manual review.
-func (s *ReceiptService) applyItemMatches(tx *gorm.DB, receiptID uuid.UUID, listID uuid.UUID, familyID uuid.UUID, parsedItems []ai.ParsedReceiptItem, plans []receiptItemMatchPlan, listItems []models.Item) (bool, error) {
+func (s *ReceiptService) applyItemMatches(tx *gorm.DB, receiptID uuid.UUID, familyID uuid.UUID, parsedItems []ai.ParsedReceiptItem, plans []receiptItemMatchPlan, listItems []models.Item) (bool, error) {
 	// Build Item lookup by ID for quick access
 	itemByID := map[uuid.UUID]models.Item{}
 	for _, item := range listItems {
@@ -435,7 +442,7 @@ func (s *ReceiptService) applyItemMatches(tx *gorm.DB, receiptID uuid.UUID, list
 			SuggestedItems: sugJSON,
 		}
 
-		if plan.MatchStatus == "auto" && plan.PlannedItemID != nil {
+		if plan.MatchStatus == matchStatusAuto && plan.PlannedItemID != nil {
 			// Auto-match: link and mark bought
 			item := itemByID[*plan.PlannedItemID]
 			item.IsBought = true
@@ -517,7 +524,7 @@ func (s *ReceiptService) GetReceiptMatches(receiptID uuid.UUID, familyID uuid.UU
 			}
 		}
 
-		isExtra := ri.MatchStatus == "unmatched" && len(suggestions) == 0
+		isExtra := ri.MatchStatus == matchStatusUnmatched && len(suggestions) == 0
 
 		items = append(items, ReceiptItemMatch{
 			ReceiptItemID: ri.ID,
@@ -602,7 +609,8 @@ func (s *ReceiptService) ConfirmMatch(ctx context.Context, receiptItemID uint, p
 			receiptItem.MatchedItemID = nil
 		}
 
-		if plannedItemID != nil {
+		switch {
+		case plannedItemID != nil:
 			// Link to existing planned item — verify it belongs to the receipt's list
 			var item models.Item
 			if err := tx.Where("id = ? AND family_id = ? AND list_id = ?", *plannedItemID, familyID, *receipt.ListID).First(&item).Error; err != nil {
@@ -622,11 +630,11 @@ func (s *ReceiptService) ConfirmMatch(ctx context.Context, receiptItemID uint, p
 			s.updateItemFrequency(tx, familyID, item.Name, receiptItem.Price)
 
 			receiptItem.MatchedItemID = plannedItemID
-			receiptItem.MatchStatus = "confirmed"
-		} else if wasPreviouslyMatched {
+			receiptItem.MatchStatus = matchStatusConfirmed
+		case wasPreviouslyMatched:
 			// Unmatch: revert to "unmatched" so user can pick a different match
-			receiptItem.MatchStatus = "unmatched"
-		} else {
+			receiptItem.MatchStatus = matchStatusUnmatched
+		default:
 			// Create new list item from receipt data (extra/impulse buy)
 			var defaultCategoryID uuid.UUID
 			var cat models.Category
@@ -655,7 +663,7 @@ func (s *ReceiptService) ConfirmMatch(ctx context.Context, receiptItemID uint, p
 			s.updateItemFrequency(tx, familyID, receiptItem.Name, receiptItem.Price)
 
 			receiptItem.MatchedItemID = &newItem.ID
-			receiptItem.MatchStatus = "confirmed"
+			receiptItem.MatchStatus = matchStatusConfirmed
 		}
 
 		if err := tx.Save(&receiptItem).Error; err != nil {
@@ -710,13 +718,13 @@ func (s *ReceiptService) ConfirmAllMatches(ctx context.Context, receiptID uuid.U
 
 		for _, ri := range receipt.Items {
 			switch ri.MatchStatus {
-			case "auto":
+			case matchStatusAuto:
 				// Already applied — just mark as confirmed
-				ri.MatchStatus = "confirmed"
+				ri.MatchStatus = matchStatusConfirmed
 				if err := tx.Save(&ri).Error; err != nil {
 					return fmt.Errorf("failed to confirm auto-match for %q: %w", ri.Name, err)
 				}
-			case "unmatched":
+			case matchStatusUnmatched:
 				// Create new list item (extra buy)
 				newItem := models.Item{
 					TenantModel:      coremodels.TenantModel{ID: uuid.New(), FamilyID: familyID},
@@ -737,7 +745,7 @@ func (s *ReceiptService) ConfirmAllMatches(ctx context.Context, receiptID uuid.U
 				s.updateItemFrequency(tx, familyID, ri.Name, ri.Price)
 
 				ri.MatchedItemID = &newItem.ID
-				ri.MatchStatus = "confirmed"
+				ri.MatchStatus = matchStatusConfirmed
 				if err := tx.Save(&ri).Error; err != nil {
 					return fmt.Errorf("failed to save confirmed receipt item %q: %w", ri.Name, err)
 				}

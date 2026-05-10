@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"log"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -23,6 +24,12 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func run() error {
 	// Configure structured logging
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
@@ -212,8 +219,5 @@ func main() {
 	}
 
 	slog.Info("Server starting", "port", 8080, "uploads_path", uploadsPath)
-	if err := r.Run(":8080"); err != nil {
-		slog.Error("Failed to run server", "error", err)
-		os.Exit(1)
-	}
+	return r.Run(":8080")
 }

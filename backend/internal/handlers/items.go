@@ -439,9 +439,9 @@ type parsedItemVariant struct {
 
 type parsedItemResult struct {
 	ai.ParsedShoppingItem
-	SuggestedPrice float64              `json:"suggested_price,omitempty"`
-	AliasCount     int                  `json:"alias_count,omitempty"`
-	Variants       []parsedItemVariant  `json:"variants,omitempty"`
+	SuggestedPrice float64             `json:"suggested_price,omitempty"`
+	AliasCount     int                 `json:"alias_count,omitempty"`
+	Variants       []parsedItemVariant `json:"variants,omitempty"`
 }
 
 func ParseListText(c *gin.Context) {
@@ -686,7 +686,7 @@ func LinkItemAsAlias(c *gin.Context) {
 
 	// Load the scanned (receipt-side) Item — scope via shopping_lists since items.family_id may be zero
 	var scannedItem models.Item
-	if err := database.DB.Joins("JOIN shopping_lists ON shopping_lists.id = items.list_id").
+	if err = database.DB.Joins("JOIN shopping_lists ON shopping_lists.id = items.list_id").
 		Where("items.id = ? AND shopping_lists.family_id = ?", scannedItemID, familyID).First(&scannedItem).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "receipt item not found"})
 		return
@@ -695,12 +695,13 @@ func LinkItemAsAlias(c *gin.Context) {
 	// Load the planned Item if planned_item_id was provided
 	var plannedItem models.Item
 	if body.PlannedItemID != nil {
-		plannedItemID, err := uuid.Parse(*body.PlannedItemID)
+		var plannedItemID uuid.UUID
+		plannedItemID, err = uuid.Parse(*body.PlannedItemID)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid planned_item_id"})
 			return
 		}
-		if err := database.DB.Joins("JOIN shopping_lists ON shopping_lists.id = items.list_id").
+		if err = database.DB.Joins("JOIN shopping_lists ON shopping_lists.id = items.list_id").
 			Where("items.id = ? AND shopping_lists.family_id = ?", plannedItemID, familyID).First(&plannedItem).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "planned item not found"})
 			return
@@ -712,11 +713,11 @@ func LinkItemAsAlias(c *gin.Context) {
 	var shopID *uuid.UUID
 	if scannedItem.ReceiptItemID != nil {
 		var ri models.ReceiptItem
-		if err := database.DB.First(&ri, *scannedItem.ReceiptItemID).Error; err != nil {
+		if err = database.DB.First(&ri, *scannedItem.ReceiptItemID).Error; err != nil {
 			slog.Debug("Could not load receipt item for shop resolution", "receipt_item_id", *scannedItem.ReceiptItemID, "error", err)
 		} else {
 			var receipt models.Receipt
-			if err := database.DB.Where("id = ? AND family_id = ?", ri.ReceiptID, familyID).First(&receipt).Error; err != nil {
+			if err = database.DB.Where("id = ? AND family_id = ?", ri.ReceiptID, familyID).First(&receipt).Error; err != nil {
 				slog.Debug("Could not load receipt for shop resolution", "receipt_id", ri.ReceiptID, "error", err)
 			} else {
 				shopID = receipt.ShopID

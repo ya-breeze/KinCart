@@ -37,9 +37,9 @@ const SettingsPage = () => {
     };
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         fetchCategories();
         fetchShops();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const fetchShopOrder = async (shopId) => {

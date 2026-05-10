@@ -66,7 +66,6 @@ export const AuthProvider = ({ children }) => {
   const login = React.useCallback((userData) => {
     setUser(userData);
     fetchFamilyConfig();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const logout = React.useCallback(async () => {

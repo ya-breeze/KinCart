@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
@@ -71,7 +72,7 @@ func TestAliasIsolation(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 		var result []models.ItemAlias
-		json.NewDecoder(w.Body).Decode(&result)
+		require.NoError(t, json.NewDecoder(w.Body).Decode(&result))
 		assert.Empty(t, result, "FamilyA should not see FamilyB's aliases")
 	})
 
@@ -85,7 +86,7 @@ func TestAliasIsolation(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 		var result []itemSuggestion
-		json.NewDecoder(w.Body).Decode(&result)
+		require.NoError(t, json.NewDecoder(w.Body).Decode(&result))
 		assert.Empty(t, result, "FamilyA should not see FamilyB's aliases as suggestions")
 	})
 
@@ -354,7 +355,7 @@ func TestUpdateAlias(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 		var result models.ItemAlias
-		json.NewDecoder(w.Body).Decode(&result)
+		require.NoError(t, json.NewDecoder(w.Body).Decode(&result))
 		assert.Equal(t, "selský jogurt 2%", result.ReceiptName)
 		assert.InDelta(t, 31.90, result.LastPrice, 0.01)
 
