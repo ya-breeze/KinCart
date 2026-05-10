@@ -581,9 +581,7 @@ const ListDetail = () => {
                 <style>{`
                     @keyframes kcSheetUp { from { transform: translateY(100%) } to { transform: translateY(0) } }
                     @keyframes kcRowPop { 0%{transform:scale(.97);opacity:.4} 60%{transform:scale(1.01);opacity:1} 100%{transform:scale(1)} }
-                    .kc-chip-rail::-webkit-scrollbar { display: none; }
-                    .kc-chip-rail { scrollbar-width: none; }
-                    .kc-variants::-webkit-scrollbar { display: none; }
+.kc-variants::-webkit-scrollbar { display: none; }
                 `}</style>
 
                 <div style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', background: '#f8fafc', fontFamily: 'Inter, system-ui, sans-serif', overflow: 'hidden' }}>
