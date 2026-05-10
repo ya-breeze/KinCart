@@ -8,6 +8,7 @@ import ListDetail from './pages/ListDetail';
 import SettingsPage from './pages/SettingsPage';
 import FlyerItemsPage from './pages/FlyerItemsPage';
 import FlyerStatsPage from './pages/FlyerStatsPage';
+import AliasesPage from './pages/AliasesPage';
 import PriceHistoryPage from './pages/PriceHistoryPage';
 import './index.css';
 
@@ -64,6 +65,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <FlyerStatsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings/aliases"
+            element={
+              <ProtectedRoute>
+                <AliasesPage />
               </ProtectedRoute>
             }
           />

@@ -241,6 +241,8 @@ try {
 - `GET /api/family/item-suggestions?q=` - Autocomplete item names from aliases (min 2 chars)
 - `GET /api/family/aliases` - List item aliases (grouped by planned_name)
 - `POST /api/family/aliases` - Create alias
+- `PATCH /api/family/aliases/groups/:name` - Rename a whole alias group (updates planned_name on all variants). Body: `{new_name}`. `:name` must be URL-encoded.
+- `DELETE /api/family/aliases/groups/:name` - Delete all aliases in a group. `:name` must be URL-encoded.
 - `PATCH /api/family/aliases/:id` - Update alias receipt_name / shop_id / last_price
 - `DELETE /api/family/aliases/:id` - Delete alias
 - `GET /api/shops` - Get shops

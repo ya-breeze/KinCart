@@ -141,7 +141,7 @@ test.describe('Alias linking', () => {
         await expect(page.locator('[data-testid="item-alias-label"]', { hasText: `→ ${plannedName}` })).toBeVisible();
 
         // Verify in Settings → Aliases that the alias exists
-        await page.goto('/settings');
+        await page.goto('/settings/aliases');
         await page.locator('input[placeholder="Filter by item name..."]').fill(plannedName.substring(0, 7));
         // Expand the group
         await page.locator('span', { hasText: plannedName }).click();
@@ -355,7 +355,7 @@ test.describe('Alias linking', () => {
         await createAliasViaAPI(page, plannedName, originalReceipt, 55.0);
 
         // Navigate to Settings → Aliases
-        await page.goto('/settings');
+        await page.goto('/settings/aliases');
         const filterInput = page.locator('input[placeholder="Filter by item name..."]');
         await expect(filterInput).toBeVisible({ timeout: 5000 });
 
@@ -408,7 +408,90 @@ test.describe('Alias linking', () => {
     });
 
     // -----------------------------------------------------------------------
-    // Test 7: cross-family isolation — aliases not visible to other families
+    // Test 7: navigation — Settings page links to /settings/aliases and back
+    // -----------------------------------------------------------------------
+    test('Settings nav card opens aliases page and back button returns to settings', async ({ page }) => {
+        // Go to settings and click the "Manage Aliases" button
+        await page.goto('/settings');
+        await page.click('button:has-text("Manage Aliases")');
+        await expect(page).toHaveURL(/\/settings\/aliases/);
+        await expect(page.locator('h1', { hasText: 'Item Aliases' })).toBeVisible({ timeout: 5000 });
+        await expect(page.locator('input[placeholder="Filter by item name..."]')).toBeVisible();
+
+        // Click the back arrow and confirm we're back on the settings page
+        await page.click('button[title="Back to Settings"]');
+        await expect(page).toHaveURL(/\/settings$/);
+        await expect(page.locator('h1', { hasText: 'Family Settings' })).toBeVisible({ timeout: 5000 });
+    });
+
+    // -----------------------------------------------------------------------
+    // Test 9: rename alias group — all variants renamed, UI and API updated
+    // -----------------------------------------------------------------------
+    test('renaming a group updates all its variants and the displayed name', async ({ page }) => {
+        const ts = Date.now();
+        // Both names share the "Mléko" prefix so the filter still returns the group after rename
+        const originalName = `Mléko ${ts}`;
+        const renamedName = `Mléko bílé ${ts}`;
+
+        const a1 = await createAliasViaAPI(page, originalName, `TATRA 1L ${ts}`, 25.9);
+        const a2 = await createAliasViaAPI(page, originalName, `OLMA 1L ${ts}`, 22.0);
+
+        await page.goto('/settings/aliases');
+        await page.locator('input[placeholder="Filter by item name..."]').fill('Mléko');
+        await expect(page.locator('span', { hasText: originalName })).toBeVisible({ timeout: 5000 });
+
+        // Click the rename (pencil) button on the group header
+        await page.getByTitle(`Rename "${originalName}"`).click();
+
+        // Input is auto-focused pre-filled with the current name; replace it
+        const renameInput = page.locator('input:focus');
+        await expect(renameInput).toBeVisible({ timeout: 3000 });
+        await renameInput.fill(renamedName);
+        await renameInput.press('Enter');
+
+        // Old name gone, new name shown
+        await expect(page.locator('span', { hasText: renamedName })).toBeVisible({ timeout: 5000 });
+        await expect(page.locator('span', { hasText: originalName })).not.toBeVisible();
+
+        // Verify via API: both variants carry the new planned_name
+        const aliasesResp = await page.request.get('/api/family/aliases');
+        const aliases: any[] = await aliasesResp.json();
+        const renamedGroup = aliases.filter((a: any) => a.planned_name === renamedName);
+        expect(renamedGroup).toHaveLength(2);
+
+        for (const a of renamedGroup) await deleteAliasViaAPI(page, a.id);
+    });
+
+    // -----------------------------------------------------------------------
+    // Test 10: delete alias group — all variants removed from UI and API
+    // -----------------------------------------------------------------------
+    test('deleting a group removes all its variants from the UI and API', async ({ page }) => {
+        const ts = Date.now();
+        const groupName = `Máslo ${ts}`;
+
+        await createAliasViaAPI(page, groupName, `JIHOČESKÉ MÁSLO ${ts}`, 45.9);
+        await createAliasViaAPI(page, groupName, `PRÉSIDENT MÁSLO ${ts}`, 55.0);
+
+        await page.goto('/settings/aliases');
+        await page.locator('input[placeholder="Filter by item name..."]').fill('Máslo');
+        await expect(page.locator('span', { hasText: groupName })).toBeVisible({ timeout: 5000 });
+
+        // Register dialog handler before the click that triggers window.confirm
+        page.once('dialog', dialog => dialog.accept());
+        await page.getByTitle(`Delete all aliases for "${groupName}"`).click();
+
+        // Group disappears from the list
+        await expect(page.locator('span', { hasText: groupName })).not.toBeVisible({ timeout: 5000 });
+
+        // Verify via API: no aliases remain for this group
+        const aliasesResp = await page.request.get('/api/family/aliases');
+        const aliases: any[] = await aliasesResp.json();
+        const remaining = aliases.filter((a: any) => a.planned_name === groupName);
+        expect(remaining).toHaveLength(0);
+    });
+
+    // -----------------------------------------------------------------------
+    // Test 11: cross-family isolation — aliases not visible to other families
     // Skipped automatically if a second family user is not seeded.
     // -----------------------------------------------------------------------
     test('aliases are not visible across families', async ({ page, browser }) => {

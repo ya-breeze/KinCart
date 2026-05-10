@@ -162,6 +162,136 @@ func TestAliasIsolation(t *testing.T) {
 	})
 }
 
+func setupGroupTestDB() (familyA, familyB models.Family) {
+	var err error
+	database.DB, err = gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		panic("failed to connect database")
+	}
+	database.DB.AutoMigrate(&models.Family{}, &models.ItemAlias{})
+
+	familyA = models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "FamilyA"}}
+	familyB = models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "FamilyB"}}
+	database.DB.Create(&familyA)
+	database.DB.Create(&familyB)
+	return
+}
+
+func ginRouterWithFamily(familyID uuid.UUID) *gin.Engine {
+	r := gin.New()
+	r.Use(func(c *gin.Context) { c.Set("family_id", familyID); c.Next() })
+	return r
+}
+
+func TestRenameAliasGroup(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	familyA, familyB := setupGroupTestDB()
+
+	// Both families share a group named "jogurt"
+	a1 := models.ItemAlias{FamilyID: familyA.ID, PlannedName: "jogurt", PlannedNameLower: "jogurt", ReceiptName: "selský jogurt", ReceiptNameLower: "selský jogurt", LastUsedAt: time.Now()}
+	a2 := models.ItemAlias{FamilyID: familyA.ID, PlannedName: "jogurt", PlannedNameLower: "jogurt", ReceiptName: "bio jogurt", ReceiptNameLower: "bio jogurt", LastUsedAt: time.Now()}
+	bAlias := models.ItemAlias{FamilyID: familyB.ID, PlannedName: "jogurt", PlannedNameLower: "jogurt", ReceiptName: "tesco jogurt", ReceiptNameLower: "tesco jogurt", LastUsedAt: time.Now()}
+	database.DB.Create(&a1)
+	database.DB.Create(&a2)
+	database.DB.Create(&bAlias)
+
+	t.Run("renames all variants in the family's group only", func(t *testing.T) {
+		r := ginRouterWithFamily(familyA.ID)
+		r.PATCH("/family/aliases/groups/:name", RenameAliasGroup)
+
+		body, _ := json.Marshal(map[string]string{"new_name": "jogurt bílý"})
+		req, _ := http.NewRequest(http.MethodPatch, "/family/aliases/groups/jogurt", bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNoContent, w.Code)
+
+		var count int64
+		database.DB.Model(&models.ItemAlias{}).Where("family_id = ? AND planned_name = ?", familyA.ID, "jogurt bílý").Count(&count)
+		assert.Equal(t, int64(2), count, "both FamilyA variants should carry the new name")
+		database.DB.Model(&models.ItemAlias{}).Where("family_id = ? AND planned_name_lower = ?", familyA.ID, "jogurt bílý").Count(&count)
+		assert.Equal(t, int64(2), count, "planned_name_lower must also be updated")
+
+		// FamilyB's alias must be untouched
+		database.DB.Model(&models.ItemAlias{}).Where("family_id = ? AND planned_name = ?", familyB.ID, "jogurt").Count(&count)
+		assert.Equal(t, int64(1), count, "FamilyB alias must not be renamed")
+	})
+
+	t.Run("404 when group does not exist for this family", func(t *testing.T) {
+		r := ginRouterWithFamily(familyA.ID)
+		r.PATCH("/family/aliases/groups/:name", RenameAliasGroup)
+
+		body, _ := json.Marshal(map[string]string{"new_name": "whatever"})
+		req, _ := http.NewRequest(http.MethodPatch, "/family/aliases/groups/nonexistent", bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+
+	t.Run("FamilyA cannot rename FamilyB's group by targeting the same name", func(t *testing.T) {
+		// FamilyB still has "jogurt"; familyA no longer has it (renamed to "jogurt bílý" above).
+		// A request from familyA targeting "jogurt" must 404 and leave FamilyB untouched.
+		r := ginRouterWithFamily(familyA.ID)
+		r.PATCH("/family/aliases/groups/:name", RenameAliasGroup)
+
+		body, _ := json.Marshal(map[string]string{"new_name": "hacked"})
+		req, _ := http.NewRequest(http.MethodPatch, "/family/aliases/groups/jogurt", bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+
+		var count int64
+		database.DB.Model(&models.ItemAlias{}).Where("family_id = ? AND planned_name = ?", familyB.ID, "jogurt").Count(&count)
+		assert.Equal(t, int64(1), count, "FamilyB alias must remain untouched")
+	})
+}
+
+func TestDeleteAliasGroup(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	familyA, familyB := setupGroupTestDB()
+
+	a1 := models.ItemAlias{FamilyID: familyA.ID, PlannedName: "máslo", PlannedNameLower: "máslo", ReceiptName: "jihočeské máslo", ReceiptNameLower: "jihočeské máslo", LastUsedAt: time.Now()}
+	a2 := models.ItemAlias{FamilyID: familyA.ID, PlannedName: "máslo", PlannedNameLower: "máslo", ReceiptName: "président máslo", ReceiptNameLower: "président máslo", LastUsedAt: time.Now()}
+	bAlias := models.ItemAlias{FamilyID: familyB.ID, PlannedName: "máslo", PlannedNameLower: "máslo", ReceiptName: "tesco máslo", ReceiptNameLower: "tesco máslo", LastUsedAt: time.Now()}
+	database.DB.Create(&a1)
+	database.DB.Create(&a2)
+	database.DB.Create(&bAlias)
+
+	t.Run("deletes all variants in the family's group only", func(t *testing.T) {
+		r := ginRouterWithFamily(familyA.ID)
+		r.DELETE("/family/aliases/groups/:name", DeleteAliasGroup)
+
+		req, _ := http.NewRequest(http.MethodDelete, "/family/aliases/groups/m%C3%A1slo", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNoContent, w.Code)
+
+		var count int64
+		database.DB.Model(&models.ItemAlias{}).Where("family_id = ?", familyA.ID).Count(&count)
+		assert.Equal(t, int64(0), count, "all FamilyA aliases should be deleted")
+
+		database.DB.Model(&models.ItemAlias{}).Where("family_id = ?", familyB.ID).Count(&count)
+		assert.Equal(t, int64(1), count, "FamilyB alias must not be deleted")
+	})
+
+	t.Run("404 when group does not exist for this family", func(t *testing.T) {
+		r := ginRouterWithFamily(familyA.ID)
+		r.DELETE("/family/aliases/groups/:name", DeleteAliasGroup)
+
+		req, _ := http.NewRequest(http.MethodDelete, "/family/aliases/groups/nonexistent", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+}
+
 func TestUpdateAlias(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

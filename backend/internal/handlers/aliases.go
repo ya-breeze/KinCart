@@ -190,3 +190,54 @@ func DeleteAlias(c *gin.Context) {
 
 	c.Status(http.StatusNoContent)
 }
+
+type renameGroupRequest struct {
+	NewName string `json:"new_name" binding:"required"`
+}
+
+func RenameAliasGroup(c *gin.Context) {
+	familyID := c.MustGet("family_id").(uuid.UUID)
+	name := c.Param("name")
+
+	var req renameGroupRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	newNameLower := strings.ToLower(req.NewName)
+	result := database.DB.Model(&models.ItemAlias{}).
+		Where("family_id = ? AND planned_name_lower = ?", familyID, strings.ToLower(name)).
+		Updates(map[string]interface{}{
+			"planned_name":       req.NewName,
+			"planned_name_lower": newNameLower,
+		})
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to rename group"})
+		return
+	}
+	if result.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Group not found"})
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+func DeleteAliasGroup(c *gin.Context) {
+	familyID := c.MustGet("family_id").(uuid.UUID)
+	name := c.Param("name")
+
+	result := database.DB.Where("family_id = ? AND planned_name_lower = ?", familyID, strings.ToLower(name)).
+		Delete(&models.ItemAlias{})
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete group"})
+		return
+	}
+	if result.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Group not found"})
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
