@@ -115,6 +115,17 @@ const ListDetail = () => {
         if (resp.ok) setFrequentItems(await resp.json());
     };
 
+    const deleteFrequentItem = async (e, id) => {
+        e.stopPropagation();
+        try {
+            const resp = await fetch(`${API_BASE_URL}/api/family/frequent-items/${id}`, { method: 'DELETE' });
+            if (resp.ok) setFrequentItems(prev => prev.filter(fi => fi.id !== id));
+            else showToast(await getApiError(resp, 'Failed to delete frequent item'));
+        } catch {
+            showToast('Network error — could not delete frequent item');
+        }
+    };
+
     const fetchCategories = async () => {
         const resp = await fetch(`${API_BASE_URL}/api/categories`);
         if (resp.ok) setCategories(await resp.json());
@@ -766,9 +777,10 @@ const ListDetail = () => {
                             <div style={{ marginBottom: 8 }}>
                                 <div ref={chipsContainerRef} style={{ display: 'flex', flexWrap: 'wrap', gap: 5, maxHeight: chipsExpanded ? 'none' : 64, overflow: 'hidden', paddingBottom: 1 }}>
                                     {frequentItems.map(fi => (
-                                        <button key={fi.id} onClick={() => openDraftNew(fi.item_name)} style={{ padding: '5px 10px', borderRadius: 9999, background: '#fff', border: '1px solid #e2e8f0', fontFamily: 'Inter, system-ui, sans-serif', fontSize: 12, fontWeight: 600, color: '#0f172a', cursor: 'pointer', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 3, boxShadow: '0 1px 1px rgba(0,0,0,.03)', minHeight: 'unset' }}>
+                                        <button key={fi.id} onClick={() => openDraftNew(fi.item_name)} style={{ padding: '5px 8px 5px 10px', borderRadius: 9999, background: '#fff', border: '1px solid #e2e8f0', fontFamily: 'Inter, system-ui, sans-serif', fontSize: 12, fontWeight: 600, color: '#0f172a', cursor: 'pointer', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 3, boxShadow: '0 1px 1px rgba(0,0,0,.03)', minHeight: 'unset' }}>
                                             <span style={{ color: '#22c55e', display: 'flex', alignItems: 'center' }}><Plus size={11} /></span>
                                             {fi.item_name}
+                                            <span onClick={(e) => deleteFrequentItem(e, fi.id)} style={{ color: '#94a3b8', display: 'flex', alignItems: 'center', marginLeft: 2, cursor: 'pointer' }} title="Remove"><X size={11} /></span>
                                         </button>
                                     ))}
                                 </div>
