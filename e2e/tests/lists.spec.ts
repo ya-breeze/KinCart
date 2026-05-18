@@ -211,14 +211,18 @@ test.describe('Shopping Lists Flow', () => {
         await expect(quickAddInput).toBeVisible({ timeout: 10000 });
 
         // Cycle status: PREPARING → READY FOR SHOPPING → COMPLETED (two clicks)
+        // Wait for each status update to reflect before the next click (cycleStatus reads live state)
         await page.click('[data-testid="status-badge"]');
+        await expect(page.locator('[data-testid="status-badge"]')).toHaveText('READY FOR SHOPPING', { timeout: 5000 });
         await page.click('[data-testid="status-badge"]');
+        await expect(page.locator('[data-testid="status-badge"]')).toHaveText('COMPLETED', { timeout: 5000 });
 
         // Quick-add input must not be in the DOM
         await expect(quickAddInput).not.toBeVisible({ timeout: 5000 });
 
         // Cycle back to PREPARING (one more click) — input should reappear
         await page.click('[data-testid="status-badge"]');
+        await expect(page.locator('[data-testid="status-badge"]')).toHaveText('PREPARING', { timeout: 5000 });
         await expect(quickAddInput).toBeVisible({ timeout: 5000 });
     });
 
