@@ -195,6 +195,37 @@ test.describe('Shopping Lists Flow', () => {
         await expect(page.locator('[data-testid="item-name"]', { hasText: 'KeepMe' })).toBeVisible();
     });
 
+    test('completed list hides quick-add bar and frequent-item chips', async ({ page }) => {
+        const title = `Completed UI Test ${Date.now()}`;
+
+        // Create list and open it
+        await page.click('button:has-text("New List")');
+        const input = page.locator('input[placeholder*="Weekly Groceries"]');
+        await expect(input).toBeVisible({ timeout: 5000 });
+        await input.fill(title);
+        await page.click('button:has-text("Create List")');
+        await page.locator('.card', { hasText: title }).click();
+
+        // Confirm quick-add input is visible on a non-completed list
+        const quickAddInput = page.locator('input[placeholder="Add item — type, paste, or pick a chip…"]');
+        await expect(quickAddInput).toBeVisible({ timeout: 10000 });
+
+        // Cycle status: PREPARING → READY FOR SHOPPING → COMPLETED (two clicks)
+        // Wait for each status update to reflect before the next click (cycleStatus reads live state)
+        await page.click('[data-testid="status-badge"]');
+        await expect(page.locator('[data-testid="status-badge"]')).toHaveText('READY', { timeout: 5000 });
+        await page.click('[data-testid="status-badge"]');
+        await expect(page.locator('[data-testid="status-badge"]')).toHaveText('COMPLETED', { timeout: 5000 });
+
+        // Quick-add input must not be in the DOM
+        await expect(quickAddInput).not.toBeVisible({ timeout: 5000 });
+
+        // Cycle back to PREPARING (one more click) — input should reappear
+        await page.click('[data-testid="status-badge"]');
+        await expect(page.locator('[data-testid="status-badge"]')).toHaveText('PREPARING', { timeout: 5000 });
+        await expect(quickAddInput).toBeVisible({ timeout: 5000 });
+    });
+
     test('inline edit does not overwrite modal save (startEditing clears expandedEdits)', async ({ page }) => {
         // Regression: startEditing previously left expandedEdits intact. When the row
         // was collapsed after the modal saved, toggleExpand compared stale expandedEdits

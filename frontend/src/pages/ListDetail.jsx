@@ -775,7 +775,7 @@ const ListDetail = () => {
                     </div>
 
                     {/* ── Bottom quick-add bar (order 3) ───────────────────────── */}
-                    <div style={{ padding: '10px 14px 8px', background: '#f8fafc', borderTop: '1px solid #f1f5f9', order: 3, flexShrink: 0 }}>
+                    {!isCompleted && <div style={{ padding: '10px 14px 8px', background: '#f8fafc', borderTop: '1px solid #f1f5f9', order: 3, flexShrink: 0 }}>
                         {/* Frequent-use chip grid */}
                         {frequentItems.length > 0 && (
                             <div style={{ marginBottom: 8 }}>
@@ -863,7 +863,7 @@ const ListDetail = () => {
                                 </div>
                             )}
                         </div>
-                    </div>
+                    </div>}
                 </div>
 
                 {/* Confirm sheet overlay */}
