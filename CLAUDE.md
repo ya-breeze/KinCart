@@ -163,7 +163,8 @@ npm test -- LazyImage.test.jsx
 **Components:**
 - `LazyImage.jsx` - Lazy-loaded images with fade-in
 - `ImageModal.jsx` - Full-screen image viewer
-- `ReceiptUploadModal.jsx` - Receipt upload with camera/file support
+- `ReceiptUploadModal.jsx` - Receipt upload with camera/file support; on `pending_review` result, hands off to `ReceiptMatchModal`
+- `ReceiptMatchModal.jsx` - Receipt match review dialog; uses **local decision staging** (no per-click API calls). All decisions are collected in `decisions` state (Map from `receipt_item_id` to decision object, `null` = removed match, `undefined` key = untouched). History stack + UNSET Symbol enables Undo; `resetAll()` restores to `initialDecisions` snapshot. `confirmAll` fires PATCH/POST calls then calls `confirm-all`. Blocked when `pendingCount > 0` (null decisions or untouched non-matched items).
 
 **Context:**
 - `context/AuthContext.jsx` - User authentication state (user, mode, currency, login/logout)
@@ -320,6 +321,10 @@ Located in `e2e/tests/`:
 
 6. **Flyer & Receipt Features**: Require `GEMINI_API_KEY` to be set. These are optional features that gracefully degrade if the API key is missing.
 
-7. **Docker Deployment**: The app runs behind Nginx reverse proxy. Internal API routes (`/api/internal/*`) should only be accessible within the Docker network.
+7. **Receipt Matching — Duplicate Item Bug**: When a user manually marks items as bought *before* uploading a receipt, the old code (`if !item.IsBought`) excluded those items from the alias-matching pool → all receipt items became "extras" → clicking "+" created duplicates. **Fix**: changed filter to `if item.ReceiptItemID == nil` so bought-but-unclaimed items ARE included. Also: `buildItemMatches` now has a nil guard for `s.gemini` (SQLite LOWER() only handles ASCII, so non-ASCII item names never find aliases and reach the Gemini branch which panics if nil). Alias lookup uses `LOWER(receipt_name)` in the WHERE clause — only reliable for ASCII item names in the test suite; use ASCII names in `receipt_service_test.go` tests.
 
-8. **Development Plan**: See `development_plan.md` for feature roadmap and implementation status.
+   The `ReceiptMatchResponse` now includes `AlreadyBoughtItems []PlannedItemRef` — items that are bought (IsBought=true) but not yet linked to any receipt item (ReceiptItemID=nil). These appear as link targets in the match modal's expansion panel under an "already bought" divider.
+
+8. **Docker Deployment**: The app runs behind Nginx reverse proxy. Internal API routes (`/api/internal/*`) should only be accessible within the Docker network.
+
+9. **Development Plan**: See `development_plan.md` for feature roadmap and implementation status.

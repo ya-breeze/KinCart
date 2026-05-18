@@ -453,3 +453,175 @@ func TestConfirmMatch_RepeatedAddNew_NoPhantomAccumulation(t *testing.T) {
 	assert.True(t, items[0].IsBought)
 	assert.NotNil(t, items[0].ReceiptItemID)
 }
+
+// TestBuildItemMatches_AlreadyBoughtItemMatchable verifies that a planned item that was manually
+// marked as bought before the receipt upload is still included in the matching pool.
+// Uses ASCII-only names because SQLite's LOWER() only handles ASCII characters.
+func TestBuildItemMatches_AlreadyBoughtItemMatchable(t *testing.T) {
+	db := setupTestDB()
+	svc := NewReceiptService(db, nil, nil, t.TempDir())
+
+	familyID := uuid.New()
+	family := models.Family{Family: coremodels.Family{ID: familyID, Name: "F"}}
+	db.Create(&family)
+
+	list := models.ShoppingList{TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: familyID}}
+	db.Create(&list)
+
+	// Planned item already bought (manually ticked during shopping), not yet linked to any receipt item.
+	milk := models.Item{
+		TenantModel:   coremodels.TenantModel{ID: uuid.New(), FamilyID: familyID},
+		Name:          "Milk",
+		ListID:        list.ID,
+		IsBought:      true,
+		ReceiptItemID: nil,
+	}
+	db.Create(&milk)
+
+	// Alias: receipt name "WHOLE MILK 1L" → planned name "milk"
+	alias := models.ItemAlias{
+		FamilyID:         familyID,
+		PlannedName:      "Milk",
+		PlannedNameLower: "milk",
+		ReceiptName:      "WHOLE MILK 1L",
+		ReceiptNameLower: "whole milk 1l",
+	}
+	db.Create(&alias)
+
+	parsedItems := []ai.ParsedReceiptItem{
+		{Name: "WHOLE MILK 1L", Price: 18.90, Quantity: 1},
+	}
+
+	plans := svc.buildItemMatches(context.Background(), familyID, []models.Item{milk}, parsedItems)
+
+	assert.Len(t, plans, 1)
+	assert.Equal(t, matchStatusAuto, plans[0].MatchStatus, "already-bought item should be auto-matched via alias")
+	assert.NotNil(t, plans[0].PlannedItemID)
+	assert.Equal(t, milk.ID, *plans[0].PlannedItemID)
+}
+
+// TestBuildItemMatches_BoughtWithReceiptIDExcluded verifies that an already-bought item that is
+// already linked to a receipt item is NOT included as a match candidate (it is already claimed).
+func TestBuildItemMatches_BoughtWithReceiptIDExcluded(t *testing.T) {
+	db := setupTestDB()
+	svc := NewReceiptService(db, nil, nil, t.TempDir())
+
+	familyID := uuid.New()
+	family := models.Family{Family: coremodels.Family{ID: familyID, Name: "F"}}
+	db.Create(&family)
+
+	list := models.ShoppingList{TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: familyID}}
+	db.Create(&list)
+
+	existingReceiptItemID := uint(999)
+	milk := models.Item{
+		TenantModel:   coremodels.TenantModel{ID: uuid.New(), FamilyID: familyID},
+		Name:          "Milk",
+		ListID:        list.ID,
+		IsBought:      true,
+		ReceiptItemID: &existingReceiptItemID, // already claimed by another receipt item
+	}
+	db.Create(&milk)
+
+	alias := models.ItemAlias{
+		FamilyID:         familyID,
+		PlannedName:      "Milk",
+		PlannedNameLower: "milk",
+		ReceiptName:      "WHOLE MILK 1L",
+		ReceiptNameLower: "whole milk 1l",
+	}
+	db.Create(&alias)
+
+	parsedItems := []ai.ParsedReceiptItem{
+		{Name: "WHOLE MILK 1L", Price: 18.90, Quantity: 1},
+	}
+
+	plans := svc.buildItemMatches(context.Background(), familyID, []models.Item{milk}, parsedItems)
+
+	assert.Len(t, plans, 1)
+	assert.Equal(t, matchStatusUnmatched, plans[0].MatchStatus, "item already claimed by another receipt must not be matched again")
+	assert.Nil(t, plans[0].PlannedItemID)
+}
+
+// TestGetReceiptMatches_AlreadyBoughtIncluded verifies that already-bought, unlinked items appear
+// in the already_bought_items field (not unmatched_planned_items) of the matches response.
+func TestGetReceiptMatches_AlreadyBoughtIncluded(t *testing.T) {
+	db := setupTestDB()
+	svc := NewReceiptService(db, nil, nil, t.TempDir())
+
+	familyID := uuid.New()
+	family := models.Family{Family: coremodels.Family{ID: familyID, Name: "F"}}
+	db.Create(&family)
+
+	list := models.ShoppingList{TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: familyID}}
+	db.Create(&list)
+
+	// Already bought, not linked to any receipt item
+	boughtItem := models.Item{
+		TenantModel:   coremodels.TenantModel{ID: uuid.New(), FamilyID: familyID},
+		Name:          "Milk",
+		ListID:        list.ID,
+		IsBought:      true,
+		ReceiptItemID: nil,
+	}
+	db.Create(&boughtItem)
+
+	receipt := models.Receipt{
+		TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: familyID},
+		ListID:      &list.ID,
+		ImagePath:   "r.jpg",
+		Status:      "pending_review",
+	}
+	db.Create(&receipt)
+
+	ri := models.ReceiptItem{
+		ReceiptID:   receipt.ID,
+		Name:        "WHOLE MILK 1L",
+		Price:       18.90,
+		Quantity:    1,
+		MatchStatus: matchStatusUnmatched,
+	}
+	db.Create(&ri)
+
+	resp, err := svc.GetReceiptMatches(receipt.ID, familyID)
+	assert.NoError(t, err)
+	assert.Len(t, resp.AlreadyBoughtItems, 1, "bought unlinked item should appear in already_bought_items")
+	assert.Equal(t, boughtItem.ID, resp.AlreadyBoughtItems[0].ID)
+	assert.Len(t, resp.UnmatchedPlannedItems, 0, "bought item must not appear in unmatched_planned_items")
+}
+
+// TestConfirmMatch_AlreadyBoughtItem_UpdatesPriceAndLinks verifies that ConfirmMatch correctly
+// links a receipt item to a planned item that was already manually bought (IsBought stays true).
+func TestConfirmMatch_AlreadyBoughtItem_UpdatesPriceAndLinks(t *testing.T) {
+	db, svc, familyID, listID, receiptItemID := setupConfirmMatchFixture(t)
+
+	// Pre-existing item that was manually ticked before the receipt upload
+	planned := models.Item{
+		TenantModel:   coremodels.TenantModel{ID: uuid.New(), FamilyID: familyID},
+		Name:          "Milk",
+		ListID:        listID,
+		IsBought:      true,
+		ReceiptItemID: nil,
+	}
+	db.Create(&planned)
+
+	// Confirm: link the receipt item to the already-bought planned item
+	err := svc.ConfirmMatch(context.Background(), receiptItemID, &planned.ID, familyID)
+	assert.NoError(t, err)
+
+	var updated models.Item
+	db.First(&updated, "id = ?", planned.ID)
+	assert.True(t, updated.IsBought, "IsBought must remain true")
+	assert.NotNil(t, updated.ReceiptItemID, "ReceiptItemID must be set")
+	assert.Equal(t, receiptItemID, *updated.ReceiptItemID)
+
+	var ri models.ReceiptItem
+	db.First(&ri, receiptItemID)
+	assert.Equal(t, matchStatusConfirmed, ri.MatchStatus)
+	assert.Equal(t, &planned.ID, ri.MatchedItemID)
+
+	// No extra items should have been created
+	var itemCount int64
+	db.Model(&models.Item{}).Where("list_id = ?", listID).Count(&itemCount)
+	assert.Equal(t, int64(1), itemCount, "no duplicate item should be created")
+}

@@ -86,6 +86,7 @@ type ReceiptMatchResponse struct {
 	Total                 float64            `json:"total"`
 	Items                 []ReceiptItemMatch `json:"items"`
 	UnmatchedPlannedItems []PlannedItemRef   `json:"unmatched_planned_items"`
+	AlreadyBoughtItems    []PlannedItemRef   `json:"already_bought_items"`
 }
 
 // receiptItemMatchPlan holds pre-computed match info for one parsed receipt item.
@@ -252,10 +253,13 @@ func (s *ReceiptService) buildItemMatches(ctx context.Context, familyID uuid.UUI
 	plans := make([]receiptItemMatchPlan, len(parsedItems))
 	usedPlannedIDs := map[uuid.UUID]bool{}
 
-	// Build a lookup: lowercase name → Item
+	// Build a lookup: lowercase name → Item.
+	// Include items not yet claimed by any receipt item (ReceiptItemID == nil),
+	// even if already bought — this handles the case where the user manually ticked
+	// items during shopping before uploading the receipt.
 	plannedByName := map[string]models.Item{}
 	for _, item := range listItems {
-		if !item.IsBought {
+		if item.ReceiptItemID == nil {
 			plannedByName[strings.ToLower(item.Name)] = item
 		}
 	}
@@ -304,8 +308,8 @@ func (s *ReceiptService) buildItemMatches(ctx context.Context, familyID uuid.UUI
 		return plans
 	}
 
-	// If context was canceled, explicitly mark remaining items as unmatched
-	if ctx.Err() != nil {
+	// If context was canceled or no AI client is available, mark remaining as unmatched
+	if ctx.Err() != nil || s.gemini == nil {
 		for _, idx := range unresolvedIdxs {
 			plans[idx] = receiptItemMatchPlan{
 				MatchStatus: matchStatusUnmatched,
@@ -551,6 +555,19 @@ func (s *ReceiptService) GetReceiptMatches(receiptID uuid.UUID, familyID uuid.UU
 		unmatched = []PlannedItemRef{}
 	}
 
+	// Collect already-bought items not yet linked to any receipt item.
+	// These are available as link targets so users can connect receipt items
+	// to items they manually ticked before uploading the receipt.
+	var alreadyBought []PlannedItemRef
+	for _, item := range listItems {
+		if item.IsBought && item.ReceiptItemID == nil && !matchedIDs[item.ID] {
+			alreadyBought = append(alreadyBought, PlannedItemRef{ID: item.ID, Name: item.Name})
+		}
+	}
+	if alreadyBought == nil {
+		alreadyBought = []PlannedItemRef{}
+	}
+
 	shopName := ""
 	if receipt.Shop != nil {
 		shopName = receipt.Shop.Name
@@ -564,6 +581,7 @@ func (s *ReceiptService) GetReceiptMatches(receiptID uuid.UUID, familyID uuid.UU
 		Total:                 receipt.Total,
 		Items:                 items,
 		UnmatchedPlannedItems: unmatched,
+		AlreadyBoughtItems:    alreadyBought,
 	}, nil
 }
 
