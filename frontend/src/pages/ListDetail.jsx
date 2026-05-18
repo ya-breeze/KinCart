@@ -63,6 +63,7 @@ const ListDetail = () => {
     const [query, setQuery] = useState('');
     const [draft, setDraft] = useState(null);
     const [showPasteModal, setShowPasteModal] = useState(false);
+    const isListMode = query.includes(',');
     const [justAddedId, setJustAddedId] = useState(null);
 
     // ── manager inline row expansion ──
@@ -797,51 +798,46 @@ const ListDetail = () => {
 
                         {/* Search input + autocomplete */}
                         <div style={{ position: 'relative' }}>
-                            {(() => {
-                                const isListMode = query.includes(',');
-                                return (
-                                    <>
-                                        <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: isListMode ? '#16a34a' : '#94a3b8', display: 'flex', pointerEvents: 'none' }}>
-                                            {isListMode ? <List size={16} /> : <Search size={16} />}
-                                        </span>
-                                        <input
-                                            ref={queryInputRef}
-                                            value={query}
-                                            onChange={e => {
-                                                const val = e.target.value;
-                                                setQuery(val);
-                                                clearTimeout(queryDebounceRef.current);
-                                                queryDebounceRef.current = setTimeout(() => fetchSuggestions(val), 250);
-                                            }}
-                                            onKeyDown={e => {
-                                                if (e.key === 'Enter') {
-                                                    if (isListMode) setShowPasteModal(true);
-                                                    else openDraftNew();
-                                                }
-                                            }}
-                                            onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-                                            placeholder="Add item — type, paste, or pick a chip…"
-                                            style={{ width: '100%', padding: '11px 80px 11px 36px', borderRadius: 12, border: `1.5px solid ${isListMode ? '#16a34a' : '#2563eb'}`, fontFamily: 'Inter, system-ui, sans-serif', fontSize: 14, fontWeight: 500, outline: 'none', background: '#fff', boxShadow: query ? `0 0 0 3px ${isListMode ? 'rgba(22,163,74,.12)' : 'rgba(37,99,235,.12)'}` : 'none', minHeight: 'unset' }}
-                                        />
-                                        <div style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', display: 'flex', gap: 4 }}>
-                                            <button title="Voice (coming soon)" style={{ width: 30, height: 30, minHeight: 'unset', borderRadius: 8, background: '#f1f5f9', color: '#475569', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                                                <Mic size={14} />
-                                            </button>
-                                            <button
-                                                onClick={() => { if (isListMode) setShowPasteModal(true); else openDraftNew(); }}
-                                                disabled={!query}
-                                                style={{ width: 30, height: 30, minHeight: 'unset', borderRadius: 8, background: query ? (isListMode ? '#16a34a' : '#2563eb') : '#cbd5e1', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: query ? 'pointer' : 'not-allowed' }}
-                                                title={isListMode ? 'Add as list' : 'Add item'}
-                                            >
-                                                {isListMode ? <List size={14} /> : <Plus size={14} />}
-                                            </button>
-                                        </div>
-                                    </>
-                                );
-                            })()}
+                            <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: isListMode ? '#16a34a' : '#94a3b8', display: 'flex', pointerEvents: 'none' }}>
+                                {isListMode ? <List size={16} /> : <Search size={16} />}
+                            </span>
+                            <input
+                                ref={queryInputRef}
+                                value={query}
+                                onChange={e => {
+                                    const val = e.target.value;
+                                    setQuery(val);
+                                    if (!val.includes(',')) {
+                                        clearTimeout(queryDebounceRef.current);
+                                        queryDebounceRef.current = setTimeout(() => fetchSuggestions(val), 250);
+                                    }
+                                }}
+                                onKeyDown={e => {
+                                    if (e.key === 'Enter') {
+                                        if (isListMode) setShowPasteModal(true);
+                                        else openDraftNew();
+                                    }
+                                }}
+                                onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                                placeholder="Add item — type, paste, or pick a chip…"
+                                style={{ width: '100%', padding: '11px 80px 11px 36px', borderRadius: 12, border: `1.5px solid ${isListMode ? '#16a34a' : '#2563eb'}`, fontFamily: 'Inter, system-ui, sans-serif', fontSize: 14, fontWeight: 500, outline: 'none', background: '#fff', boxShadow: query ? `0 0 0 3px ${isListMode ? 'rgba(22,163,74,.12)' : 'rgba(37,99,235,.12)'}` : 'none', minHeight: 'unset' }}
+                            />
+                            <div style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', display: 'flex', gap: 4 }}>
+                                <button title="Voice (coming soon)" style={{ width: 30, height: 30, minHeight: 'unset', borderRadius: 8, background: '#f1f5f9', color: '#475569', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                                    <Mic size={14} />
+                                </button>
+                                <button
+                                    onClick={() => { if (isListMode) setShowPasteModal(true); else openDraftNew(); }}
+                                    disabled={!query}
+                                    style={{ width: 30, height: 30, minHeight: 'unset', borderRadius: 8, background: query ? (isListMode ? '#16a34a' : '#2563eb') : '#cbd5e1', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: query ? 'pointer' : 'not-allowed' }}
+                                    title={isListMode ? 'Add as list' : 'Add item'}
+                                >
+                                    {isListMode ? <List size={14} /> : <Plus size={14} />}
+                                </button>
+                            </div>
 
                             {/* Autocomplete dropdown — appears above the input */}
-                            {showDropdown && !query.includes(',') && (
+                            {showDropdown && !isListMode && (
                                 <div style={{ position: 'absolute', bottom: 'calc(100% + 6px)', left: 0, right: 0, background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 10px 25px rgba(15,23,42,.12)', overflow: 'hidden', zIndex: 10 }}>
                                     <div style={{ padding: '6px 12px', fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.05em', background: '#f8fafc', display: 'flex', alignItems: 'center', gap: 4 }}>
                                         ✦ From your history
