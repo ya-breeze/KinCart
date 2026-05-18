@@ -5,9 +5,9 @@ import { Plus, Search, ChevronRight, ChevronDown } from 'lucide-react';
 
 const UNITS = ['pcs', 'kg', 'g', '100g', 'l', 'ml', 'pack'];
 
-const PasteItemsPanel = ({ listId, shops, onItemsAdded }) => {
+const PasteItemsPanel = ({ listId, shops, onItemsAdded, initialText = '' }) => {
     const { showToast } = useToast();
-    const [text, setText] = useState('');
+    const [text, setText] = useState(initialText);
     const [selectedShopId, setSelectedShopId] = useState('');
     const [parsedItems, setParsedItems] = useState(null);
     const [expandedIndex, setExpandedIndex] = useState(null);
