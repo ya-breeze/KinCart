@@ -10,6 +10,7 @@ import FlyerItemsPage from './pages/FlyerItemsPage';
 import FlyerStatsPage from './pages/FlyerStatsPage';
 import AliasesPage from './pages/AliasesPage';
 import PriceHistoryPage from './pages/PriceHistoryPage';
+import FrequentItemsPage from './pages/FrequentItemsPage';
 import './index.css';
 
 const ProtectedRoute = ({ children }) => {
@@ -73,6 +74,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <AliasesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings/frequent-items"
+            element={
+              <ProtectedRoute>
+                <FrequentItemsPage />
               </ProtectedRoute>
             }
           />

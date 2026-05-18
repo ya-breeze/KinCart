@@ -57,7 +57,7 @@ func AddItemToList(c *gin.Context) {
 
 	// Increment frequency
 	var freq models.ItemFrequency
-	result := database.DB.Where("family_id = ? AND item_name = ?", familyID, item.Name).First(&freq)
+	result := database.DB.Where("family_id = ? AND LOWER(item_name) = LOWER(?)", familyID, item.Name).First(&freq)
 	if result.Error != nil {
 		// New item
 		freq = models.ItemFrequency{
@@ -66,8 +66,8 @@ func AddItemToList(c *gin.Context) {
 			Frequency: 1,
 		}
 		database.DB.Create(&freq)
-	} else {
-		// Update existing
+	} else if !freq.IsHidden {
+		// Update existing (skip if user has hidden this item)
 		database.DB.Model(&freq).Update("frequency", freq.Frequency+1)
 	}
 
@@ -349,7 +349,7 @@ func GetFrequentItems(c *gin.Context) {
 	familyID := c.MustGet("family_id").(uuid.UUID)
 
 	var freqItems []models.ItemFrequency
-	if err := database.DB.Where("family_id = ? AND frequency >= 2", familyID).Order("frequency DESC").Limit(10).Find(&freqItems).Error; err != nil {
+	if err := database.DB.Where("family_id = ? AND frequency >= 2 AND is_hidden = ?", familyID, false).Order("frequency DESC").Limit(10).Find(&freqItems).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch frequent items"})
 		return
 	}
@@ -406,7 +406,56 @@ func DeleteFrequentItem(c *gin.Context) {
 		return
 	}
 
-	database.DB.Delete(&freq)
+	if err := database.DB.Model(&freq).Update("is_hidden", true).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hide item"})
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+func GetHiddenFrequentItems(c *gin.Context) {
+	familyID := c.MustGet("family_id").(uuid.UUID)
+
+	var freqItems []models.ItemFrequency
+	if err := database.DB.Where("family_id = ? AND is_hidden = ?", familyID, true).Order("item_name ASC").Find(&freqItems).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch hidden items"})
+		return
+	}
+
+	result := make([]frequentItemResponse, 0, len(freqItems))
+	for _, fi := range freqItems {
+		result = append(result, frequentItemResponse{
+			ID:        fi.ID,
+			ItemName:  fi.ItemName,
+			Frequency: fi.Frequency,
+			LastPrice: fi.LastPrice,
+			Variants:  []frequentItemVariant{},
+		})
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
+func RestoreFrequentItem(c *gin.Context) {
+	familyID := c.MustGet("family_id").(uuid.UUID)
+
+	idParam := c.Param("id")
+	var id uint
+	if _, err := fmt.Sscanf(idParam, "%d", &id); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid id"})
+		return
+	}
+
+	var freq models.ItemFrequency
+	if err := database.DB.Where("id = ? AND family_id = ?", id, familyID).First(&freq).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Not found"})
+		return
+	}
+
+	if err := database.DB.Model(&freq).Update("is_hidden", false).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to restore item"})
+		return
+	}
 	c.Status(http.StatusNoContent)
 }
 
@@ -569,11 +618,11 @@ func BulkAddItems(c *gin.Context) {
 
 	for _, item := range items {
 		var freq models.ItemFrequency
-		result := database.DB.Where("family_id = ? AND item_name = ?", familyID, item.Name).First(&freq)
+		result := database.DB.Where("family_id = ? AND LOWER(item_name) = LOWER(?)", familyID, item.Name).First(&freq)
 		if result.Error != nil {
 			freq = models.ItemFrequency{FamilyID: familyID, ItemName: item.Name, Frequency: 1}
 			database.DB.Create(&freq)
-		} else {
+		} else if !freq.IsHidden {
 			database.DB.Model(&freq).Update("frequency", freq.Frequency+1)
 		}
 	}

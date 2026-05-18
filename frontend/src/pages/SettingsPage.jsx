@@ -430,6 +430,18 @@ const SettingsPage = () => {
             <section className="card" style={{ marginTop: '3rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
                     <div>
+                        <h2 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '0.25rem' }}>Frequent Items</h2>
+                        <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>Restore items you have previously removed from the quick-add chip grid.</p>
+                    </div>
+                    <button onClick={() => navigate('/settings/frequent-items')} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.25rem' }}>
+                        Manage Hidden Items
+                    </button>
+                </div>
+            </section>
+
+            <section className="card" style={{ marginTop: '3rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+                    <div>
                         <h2 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '0.25rem' }}>Item Aliases</h2>
                         <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>Map generic list names to specific products and manage learned aliases.</p>
                     </div>

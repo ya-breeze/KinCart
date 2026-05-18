@@ -398,7 +398,8 @@ func TestFrequentItems(t *testing.T) {
 
 		var check models.ItemFrequency
 		err := database.DB.First(&check, freq.ID).Error
-		assert.Error(t, err, "row should be deleted")
+		assert.NoError(t, err, "row should still exist (soft-delete)")
+		assert.True(t, check.IsHidden, "row should be hidden")
 	})
 
 	t.Run("DeleteFrequentItem_WrongFamily", func(t *testing.T) {
