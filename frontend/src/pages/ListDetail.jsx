@@ -82,17 +82,18 @@ const ListDetail = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [id]);
 
-    useEffect(() => { setChipsExpanded(false); }, [id]);
+    useEffect(() => { setChipsExpanded(false); setChipsOverflow(false); }, [id]);
 
     useEffect(() => {
         const el = chipsContainerRef.current;
         if (!el) return;
-        const check = () => setChipsOverflow(el.scrollHeight > 64);
-        check();
+        let mounted = true;
+        const check = () => { if (mounted) setChipsOverflow(el.scrollHeight > 64); };
         const ro = new ResizeObserver(check);
+        check();
         ro.observe(el);
-        return () => ro.disconnect();
-    }, [frequentItems]);
+        return () => { mounted = false; ro.disconnect(); };
+    }, [frequentItems, list?.id]);
 
     // ── fetch helpers ──────────────────────────────────────────────────────────
 
