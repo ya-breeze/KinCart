@@ -74,6 +74,7 @@ type ItemFrequency struct {
 	ItemName  string    `gorm:"not null" json:"item_name"`
 	Frequency int       `gorm:"default:1" json:"frequency"`
 	LastPrice float64   `json:"last_price"`
+	IsHidden  bool      `gorm:"default:false" json:"is_hidden"`
 }
 
 type Flyer struct {

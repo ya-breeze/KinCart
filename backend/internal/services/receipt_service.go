@@ -957,7 +957,7 @@ func (s *ReceiptService) updateItemFrequency(tx *gorm.DB, familyID uuid.UUID, na
 				slog.Warn("Failed to create item frequency", "name", name, "error", err)
 			}
 		}
-	} else {
+	} else if !freq.IsHidden {
 		freq.Frequency++
 		freq.LastPrice = price
 		if err := tx.Save(&freq).Error; err != nil {
