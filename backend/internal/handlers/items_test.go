@@ -332,7 +332,9 @@ func frequentItemsRouter(familyID uuid.UUID) *gin.Engine {
 		c.Next()
 	})
 	r.GET("/family/frequent-items", GetFrequentItems)
+	r.GET("/family/frequent-items/hidden", GetHiddenFrequentItems)
 	r.DELETE("/family/frequent-items/:id", DeleteFrequentItem)
+	r.PATCH("/family/frequent-items/:id/restore", RestoreFrequentItem)
 	return r
 }
 
@@ -423,5 +425,171 @@ func TestFrequentItems(t *testing.T) {
 		var check models.ItemFrequency
 		err := database.DB.First(&check, freq.ID).Error
 		assert.NoError(t, err)
+	})
+
+	t.Run("GetFrequentItems_ExcludesHidden", func(t *testing.T) {
+		setupItemTestDBIsolated()
+		family := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "Test Family"}}
+		database.DB.Create(&family)
+
+		database.DB.Create(&models.ItemFrequency{FamilyID: family.ID, ItemName: "visible", Frequency: 3})
+		database.DB.Create(&models.ItemFrequency{FamilyID: family.ID, ItemName: "hidden", Frequency: 5, IsHidden: true})
+
+		req, _ := http.NewRequest(http.MethodGet, "/family/frequent-items", nil)
+		w := httptest.NewRecorder()
+		frequentItemsRouter(family.ID).ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		var result []map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &result)
+		assert.Equal(t, 1, len(result))
+		assert.Equal(t, "visible", result[0]["item_name"])
+	})
+
+	t.Run("GetHiddenFrequentItems_ReturnsHiddenOnly", func(t *testing.T) {
+		setupItemTestDBIsolated()
+		family := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "Test Family"}}
+		database.DB.Create(&family)
+
+		database.DB.Create(&models.ItemFrequency{FamilyID: family.ID, ItemName: "active", Frequency: 3})
+		database.DB.Create(&models.ItemFrequency{FamilyID: family.ID, ItemName: "gone", Frequency: 5, IsHidden: true})
+
+		req, _ := http.NewRequest(http.MethodGet, "/family/frequent-items/hidden", nil)
+		w := httptest.NewRecorder()
+		frequentItemsRouter(family.ID).ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		var result []map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &result)
+		assert.Equal(t, 1, len(result))
+		assert.Equal(t, "gone", result[0]["item_name"])
+	})
+
+	t.Run("GetHiddenFrequentItems_EmptyWhenNoneHidden", func(t *testing.T) {
+		setupItemTestDBIsolated()
+		family := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "Test Family"}}
+		database.DB.Create(&family)
+
+		database.DB.Create(&models.ItemFrequency{FamilyID: family.ID, ItemName: "normal", Frequency: 3})
+
+		req, _ := http.NewRequest(http.MethodGet, "/family/frequent-items/hidden", nil)
+		w := httptest.NewRecorder()
+		frequentItemsRouter(family.ID).ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		var result []map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &result)
+		assert.Equal(t, 0, len(result))
+	})
+
+	t.Run("RestoreFrequentItem_Success", func(t *testing.T) {
+		setupItemTestDBIsolated()
+		family := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "Test Family"}}
+		database.DB.Create(&family)
+
+		freq := models.ItemFrequency{FamilyID: family.ID, ItemName: "mleko", Frequency: 4, IsHidden: true}
+		database.DB.Create(&freq)
+
+		req, _ := http.NewRequest(http.MethodPatch, fmt.Sprintf("/family/frequent-items/%d/restore", freq.ID), nil)
+		w := httptest.NewRecorder()
+		frequentItemsRouter(family.ID).ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNoContent, w.Code)
+
+		var check models.ItemFrequency
+		database.DB.First(&check, freq.ID)
+		assert.False(t, check.IsHidden, "item should be visible again after restore")
+	})
+
+	t.Run("RestoreFrequentItem_WrongFamily", func(t *testing.T) {
+		setupItemTestDBIsolated()
+		familyA := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "Family A"}}
+		familyB := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "Family B"}}
+		database.DB.Create(&familyA)
+		database.DB.Create(&familyB)
+
+		freq := models.ItemFrequency{FamilyID: familyA.ID, ItemName: "syr", Frequency: 3, IsHidden: true}
+		database.DB.Create(&freq)
+
+		req, _ := http.NewRequest(http.MethodPatch, fmt.Sprintf("/family/frequent-items/%d/restore", freq.ID), nil)
+		w := httptest.NewRecorder()
+		frequentItemsRouter(familyB.ID).ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+
+		// item must remain hidden
+		var check models.ItemFrequency
+		database.DB.First(&check, freq.ID)
+		assert.True(t, check.IsHidden)
+	})
+
+	t.Run("HiddenItem_NotResurrectedByAddItem", func(t *testing.T) {
+		setupItemTestDBIsolated()
+		family := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "Test Family"}}
+		database.DB.Create(&family)
+		list := models.ShoppingList{
+			TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID},
+			Title:       "Test List",
+		}
+		database.DB.Create(&list)
+
+		// pre-seed a hidden frequency row
+		freq := models.ItemFrequency{FamilyID: family.ID, ItemName: "Butter", Frequency: 5, IsHidden: true}
+		database.DB.Create(&freq)
+
+		r := gin.New()
+		r.Use(func(c *gin.Context) { c.Set("family_id", family.ID); c.Next() })
+		r.POST("/lists/:id/items", AddItemToList)
+
+		newItem := models.Item{Name: "Butter"}
+		body, _ := json.Marshal(newItem)
+		req, _ := http.NewRequest(http.MethodPost, fmt.Sprintf("/lists/%s/items", list.ID.String()), bytes.NewBuffer(body))
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusCreated, w.Code)
+
+		// frequency row must still be hidden and counter must not have changed
+		var check models.ItemFrequency
+		database.DB.First(&check, freq.ID)
+		assert.True(t, check.IsHidden, "hidden item should not be un-hidden by adding item")
+		assert.Equal(t, 5, check.Frequency, "frequency should not change for hidden item")
+	})
+
+	t.Run("HiddenItem_NotResurrectedByCaseVariant", func(t *testing.T) {
+		setupItemTestDBIsolated()
+		family := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "Test Family"}}
+		database.DB.Create(&family)
+		list := models.ShoppingList{
+			TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID},
+			Title:       "Test List",
+		}
+		database.DB.Create(&list)
+
+		// hidden as "Milk" (capitalized)
+		freq := models.ItemFrequency{FamilyID: family.ID, ItemName: "Milk", Frequency: 3, IsHidden: true}
+		database.DB.Create(&freq)
+
+		r := gin.New()
+		r.Use(func(c *gin.Context) { c.Set("family_id", family.ID); c.Next() })
+		r.POST("/lists/:id/items", AddItemToList)
+
+		// add lowercase variant
+		newItem := models.Item{Name: "milk"}
+		body, _ := json.Marshal(newItem)
+		req, _ := http.NewRequest(http.MethodPost, fmt.Sprintf("/lists/%s/items", list.ID.String()), bytes.NewBuffer(body))
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusCreated, w.Code)
+
+		// original row must remain hidden, no new row created
+		var check models.ItemFrequency
+		database.DB.First(&check, freq.ID)
+		assert.True(t, check.IsHidden, "case variant must not un-hide the original")
+
+		var count int64
+		database.DB.Model(&models.ItemFrequency{}).Where("family_id = ? AND LOWER(item_name) = 'milk'", family.ID).Count(&count)
+		assert.Equal(t, int64(1), count, "must not create a second row for the case variant")
 	})
 }
