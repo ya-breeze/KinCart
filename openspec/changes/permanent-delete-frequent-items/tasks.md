@@ -33,6 +33,6 @@
 ## 7. Testing
 
 - [x] 7.1 Run existing backend tests: `make test` in `backend/` — confirm no regressions
-- [ ] 7.2 Run existing E2E tests against WIP stack: `BASE_URL=<wip-url> npx playwright test --reporter=line` in `e2e/`
+- [x] 7.2 Run existing E2E tests against WIP stack: `BASE_URL=<wip-url> npx playwright test --reporter=line` in `e2e/`
 - [ ] 7.3 Manual smoke test: delete a chip → add same item → confirm chip does not reappear
 - [ ] 7.4 Manual smoke test: navigate to Settings → Frequent Items → restore a hidden item → confirm chip reappears
