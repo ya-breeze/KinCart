@@ -9,6 +9,7 @@ import (
 	"mime/multipart"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -194,6 +195,8 @@ func (s *ReceiptService) ProcessReceipt(ctx context.Context, receiptID uuid.UUID
 		s.db.Model(&receipt).Update("status", "error")
 		return fmt.Errorf("gemini parsing failed: %w", parseErr)
 	}
+
+	normalizePackItems(parsed)
 
 	// 3. Pre-compute item matches outside the transaction (AI call is network I/O)
 	matchPlans := s.buildItemMatches(ctx, receipt.FamilyID, listItems, parsed.Items)
@@ -962,6 +965,34 @@ func (s *ReceiptService) updateItemFrequency(tx *gorm.DB, familyID uuid.UUID, na
 		freq.LastPrice = price
 		if err := tx.Save(&freq).Error; err != nil {
 			slog.Warn("Failed to update item frequency", "name", name, "error", err)
+		}
+	}
+}
+
+// packPattern matches unambiguous multi-pack indicators in item names:
+// "6×150g", "6x150g", "3-pack", "3 pack".
+//
+// Intentionally excluded patterns (handled by the AI prompt instead):
+//   - "4+2" (promo packs): `\d+\+\d+` also matches supplement ratios like "Omega 3+6"
+//   - "10ks" (Czech "kusy" = pieces): also appears in product names like "Magne B6 60ks"
+//     where it denotes capsule count, not a multi-unit pack
+var packPattern = regexp.MustCompile(`(?i)\b\d+\s*[×x]\s*\d+|\b\d+\s*-?\s*pack\b`)
+
+// normalizePackItems collapses multi-pack lines that Gemini may have left with
+// quantity > 1 and a per-unit price. When the item name contains an unambiguous pack
+// indicator and quantity > 1, we treat the whole pack as 1 unit: price = total_price,
+// unit = "pack". TotalPrice is intentionally left unchanged — after normalization the
+// invariant price * quantity == total_price still holds (pack_total * 1 == pack_total).
+func normalizePackItems(parsed *ai.ParsedReceipt) {
+	for i := range parsed.Items {
+		item := &parsed.Items[i]
+		if item.Quantity <= 1 {
+			continue
+		}
+		if packPattern.MatchString(item.Name) && item.TotalPrice > 0 {
+			item.Price = item.TotalPrice
+			item.Quantity = 1
+			item.Unit = "pack"
 		}
 	}
 }

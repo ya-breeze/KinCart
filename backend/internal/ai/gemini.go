@@ -202,11 +202,15 @@ func (c *GeminiClient) ParseReceipt(ctx context.Context, imagePath string, known
 	}
 
 	prompt := fmt.Sprintf(`
-You are a receipt parser. parse the following receipt image.
+You are a receipt parser. Parse the following receipt image.
 Extract the store name, date (YYYY-MM-DD), total amount, and all items.
 For each item, extract the name, quantity, unit, price per unit, and total price.
 If the unit is not explicitly stated but can be inferred (e.g. kg, pieces), use pieces as default or infer from context.
 The context list of known items is: %s. Use this to help match naming conventions, but priority is what's on receipt.
+
+Price rules:
+- Always use the price the customer actually pays — including all taxes (VAT/DPH). Never use pre-tax prices.
+- If a product is sold as a multi-pack (e.g. "6×150g", "3-pack", "4+2", "10ks"), treat the whole pack as 1 unit: set quantity=1 and price=total_price for that line. Do not split packs into individual pieces.
 
 Return strict JSON.
 `, strings.Join(knownItems, ", "))
@@ -250,6 +254,10 @@ For each item, extract the name, quantity, unit, price per unit, and total price
 If the unit is not explicitly stated but can be inferred (e.g. kg, pieces), use pieces as default or infer from context.
 Note: prices may use European decimal notation (comma as decimal separator, e.g. "1,99" means 1.99).
 The context list of known items is: %s. Use this to help match naming conventions, but priority is what's on the receipt.
+
+Price rules:
+- Always use the price the customer actually pays — including all taxes (VAT/DPH). Never use pre-tax prices.
+- If a product is sold as a multi-pack (e.g. "6×150g", "3-pack", "4+2", "10ks"), treat the whole pack as 1 unit: set quantity=1 and price=total_price for that line. Do not split packs into individual pieces.
 
 Receipt text:
 ---
