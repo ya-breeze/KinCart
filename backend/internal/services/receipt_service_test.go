@@ -590,6 +590,94 @@ func TestGetReceiptMatches_AlreadyBoughtIncluded(t *testing.T) {
 	assert.Len(t, resp.UnmatchedPlannedItems, 0, "bought item must not appear in unmatched_planned_items")
 }
 
+// TestNormalizePackItems verifies that multi-pack lines are collapsed to quantity=1.
+func TestNormalizePackItems(t *testing.T) {
+	cases := []struct {
+		name       string
+		itemName   string
+		quantity   float64
+		price      float64
+		totalPrice float64
+		wantQty    float64
+		wantPrice  float64
+		wantUnit   string
+	}{
+		{
+			name:     "6×150g pack collapses",
+			itemName: "Jogurt 6×150g", quantity: 6, price: 14.83, totalPrice: 89.0,
+			wantQty: 1, wantPrice: 89.0, wantUnit: "pack",
+		},
+		{
+			name:     "6x150g (ASCII x) collapses",
+			itemName: "Jogurt 6x150g", quantity: 6, price: 14.83, totalPrice: 89.0,
+			wantQty: 1, wantPrice: 89.0, wantUnit: "pack",
+		},
+		{
+			name:     "3-pack collapses",
+			itemName: "Máslo 3-pack", quantity: 3, price: 30.0, totalPrice: 90.0,
+			wantQty: 1, wantPrice: 90.0, wantUnit: "pack",
+		},
+		{
+			name:     "3 pack (with space) collapses",
+			itemName: "Máslo 3 pack", quantity: 3, price: 30.0, totalPrice: 90.0,
+			wantQty: 1, wantPrice: 90.0, wantUnit: "pack",
+		},
+		{
+			name:     "no pack indicator — unchanged",
+			itemName: "Mléko", quantity: 3, price: 25.0, totalPrice: 75.0,
+			wantQty: 3, wantPrice: 25.0, wantUnit: "pcs",
+		},
+		{
+			name:     "quantity=1 — unchanged even with pack name",
+			itemName: "Jogurt 6×150g", quantity: 1, price: 89.0, totalPrice: 89.0,
+			wantQty: 1, wantPrice: 89.0, wantUnit: "pcs",
+		},
+		{
+			// "4+2" is handled by the AI prompt; the regex intentionally excludes \d+\+\d+
+			// to avoid false-positives on supplement names like "Omega 3+6".
+			name:     "4+2 promo — not collapsed by regex (AI handles it)",
+			itemName: "Pivo 4+2", quantity: 6, price: 20.0, totalPrice: 120.0,
+			wantQty: 6, wantPrice: 20.0, wantUnit: "pcs",
+		},
+		{
+			name:     "Omega 3+6 supplement — not collapsed (false-positive guard)",
+			itemName: "Omega 3+6", quantity: 2, price: 150.0, totalPrice: 300.0,
+			wantQty: 2, wantPrice: 150.0, wantUnit: "pcs",
+		},
+		{
+			// "10ks" is handled by the AI prompt; the regex intentionally excludes \d+ks
+			// to avoid false-positives on pharmacy products like "Magne B6 60ks".
+			name:     "10ks eggs — not collapsed by regex (AI handles it)",
+			itemName: "Vejce 10ks", quantity: 10, price: 3.5, totalPrice: 35.0,
+			wantQty: 10, wantPrice: 3.5, wantUnit: "pcs",
+		},
+		{
+			name:     "Magne B6 60ks — not collapsed (false-positive guard)",
+			itemName: "Magne B6 60ks", quantity: 2, price: 149.5, totalPrice: 299.0,
+			wantQty: 2, wantPrice: 149.5, wantUnit: "pcs",
+		},
+		{
+			name:     "total_price=0 — not collapsed even with pack name",
+			itemName: "Jogurt 6×150g", quantity: 6, price: 14.83, totalPrice: 0,
+			wantQty: 6, wantPrice: 14.83, wantUnit: "pcs",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			parsed := &ai.ParsedReceipt{
+				Items: []ai.ParsedReceiptItem{
+					{Name: tc.itemName, Quantity: tc.quantity, Price: tc.price, TotalPrice: tc.totalPrice, Unit: "pcs"},
+				},
+			}
+			normalizePackItems(parsed)
+			assert.Equal(t, tc.wantQty, parsed.Items[0].Quantity, "quantity")
+			assert.Equal(t, tc.wantPrice, parsed.Items[0].Price, "price")
+			assert.Equal(t, tc.wantUnit, parsed.Items[0].Unit, "unit")
+		})
+	}
+}
+
 // TestConfirmMatch_AlreadyBoughtItem_UpdatesPriceAndLinks verifies that ConfirmMatch correctly
 // links a receipt item to a planned item that was already manually bought (IsBought stays true).
 func TestConfirmMatch_AlreadyBoughtItem_UpdatesPriceAndLinks(t *testing.T) {
