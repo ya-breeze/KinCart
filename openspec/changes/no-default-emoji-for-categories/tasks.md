@@ -20,4 +20,4 @@
 
 - [x] 4.1 Update or add a unit test for `getCategoryEmoji` covering: explicit icon returned as-is, legacy `'package'` sentinel treated as empty, no icon returns `''`, name with matching keyword returns `''`
 - [x] 4.2 Run `make test-frontend` and confirm all tests pass
-- [ ] 4.3 Deploy to WIP stack and run E2E tests: `BASE_URL=<wip-url> npx playwright test --reporter=line`
+- [x] 4.3 Deploy to WIP stack and run E2E tests: `BASE_URL=<wip-url> npx playwright test --reporter=line`
