@@ -34,10 +34,10 @@ The manager can remove an item from the suggestion chips without deleting its hi
 - **WHEN** the manager restores "Milk" from the Frequent Items page
 - **THEN** "Milk" reappears as a chip (if frequency ≥ 2)
 
-### Scenario: Hiding does not increment frequency
+### Scenario: Hiding suppresses frequency increment
 - **GIVEN** an item is marked hidden
 - **WHEN** the same item name is added to a list via quick-add
-- **THEN** the frequency IS incremented (hidden only suppresses the chip display)
+- **THEN** the frequency is NOT incremented (hiding skips both chip display and frequency tracking)
 
 ---
 

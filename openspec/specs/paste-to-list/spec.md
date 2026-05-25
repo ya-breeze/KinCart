@@ -38,8 +38,9 @@ The manager can paste a freeform shopping list and have it parsed into structure
 Parsing uses the Gemini API to handle multilingual, freeform, and retail-style input.
 
 ### Scenario: Handles quantity-first format
-- **GIVEN** input "2 яблока 1.50"
-- **THEN** the parsed item has name="яблока", quantity=2, price=1.50
+- **GIVEN** input "2 яблока"
+- **THEN** the parsed item has name="яблока", quantity=2, unit="pcs"
+- **NOTE** The parse-text API returns name/quantity/unit only; price suggestions come from alias history, not from the input text
 
 ### Scenario: Handles retail promo notation
 - **GIVEN** input "кефир 4+2"
@@ -48,16 +49,12 @@ Parsing uses the Gemini API to handle multilingual, freeform, and retail-style i
 ### Scenario: Graceful degradation without Gemini API key
 - **GIVEN** `GEMINI_API_KEY` is not configured
 - **WHEN** the manager clicks "Parse"
-- **THEN** a 503 error is shown and no items are added
+- **THEN** a fallback regex parser is used and items are returned with 200 (name/quantity/unit extracted by simple rules, no AI)
 
 ---
 
-## Requirement: Text size limits
-
-### Scenario: Oversized input rejected
-- **WHEN** the manager submits text larger than 100 KB
-- **THEN** the server returns 413 and no parsing is attempted
+## Requirement: Input validation
 
 ### Scenario: Empty text rejected
 - **WHEN** the manager submits an empty or whitespace-only string
-- **THEN** an error is shown ("receipt_text is required")
+- **THEN** the server returns 400 and no parsing is attempted

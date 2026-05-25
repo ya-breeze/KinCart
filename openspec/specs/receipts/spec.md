@@ -12,20 +12,17 @@ The manager can upload a receipt after shopping to record actual prices.
 - **THEN** the "Upload Receipt" button is visible
 
 ### Scenario: Upload an image receipt
-- **WHEN** the manager uploads a JPEG, PNG, or WebP image (≤ 10 MB)
+- **WHEN** the manager uploads a JPEG, PNG, WebP, or PDF image
 - **THEN** the file is accepted and processing begins
+- **NOTE** No server-side file size limit is enforced for image/PDF uploads; only `.txt` uploads are capped at 100 KB
 
 ### Scenario: Upload a text receipt
 - **WHEN** the manager uploads a `.txt` file (≤ 100 KB)
 - **THEN** the file is accepted and processing begins
 
-### Scenario: Upload rejected for oversized image
-- **WHEN** the manager uploads an image larger than 10 MB
-- **THEN** an error is shown and the file is not saved
-
-### Scenario: Upload rejected for unsupported file type
-- **WHEN** the manager uploads a `.pdf` or other unsupported format
-- **THEN** an error is shown and the file is not saved
+### Scenario: Upload rejected for oversized text file
+- **WHEN** the manager uploads a `.txt` file larger than 100 KB
+- **THEN** the server returns 413 and the file is not saved
 
 ### Scenario: Processing indicator shown while receipt is being parsed
 - **WHEN** a receipt is uploaded and being processed
@@ -38,7 +35,7 @@ After upload the server parses the receipt and determines a review status.
 
 ### Scenario: Parsed receipt with unmatched items opens match modal
 - **GIVEN** Gemini successfully parses the receipt
-- **AND** some items have no automatic match or planned items remain unmatked
+- **AND** some items have no automatic match or planned items remain unmatched
 - **WHEN** processing completes with status `pending_review`
 - **THEN** the ReceiptMatchModal opens automatically
 
@@ -47,10 +44,10 @@ After upload the server parses the receipt and determines a review status.
 - **WHEN** processing completes with status `parsed`
 - **THEN** the match modal does NOT open; a success toast is shown instead
 
-### Scenario: Receipt queued when Gemini unavailable
+### Scenario: Receipt deferred when Gemini unavailable
 - **GIVEN** `GEMINI_API_KEY` is not set
 - **WHEN** a receipt is uploaded
-- **THEN** status is set to `queued` and a toast informs the manager it will be processed later
+- **THEN** the receipt is saved with DB status `new` and the API response message says "queued"; a toast informs the manager it will be processed later
 
 ---
 
@@ -113,9 +110,9 @@ Confirming a match builds the alias index for future auto-matching.
 ---
 
 ## Requirement: Background receipt processing
-Queued receipts are retried automatically when Gemini becomes available.
+Unprocessed receipts are retried automatically when Gemini becomes available.
 
-### Scenario: Queued receipt processed on next scheduler tick
-- **GIVEN** a receipt has status `queued`
+### Scenario: New receipt processed on next scheduler tick
+- **GIVEN** a receipt has DB status `new` (i.e., was uploaded while Gemini was unavailable)
 - **WHEN** the background job runs (every 10 minutes) and Gemini is available
 - **THEN** the receipt is parsed and its status updated to `pending_review` or `parsed`
