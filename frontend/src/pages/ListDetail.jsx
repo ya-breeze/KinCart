@@ -663,11 +663,12 @@ const ListDetail = () => {
                             const catName = getCategoryName(catId);
                             const catObj  = categories.find(c => c.id === catId) || null;
                             const catItems = groupedItems[catId];
+                            const catEmoji = getCategoryEmoji(catName, catObj?.icon);
                             return (
                                 <div key={catId} style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden', marginBottom: 8, boxShadow: '0 1px 2px rgba(0,0,0,.04)' }}>
                                     {/* Category header */}
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: '#f8fafc' }}>
-                                        <span style={{ fontSize: 15 }}>{getCategoryEmoji(catName, catObj?.icon)}</span>
+                                        {catEmoji && <span style={{ fontSize: 15 }}>{catEmoji}</span>}
                                         <span style={{ fontSize: 12, fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '.04em' }}>{catName}</span>
                                         <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 'auto' }}>{catItems.length}</span>
                                     </div>
@@ -685,7 +686,7 @@ const ListDetail = () => {
                                                 {/* Collapsed row */}
                                                 <div onClick={() => toggleExpand(item)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', cursor: 'pointer' }}>
                                                     <div style={{ width: 36, height: 36, borderRadius: 8, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 19, flexShrink: 0 }}>
-                                                        {getCategoryEmoji(catName, catObj?.icon)}
+                                                        {catEmoji}
                                                     </div>
                                                     <div style={{ flex: 1, minWidth: 0 }}>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
@@ -741,7 +742,7 @@ const ListDetail = () => {
                                                                     background: (edits.category_id ?? item.category_id) === cat.id ? '#eff6ff' : '#fff',
                                                                     color: (edits.category_id ?? item.category_id) === cat.id ? '#1d4ed8' : '#475569',
                                                                 }}>
-                                                                    {getCategoryEmoji(cat.name, cat.icon)} {cat.name}
+                                                                    {[getCategoryEmoji(cat.name, cat.icon), cat.name].filter(Boolean).join(' ')}
                                                                 </button>
                                                             ))}
                                                         </div>
@@ -843,9 +844,11 @@ const ListDetail = () => {
                                     <div style={{ padding: '6px 12px', fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.05em', background: '#f8fafc', display: 'flex', alignItems: 'center', gap: 4 }}>
                                         ✦ From your history
                                     </div>
-                                    {suggestions.slice(0, 3).map((s, i) => (
+                                    {suggestions.slice(0, 3).map((s, i) => {
+                                        const suggestionEmoji = getCategoryEmoji(s.planned_name);
+                                        return (
                                         <button key={i} onMouseDown={() => openDraftFromSuggestion(s)} style={{ width: '100%', padding: '9px 12px', background: '#fff', border: 'none', borderTop: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', textAlign: 'left', minHeight: 'unset' }}>
-                                            <div style={{ width: 32, height: 32, borderRadius: 8, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, flexShrink: 0 }}>{getCategoryEmoji(s.planned_name)}</div>
+                                            {suggestionEmoji && <div style={{ width: 32, height: 32, borderRadius: 8, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, flexShrink: 0 }}>{suggestionEmoji}</div>}
                                             <div style={{ flex: 1, minWidth: 0 }}>
                                                 <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{s.planned_name}</div>
                                                 {s.variants?.[0] && (
@@ -856,7 +859,8 @@ const ListDetail = () => {
                                                 )}
                                             </div>
                                         </button>
-                                    ))}
+                                        );
+                                    })}
                                     <button onMouseDown={() => openDraftNew()} style={{ width: '100%', padding: '9px 12px', background: '#f8fafc', border: 'none', borderTop: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', textAlign: 'left', color: '#2563eb', fontWeight: 600, fontSize: 13, minHeight: 'unset' }}>
                                         <Plus size={14} /> Add "{query}" as new item
                                     </button>

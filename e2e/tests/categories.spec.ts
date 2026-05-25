@@ -73,7 +73,7 @@ test.describe('Category emoji icons', () => {
         const name = `EditMe ${ts}`;
         const emoji = '🥩';
 
-        // Create a category via API (no icon — will default to keyword fallback)
+        // Create a category via API with no icon
         const createResp = await page.request.post('/api/categories', {
             data: { name, icon: '', sort_order: 999 },
             headers: { 'Content-Type': 'application/json' },
@@ -102,9 +102,9 @@ test.describe('Category emoji icons', () => {
     });
 
     // -----------------------------------------------------------------------
-    // Test 3: Category with blank emoji falls back to keyword map
+    // Test 3: Category with blank emoji shows no emoji (no keyword fallback)
     // -----------------------------------------------------------------------
-    test('blank emoji falls back to keyword-based icon', async ({ page }) => {
+    test('blank emoji shows no emoji (no keyword fallback)', async ({ page }) => {
         const ts = Date.now();
         const name = `Dairy ${ts}`;
 
@@ -114,10 +114,11 @@ test.describe('Category emoji icons', () => {
         await page.locator('input[placeholder="New category..."]').fill(name);
         await page.click('button[title="Add a new category"]');
 
-        // The keyword map maps "dairy" → 🥛
+        // Row should show only the name, with no emoji prefix
         const row = page.locator('.card', { hasText: name });
         await expect(row).toBeVisible({ timeout: 5000 });
-        await expect(row.locator(`span:has-text("🥛 ${name}")`)).toBeVisible();
+        const nameSpan = row.locator('span').filter({ hasText: name }).first();
+        await expect(nameSpan).toHaveText(name);
 
         // Cleanup
         const resp = await page.request.get('/api/categories');
@@ -154,11 +155,55 @@ test.describe('Category emoji icons', () => {
         await expect(page.locator('button:has-text("Add to List")').last()).toBeVisible({ timeout: 5000 });
         await expect(page.locator('button').filter({ hasText: `${emoji} ${catName}` })).toBeVisible({ timeout: 5000 });
 
+        // Select the category — header emoji box should appear with the emoji
+        await page.locator('button').filter({ hasText: `${emoji} ${catName}` }).click();
+        await expect(page.locator('[data-testid="sheet-header-emoji"]')).toBeVisible({ timeout: 5000 });
+        await expect(page.locator('[data-testid="sheet-header-emoji"]')).toHaveText(emoji);
+
         // Cleanup
         await page.locator('button').filter({ hasText: 'Cancel' }).click();
         const resp = await page.request.get('/api/categories');
         const cats = await resp.json();
         const cat = cats.find((c: any) => c.name === catName);
         if (cat) await deleteCategoryViaAPI(page, cat.id);
+    });
+
+    // -----------------------------------------------------------------------
+    // Test 5: Category without emoji shows clean chip in ConfirmSheet (no 📦)
+    // -----------------------------------------------------------------------
+    test('no-emoji category shows name only in ConfirmSheet category chips', async ({ page }) => {
+        const ts = Date.now();
+        const catName = `NoEmoji ${ts}`;
+
+        // Create category with no emoji via API
+        const createResp = await page.request.post('/api/categories', {
+            data: { name: catName, icon: '', sort_order: 999 },
+            headers: { 'Content-Type': 'application/json' },
+        });
+        expect(createResp.ok()).toBeTruthy();
+        const cat = await createResp.json();
+
+        // Open a list and trigger ConfirmSheet
+        await createList(page, `NoEmoji Test ${ts}`);
+        const searchInput = page.locator('input[placeholder="Add item — type, paste, or pick a chip…"]');
+        await expect(searchInput).toBeVisible({ timeout: 5000 });
+        await searchInput.fill('TestItem');
+        await searchInput.press('Enter');
+
+        await expect(page.locator('button:has-text("Add to List")').last()).toBeVisible({ timeout: 5000 });
+
+        // Header emoji box should be absent (no category selected, no draft emoji)
+        await expect(page.locator('[data-testid="sheet-header-emoji"]')).not.toBeAttached();
+
+        // Chip should show the category name with no emoji prefix
+        const chip = page.locator('button').filter({ hasText: catName });
+        await expect(chip).toBeVisible({ timeout: 5000 });
+        await expect(chip).not.toContainText('📦');
+        // Name should appear without a leading space
+        await expect(chip).toHaveText(catName);
+
+        // Cleanup
+        await page.locator('button').filter({ hasText: 'Cancel' }).click();
+        await deleteCategoryViaAPI(page, cat.id);
     });
 });

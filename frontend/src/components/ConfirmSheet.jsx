@@ -24,7 +24,7 @@ const ConfirmSheet = ({ draft, onChange, onCancel, onConfirm, categories, curren
     const selectedCat = categories.find(c => c.id === draft.category_id) || null;
     const headerEmoji = selectedCat
         ? getCategoryEmoji(selectedCat.name, selectedCat.icon)
-        : (draft.emoji || '📦');
+        : (draft.emoji || '');
 
     return (
         <div
@@ -55,9 +55,9 @@ const ConfirmSheet = ({ draft, onChange, onCancel, onConfirm, categories, curren
 
                 {/* header: emoji + name + source + close */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-                    <div style={{ width: 44, height: 44, borderRadius: 12, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>
+                    {headerEmoji && <div data-testid="sheet-header-emoji" style={{ width: 44, height: 44, borderRadius: 12, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>
                         {headerEmoji}
-                    </div>
+                    </div>}
                     <div style={{ flex: 1, minWidth: 0 }}>
                         <input
                             data-testid="sheet-name-input"
@@ -165,7 +165,7 @@ const ConfirmSheet = ({ draft, onChange, onCancel, onConfirm, categories, curren
                             color: draft.category_id === cat.id ? '#1d4ed8' : '#475569',
                             display: 'flex', alignItems: 'center', gap: 4,
                         }}>
-                            {getCategoryEmoji(cat.name, cat.icon)} {cat.name}
+                            {[getCategoryEmoji(cat.name, cat.icon), cat.name].filter(Boolean).join(' ')}
                         </button>
                     ))}
                 </div>

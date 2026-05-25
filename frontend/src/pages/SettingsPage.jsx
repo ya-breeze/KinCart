@@ -373,7 +373,7 @@ const SettingsPage = () => {
                                     </div>
                                 </div>
                             ) : (
-                                <span style={{ flex: 1, fontWeight: 600 }}>{getCategoryEmoji(cat.name, cat.icon)} {cat.name}</span>
+                                <span style={{ flex: 1, fontWeight: 600 }}>{[getCategoryEmoji(cat.name, cat.icon), cat.name].filter(Boolean).join(' ')}</span>
                             )}
 
                             {editingCat === cat.id ? (
