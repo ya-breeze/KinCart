@@ -24,7 +24,7 @@ const ConfirmSheet = ({ draft, onChange, onCancel, onConfirm, categories, curren
     const selectedCat = categories.find(c => c.id === draft.category_id) || null;
     const headerEmoji = selectedCat
         ? getCategoryEmoji(selectedCat.name, selectedCat.icon)
-        : (draft.emoji || '📦');
+        : (draft.emoji || '');
 
     return (
         <div
@@ -165,7 +165,7 @@ const ConfirmSheet = ({ draft, onChange, onCancel, onConfirm, categories, curren
                             color: draft.category_id === cat.id ? '#1d4ed8' : '#475569',
                             display: 'flex', alignItems: 'center', gap: 4,
                         }}>
-                            {getCategoryEmoji(cat.name, cat.icon)} {cat.name}
+                            {[getCategoryEmoji(cat.name, cat.icon), cat.name].filter(Boolean).join(' ')}
                         </button>
                     ))}
                 </div>

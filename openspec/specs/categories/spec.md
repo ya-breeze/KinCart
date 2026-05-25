@@ -7,9 +7,9 @@ The manager can create, edit, reorder, and delete categories from the Settings p
 - **WHEN** the manager submits a new category with a name and emoji
 - **THEN** the category appears in the category list with the assigned emoji and name
 
-### Scenario: Create category without emoji falls back to keyword icon
+### Scenario: Create category without emoji shows no emoji
 - **GIVEN** the manager creates a category named "Dairy" without selecting an emoji
-- **THEN** the frontend displays a default emoji (🥛) based on keyword matching
+- **THEN** the frontend displays the category name only, with no emoji
 
 ### Scenario: Edit category name
 - **WHEN** the manager changes a category's name

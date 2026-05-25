@@ -102,9 +102,9 @@ test.describe('Category emoji icons', () => {
     });
 
     // -----------------------------------------------------------------------
-    // Test 3: Category with blank emoji falls back to keyword map
+    // Test 3: Category with blank emoji shows no emoji (no keyword fallback)
     // -----------------------------------------------------------------------
-    test('blank emoji falls back to keyword-based icon', async ({ page }) => {
+    test('blank emoji shows no emoji (no keyword fallback)', async ({ page }) => {
         const ts = Date.now();
         const name = `Dairy ${ts}`;
 
@@ -114,10 +114,12 @@ test.describe('Category emoji icons', () => {
         await page.locator('input[placeholder="New category..."]').fill(name);
         await page.click('button[title="Add a new category"]');
 
-        // The keyword map maps "dairy" → 🥛
+        // Row should show only the name, with no emoji prefix
         const row = page.locator('.card', { hasText: name });
         await expect(row).toBeVisible({ timeout: 5000 });
-        await expect(row.locator(`span:has-text("🥛 ${name}")`)).toBeVisible();
+        const nameSpan = row.locator('span').filter({ hasText: name }).first();
+        await expect(nameSpan).toBeVisible();
+        await expect(nameSpan).not.toContainText('🥛');
 
         // Cleanup
         const resp = await page.request.get('/api/categories');
