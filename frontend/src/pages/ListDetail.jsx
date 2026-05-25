@@ -844,9 +844,11 @@ const ListDetail = () => {
                                     <div style={{ padding: '6px 12px', fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.05em', background: '#f8fafc', display: 'flex', alignItems: 'center', gap: 4 }}>
                                         ✦ From your history
                                     </div>
-                                    {suggestions.slice(0, 3).map((s, i) => (
+                                    {suggestions.slice(0, 3).map((s, i) => {
+                                        const suggestionEmoji = getCategoryEmoji(s.planned_name);
+                                        return (
                                         <button key={i} onMouseDown={() => openDraftFromSuggestion(s)} style={{ width: '100%', padding: '9px 12px', background: '#fff', border: 'none', borderTop: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', textAlign: 'left', minHeight: 'unset' }}>
-                                            <div style={{ width: 32, height: 32, borderRadius: 8, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, flexShrink: 0 }}>{getCategoryEmoji(s.planned_name)}</div>
+                                            {suggestionEmoji && <div style={{ width: 32, height: 32, borderRadius: 8, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, flexShrink: 0 }}>{suggestionEmoji}</div>}
                                             <div style={{ flex: 1, minWidth: 0 }}>
                                                 <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{s.planned_name}</div>
                                                 {s.variants?.[0] && (
@@ -857,7 +859,8 @@ const ListDetail = () => {
                                                 )}
                                             </div>
                                         </button>
-                                    ))}
+                                        );
+                                    })}
                                     <button onMouseDown={() => openDraftNew()} style={{ width: '100%', padding: '9px 12px', background: '#f8fafc', border: 'none', borderTop: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', textAlign: 'left', color: '#2563eb', fontWeight: 600, fontSize: 13, minHeight: 'unset' }}>
                                         <Plus size={14} /> Add "{query}" as new item
                                     </button>

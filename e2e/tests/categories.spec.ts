@@ -73,7 +73,7 @@ test.describe('Category emoji icons', () => {
         const name = `EditMe ${ts}`;
         const emoji = '🥩';
 
-        // Create a category via API (no icon — will default to keyword fallback)
+        // Create a category via API with no icon
         const createResp = await page.request.post('/api/categories', {
             data: { name, icon: '', sort_order: 999 },
             headers: { 'Content-Type': 'application/json' },
@@ -118,8 +118,7 @@ test.describe('Category emoji icons', () => {
         const row = page.locator('.card', { hasText: name });
         await expect(row).toBeVisible({ timeout: 5000 });
         const nameSpan = row.locator('span').filter({ hasText: name }).first();
-        await expect(nameSpan).toBeVisible();
-        await expect(nameSpan).not.toContainText('🥛');
+        await expect(nameSpan).toHaveText(name);
 
         // Cleanup
         const resp = await page.request.get('/api/categories');

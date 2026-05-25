@@ -55,9 +55,9 @@ const ConfirmSheet = ({ draft, onChange, onCancel, onConfirm, categories, curren
 
                 {/* header: emoji + name + source + close */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-                    <div style={{ width: 44, height: 44, borderRadius: 12, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>
+                    {headerEmoji && <div style={{ width: 44, height: 44, borderRadius: 12, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>
                         {headerEmoji}
-                    </div>
+                    </div>}
                     <div style={{ flex: 1, minWidth: 0 }}>
                         <input
                             data-testid="sheet-name-input"
