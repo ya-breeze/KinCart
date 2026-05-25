@@ -163,4 +163,40 @@ test.describe('Category emoji icons', () => {
         const cat = cats.find((c: any) => c.name === catName);
         if (cat) await deleteCategoryViaAPI(page, cat.id);
     });
+
+    // -----------------------------------------------------------------------
+    // Test 5: Category without emoji shows clean chip in ConfirmSheet (no 📦)
+    // -----------------------------------------------------------------------
+    test('no-emoji category shows name only in ConfirmSheet category chips', async ({ page }) => {
+        const ts = Date.now();
+        const catName = `NoEmoji ${ts}`;
+
+        // Create category with no emoji via API
+        const createResp = await page.request.post('/api/categories', {
+            data: { name: catName, icon: '', sort_order: 999 },
+            headers: { 'Content-Type': 'application/json' },
+        });
+        expect(createResp.ok()).toBeTruthy();
+        const cat = await createResp.json();
+
+        // Open a list and trigger ConfirmSheet
+        await createList(page, `NoEmoji Test ${ts}`);
+        const searchInput = page.locator('input[placeholder="Add item — type, paste, or pick a chip…"]');
+        await expect(searchInput).toBeVisible({ timeout: 5000 });
+        await searchInput.fill('TestItem');
+        await searchInput.press('Enter');
+
+        await expect(page.locator('button:has-text("Add to List")').last()).toBeVisible({ timeout: 5000 });
+
+        // Chip should show the category name with no emoji prefix
+        const chip = page.locator('button').filter({ hasText: catName });
+        await expect(chip).toBeVisible({ timeout: 5000 });
+        await expect(chip).not.toContainText('📦');
+        // Name should appear without a leading space
+        await expect(chip).toHaveText(catName);
+
+        // Cleanup
+        await page.locator('button').filter({ hasText: 'Cancel' }).click();
+        await deleteCategoryViaAPI(page, cat.id);
+    });
 });
