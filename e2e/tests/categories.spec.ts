@@ -155,6 +155,11 @@ test.describe('Category emoji icons', () => {
         await expect(page.locator('button:has-text("Add to List")').last()).toBeVisible({ timeout: 5000 });
         await expect(page.locator('button').filter({ hasText: `${emoji} ${catName}` })).toBeVisible({ timeout: 5000 });
 
+        // Select the category — header emoji box should appear with the emoji
+        await page.locator('button').filter({ hasText: `${emoji} ${catName}` }).click();
+        await expect(page.locator('[data-testid="sheet-header-emoji"]')).toBeVisible({ timeout: 5000 });
+        await expect(page.locator('[data-testid="sheet-header-emoji"]')).toHaveText(emoji);
+
         // Cleanup
         await page.locator('button').filter({ hasText: 'Cancel' }).click();
         const resp = await page.request.get('/api/categories');
@@ -186,6 +191,9 @@ test.describe('Category emoji icons', () => {
         await searchInput.press('Enter');
 
         await expect(page.locator('button:has-text("Add to List")').last()).toBeVisible({ timeout: 5000 });
+
+        // Header emoji box should be absent (no category selected, no draft emoji)
+        await expect(page.locator('[data-testid="sheet-header-emoji"]')).not.toBeAttached();
 
         // Chip should show the category name with no emoji prefix
         const chip = page.locator('button').filter({ hasText: catName });
