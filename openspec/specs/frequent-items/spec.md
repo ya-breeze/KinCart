@@ -19,6 +19,10 @@ Every time an item is added to a list its frequency count is incremented.
 - **GIVEN** "Milk" has frequency 10 and "Eggs" has frequency 3
 - **THEN** "Milk" chip appears before "Eggs" chip
 
+### Scenario: Chip list is capped at 10 items
+- **GIVEN** more than 10 items have frequency ≥ 2
+- **THEN** only the top 10 by frequency are returned by the API and shown as chips
+
 ---
 
 ## Requirement: Hide and restore frequent items
@@ -100,4 +104,4 @@ Typing in the quick-add bar triggers autocomplete from alias history.
 ### Scenario: Autocomplete returns matching planned names
 - **GIVEN** aliases exist for "Milk" and "Mléko"
 - **WHEN** the manager types "ml"
-- **THEN** "Mléko" appears in autocomplete suggestions (case-insensitive)
+- **THEN** "Mléko" appears in autocomplete suggestions (case-insensitive prefix match: returns items whose planned_name starts with the query, not contains)

@@ -34,10 +34,10 @@ A list moves through three statuses: `preparing` → `ready for shopping` → `c
 - **WHEN** a list's status is changed to `completed`
 - **THEN** the server sets `completed_at` to the current timestamp automatically
 
-### Scenario: CompletedAt is preserved when cycling back
+### Scenario: CompletedAt is reset on re-completion
 - **GIVEN** a list with status `completed` and a `completed_at` timestamp
 - **WHEN** the status is changed to `preparing` and then back to `completed`
-- **THEN** `completed_at` is updated to the new completion time
+- **THEN** `completed_at` is set to the new completion time (the old value is cleared when the status leaves `completed`)
 
 ---
 

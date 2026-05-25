@@ -74,7 +74,8 @@ The manager reviews AI-suggested item matches before they are applied.
 
 ### Scenario: Receipt item can be dismissed
 - **WHEN** the manager dismisses a receipt item
-- **THEN** it is marked as "extra" (not on the planned list) and no planned item is created
+- **THEN** its `match_status` is set to `"dismissed"` and no planned item is created
+- **NOTE** `is_extra` is a separate computed field: it is true for unmatched items (`match_status="unmatched"`) that also have no AI suggestions. Dismissed ≠ extra.
 
 ### Scenario: Confirm button disabled until all items have a decision
 - **GIVEN** at least one receipt item is still unmatched and undismissed

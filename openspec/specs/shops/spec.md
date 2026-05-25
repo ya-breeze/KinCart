@@ -15,10 +15,11 @@ The manager can create, rename, and delete shops from the Settings page.
 - **WHEN** the manager deletes a shop
 - **THEN** the shop is removed along with all its ShopCategoryOrder records
 
-### Scenario: Delete shop does not affect aliases
+### Scenario: Delete shop does not affect aliases (known gap)
 - **GIVEN** aliases reference the deleted shop via shop_id
 - **WHEN** the shop is deleted
-- **THEN** those aliases remain but their shop reference becomes null (shop-agnostic)
+- **THEN** those aliases remain in the DB but their shop_id now points to a deleted record
+- **NOTE** The delete handler only removes ShopCategoryOrder rows; it does NOT null-out alias shop_id references. Aliases effectively become shop-agnostic in practice (shop lookup will return nothing) but the FK is left dangling.
 
 ---
 

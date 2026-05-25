@@ -52,8 +52,12 @@ Each item can carry metadata beyond its name.
 - **WHEN** an item is added without specifying quantity or unit
 - **THEN** it is created with quantity = 1 and unit = "pcs"
 
-### Scenario: Valid unit values
-- **THEN** the unit dropdown offers: pcs, kg, g, 100g, l, ml, pack
+### Scenario: Valid unit values — quick-add (ConfirmSheet)
+- **THEN** the ConfirmSheet unit dropdown offers: pcs, g, kg, ml, L, pack
+
+### Scenario: Valid unit values — inline edit (ListDetail)
+- **THEN** the inline item-edit unit dropdown offers: pcs, kg, g, 100g, l, pack
+- **NOTE** The two dropdowns have different sets: ConfirmSheet has ml/L but not 100g; inline edit has 100g but not ml
 
 ### Scenario: Item can be marked urgent
 - **WHEN** the manager marks an item as urgent

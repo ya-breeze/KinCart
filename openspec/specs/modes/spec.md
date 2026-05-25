@@ -53,13 +53,19 @@ Shopper mode provides a focused, read-only view optimized for in-store use.
 - **GIVEN** the user is in Shopper mode
 - **THEN** item edit and delete controls are NOT visible
 
-### Scenario: Shopper cannot upload receipts
-- **GIVEN** the user is in Shopper mode
-- **THEN** the "Upload Receipt" button is NOT visible
+### Scenario: Shopper can see the Upload Receipt button (known gap)
+- **GIVEN** the user is in Shopper mode on a list detail page
+- **THEN** the "Upload Receipt" button IS visible (no manager-only guard in current code)
+- **NOTE** This is a known UI gap — the intent is that receipt upload is a Manager task, but the button is not currently hidden in Shopper mode
 
 ### Scenario: Shopper can check off items
 - **GIVEN** the user is in Shopper mode on a list detail page
 - **THEN** item checkboxes are active and checking them updates `is_bought`
+
+### Scenario: Shopper can complete a list
+- **GIVEN** the user is in Shopper mode and a list has status `ready for shopping`
+- **WHEN** the shopper clicks "Complete Shopping"
+- **THEN** the list status is set to `completed` and the shopper is returned to the Dashboard
 
 ### Scenario: Shopper sees items sorted by aisle order when shop is selected
 - **GIVEN** the user is in Shopper mode and a shop is selected
