@@ -15,8 +15,8 @@
 
 ## 3. Frontend — graceful degradation
 
-- [ ] 3.1 In the flyer item card component, pass `PhotoURL` as a fallback src to `LazyImage` when `LocalPhotoPath` is empty
-- [ ] 3.2 Verify `LazyImage` already handles load errors with placeholder (no additional change needed if so)
+- [ ] 3.1 In the flyer item card component, ensure no image src is passed to `LazyImage` when `LocalPhotoPath` is empty (do not fall back to `PhotoURL`)
+- [ ] 3.2 Verify `LazyImage` renders the placeholder when src is absent or empty (no additional change needed if so)
 - [ ] 3.3 Visually confirm: card with expired image shows placeholder without broken image indicator
 
 ## 4. Verification

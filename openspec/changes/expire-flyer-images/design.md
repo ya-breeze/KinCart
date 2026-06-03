@@ -15,11 +15,11 @@ Flyers are weekly promotions. Once a flyer ends, its images have no operational 
 - Delete local image files for flyers that ended more than 30 days ago
 - Clear `FlyerPage.LocalPath` and `FlyerItem.LocalPhotoPath` in DB after deletion
 - Run cleanup before each daily backup so backups shrink immediately
-- Degrade gracefully in the UI: fall back to `PhotoURL`, then placeholder
+- Degrade gracefully in the UI: show placeholder when local image is absent
 
 **Non-Goals:**
 - Deleting DB records (flyers, pages, items, prices, dates are preserved forever)
-- Clearing `FlyerItem.PhotoURL` (remote URL stays as fallback)
+- Clearing `FlyerItem.PhotoURL` (remote URL is preserved but not used as a UI fallback)
 - Changing backup retention count or schedule
 - Cleaning up files not tracked by DB records (orphan sweep is a separate concern)
 
@@ -61,11 +61,13 @@ If a file is already missing, log a warning and proceed (idempotent).
 
 ---
 
-### D4: UI graceful degradation — fall back to `PhotoURL`, then placeholder
+### D4: UI graceful degradation — placeholder only, no PhotoURL fallback
 
-**Chosen:** The `LazyImage` component already handles load errors. We need to ensure the flyer card passes `photoURL` as a fallback `src` when `localPhotoPath` is absent. If both are absent, the existing placeholder renders.
+**Chosen:** When `LocalPhotoPath` is empty, the flyer card shows the existing placeholder image. `PhotoURL` is not used as a fallback src.
 
-**Alternative considered:** Hide the image slot entirely for expired items. Rejected — the card layout is cleaner with a consistent placeholder than with a shifting layout.
+**Rationale:** `PhotoURL` points to a retailer's CDN that may rotate or expire independently. Relying on it would introduce unpredictable image availability. A consistent placeholder is simpler and more reliable.
+
+**Alternative considered:** Fall back to `PhotoURL` before showing placeholder. Rejected — adds complexity and depends on third-party URL stability.
 
 ## Risks / Trade-offs
 

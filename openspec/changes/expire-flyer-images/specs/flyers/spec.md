@@ -10,15 +10,8 @@ The manager can browse current and upcoming store deals on the Flyers page.
 
 #### Scenario: Item card shows placeholder when local image is gone
 - **GIVEN** a flyer item's `LocalPhotoPath` has been cleared by the expiry cleanup
-- **AND** `PhotoURL` is also absent or unavailable
 - **WHEN** the manager views that item's card
-- **THEN** a placeholder image is displayed (no broken image indicator)
-
-#### Scenario: Item card falls back to remote PhotoURL
-- **GIVEN** a flyer item's `LocalPhotoPath` has been cleared by the expiry cleanup
-- **AND** `PhotoURL` is set on the item
-- **WHEN** the manager views that item's card
-- **THEN** the card image loads from `PhotoURL`
+- **THEN** a placeholder image is displayed (no broken image indicator, no fallback to `PhotoURL`)
 
 #### Scenario: Filter by shop
 - **WHEN** the manager selects a shop from the shop dropdown filter

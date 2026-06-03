@@ -10,7 +10,7 @@ Flyer image files (cropped item crops in `flyer_items/` and raw page downloads i
 - For each eligible flyer:
   - All `FlyerPage.LocalPath` files on disk are deleted; `LocalPath` is cleared in DB
   - All `FlyerItem.LocalPhotoPath` files on disk are deleted; `LocalPhotoPath` is cleared in DB
-- `FlyerItem.PhotoURL` (remote shop URL) is **preserved** — no change
+- `FlyerItem.PhotoURL` (remote shop URL) is **preserved** — no change (not used as fallback)
 - All DB records (flyers, pages, items, prices, dates) are fully preserved
 
 ## Capabilities
@@ -25,5 +25,5 @@ Flyer image files (cropped item crops in `flyer_items/` and raw page downloads i
 
 - `backend/internal/backup/backup.go` — add cleanup step before archive creation
 - `backend/internal/models/models.go` — no structural changes; `LocalPhotoPath` and `LocalPath` fields already nullable-equivalent (empty string = no file)
-- `frontend/src/` — `LazyImage` component and flyer card must handle missing local images gracefully (fall back to `PhotoURL` or show placeholder)
+- `frontend/src/` — flyer card must show a placeholder when `LocalPhotoPath` is empty (no fallback to `PhotoURL`)
 - Disk: immediate reduction of ~7 GB in live data and ~79 GB in backup storage once old backups cycle out
