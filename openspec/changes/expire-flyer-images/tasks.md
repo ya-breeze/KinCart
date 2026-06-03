@@ -17,11 +17,11 @@
 
 - [x] 3.1 In the flyer item card component, ensure no image src is passed to `LazyImage` when `LocalPhotoPath` is empty (do not fall back to `PhotoURL`)
 - [x] 3.2 Verify `LazyImage` renders the placeholder when src is absent or empty (no additional change needed if so)
-- [ ] 3.3 Visually confirm: card with expired image shows placeholder without broken image indicator
+- [x] 3.3 Visually confirm: card with expired image shows placeholder without broken image indicator
 
 ## 4. Verification
 
-- [ ] 4.1 Deploy to WIP stack and confirm cleanup runs on backup trigger (check logs)
-- [ ] 4.2 Confirm DB records (flyer, pages, items) remain after cleanup
-- [ ] 4.3 Confirm backup archive size reflects freed space
-- [ ] 4.4 Confirm flyer cards render correctly for items with cleared `LocalPhotoPath`
+- [x] 4.1 Deploy to WIP stack and confirm cleanup runs on backup trigger (check logs)
+- [x] 4.2 Confirm DB records (flyer, pages, items) remain after cleanup
+- [x] 4.3 Confirm backup archive size reflects freed space
+- [x] 4.4 Confirm flyer cards render correctly for items with cleared `LocalPhotoPath`
