@@ -6,7 +6,12 @@ The manager can browse current and upcoming store deals on the Flyers page.
 ### Scenario: Flyer items page shows a card grid
 - **GIVEN** flyer data has been parsed and stored
 - **WHEN** the manager opens the Flyers page
-- **THEN** items are displayed as cards with: photo, name, price, original price (if discounted), shop name, and valid date range
+- **THEN** items are displayed as cards with: photo (or placeholder if image expired), name, price, original price (if discounted), shop name, and valid date range
+
+### Scenario: Item card shows placeholder when local image is gone
+- **GIVEN** a flyer item's `LocalPhotoPath` has been cleared by the expiry cleanup
+- **WHEN** the manager views that item's card
+- **THEN** a placeholder image is displayed (no broken image indicator, no fallback to `PhotoURL`)
 
 ### Scenario: Filter by shop
 - **WHEN** the manager selects a shop from the shop dropdown filter

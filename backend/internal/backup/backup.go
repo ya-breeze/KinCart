@@ -16,7 +16,10 @@ import (
 	"strings"
 	"time"
 
+	"kincart/internal/models"
+
 	_ "github.com/mattn/go-sqlite3" // register sqlite3 driver for VACUUM INTO
+	"gorm.io/gorm"
 )
 
 const (
@@ -32,6 +35,7 @@ const (
 // Task creates daily .tar.gz backups of the database, uploads, and flyer items.
 type Task struct {
 	logger         *slog.Logger
+	db             *gorm.DB
 	dbPath         string
 	uploadsPath    string
 	flyerItemsPath string
@@ -40,7 +44,7 @@ type Task struct {
 	maxCount       int
 }
 
-func NewTask(logger *slog.Logger, dbPath, uploadsPath, flyerItemsPath, dataPath string) *Task {
+func NewTask(logger *slog.Logger, db *gorm.DB, dbPath, uploadsPath, flyerItemsPath, dataPath string) *Task {
 	interval := defaultInterval
 	if v := os.Getenv("KINCART_BACKUP_INTERVAL"); v != "" {
 		if d, err := time.ParseDuration(v); err == nil {
@@ -59,6 +63,7 @@ func NewTask(logger *slog.Logger, dbPath, uploadsPath, flyerItemsPath, dataPath 
 
 	return &Task{
 		logger:         logger,
+		db:             db,
 		dbPath:         dbPath,
 		uploadsPath:    uploadsPath,
 		flyerItemsPath: flyerItemsPath,
@@ -90,6 +95,84 @@ func (t *Task) Start(ctx context.Context) {
 	}()
 }
 
+// cleanupExpiredFlyerImages deletes local image files for flyers that expired
+// more than 30 days ago and clears the corresponding DB path columns.
+// Effective expiry = EndDate if set (non-zero), else CreatedAt. Only DB paths
+// for successfully deleted files are cleared — permission errors are logged and
+// retried on the next run.
+func (t *Task) cleanupExpiredFlyerImages() {
+	if t.db == nil {
+		return
+	}
+
+	threshold := time.Now().Add(-30 * 24 * time.Hour)
+	// time.Time{} is Go's zero value (year 0001), which is how GORM stores an
+	// unset EndDate in SQLite. Flyers with EndDate == zero fall back to CreatedAt.
+	zeroTime := time.Time{}
+
+	var flyers []models.Flyer
+	if err := t.db.Where(
+		"(end_date > ? AND end_date < ?) OR (end_date <= ? AND created_at < ?)",
+		zeroTime, threshold, zeroTime, threshold,
+	).Find(&flyers).Error; err != nil {
+		t.logger.Error("cleanup: failed to query eligible flyers", "error", err)
+		return
+	}
+
+	if len(flyers) == 0 {
+		t.logger.Info("cleanup: no expired flyers eligible for image cleanup")
+		return
+	}
+
+	t.logger.Info("cleanup: starting image expiry", "flyers", len(flyers))
+
+	for _, flyer := range flyers {
+		// --- FlyerPage source files ---
+		var pages []models.FlyerPage
+		if err := t.db.Where("flyer_id = ? AND local_path != ''", flyer.ID).Find(&pages).Error; err != nil {
+			t.logger.Error("cleanup: failed to query pages", "flyer_id", flyer.ID, "error", err)
+		} else {
+			var clearedPageIDs []uint
+			for _, page := range pages {
+				if err := os.Remove(page.LocalPath); err != nil && !os.IsNotExist(err) {
+					t.logger.Warn("cleanup: failed to delete page file", "path", page.LocalPath, "error", err)
+					continue
+				}
+				clearedPageIDs = append(clearedPageIDs, page.ID)
+			}
+			if len(clearedPageIDs) > 0 {
+				if err := t.db.Model(&models.FlyerPage{}).Where("id IN ?", clearedPageIDs).Update("local_path", "").Error; err != nil {
+					t.logger.Error("cleanup: failed to clear page paths in DB", "flyer_id", flyer.ID, "error", err)
+				}
+			}
+		}
+
+		// --- FlyerItem crop files ---
+		var items []models.FlyerItem
+		if err := t.db.Unscoped().Where("flyer_id = ? AND local_photo_path != ''", flyer.ID).Select("id", "local_photo_path").Find(&items).Error; err != nil {
+			t.logger.Error("cleanup: failed to query items", "flyer_id", flyer.ID, "error", err)
+		} else {
+			var clearedItemIDs []uint
+			for _, item := range items {
+				if err := os.Remove(item.LocalPhotoPath); err != nil && !os.IsNotExist(err) {
+					t.logger.Warn("cleanup: failed to delete item file", "path", item.LocalPhotoPath, "error", err)
+					continue
+				}
+				clearedItemIDs = append(clearedItemIDs, item.ID)
+			}
+			if len(clearedItemIDs) > 0 {
+				if err := t.db.Unscoped().Model(&models.FlyerItem{}).Where("id IN ?", clearedItemIDs).Update("local_photo_path", "").Error; err != nil {
+					t.logger.Error("cleanup: failed to clear item paths in DB", "flyer_id", flyer.ID, "error", err)
+				}
+			}
+		}
+
+		t.logger.Info("cleanup: processed flyer", "flyer_id", flyer.ID, "shop", flyer.ShopName, "pages", len(pages), "items", len(items))
+	}
+
+	t.logger.Info("cleanup: image expiry complete", "flyers_processed", len(flyers))
+}
+
 func (t *Task) run() {
 	today := time.Now().Format(backupDateFormat)
 
@@ -106,6 +189,10 @@ func (t *Task) run() {
 			}
 		}
 	}
+
+	// Run image expiry cleanup every time, independent of whether a new backup
+	// archive is needed today.
+	t.cleanupExpiredFlyerImages()
 
 	archivePath := filepath.Join(t.backupDir, backupPrefix+today+backupSuffix)
 	if _, err := os.Stat(archivePath); err == nil {
