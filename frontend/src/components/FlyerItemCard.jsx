@@ -1,5 +1,5 @@
 import React, { memo } from 'react';
-import { Store, Calendar, Plus, X, Loader2, Tag, ShoppingCart } from 'lucide-react';
+import { Store, Calendar, Plus, X, Loader2, Tag, ShoppingCart, ImageIcon } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import LazyImage from './LazyImage';
 
@@ -28,8 +28,8 @@ const FlyerItemCard = memo(({
                         onClick={() => onImagePreview({ src: `${API_BASE_URL}${item.local_photo_path}`, alt: item.name })}
                     />
                 ) : (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)' }}>
-                        No Image
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)' }}>
+                        <ImageIcon size={32} style={{ opacity: 0.3 }} />
                     </div>
                 )}
             </div>

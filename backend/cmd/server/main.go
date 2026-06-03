@@ -59,7 +59,7 @@ func run() error {
 		dataPath = "./kincart-data"
 	}
 
-	backup.NewTask(logger, dbPath, uploadsPath, flyerItemsPath, dataPath).Start(ctx)
+	backup.NewTask(logger, database.DB, dbPath, uploadsPath, flyerItemsPath, dataPath).Start(ctx)
 
 	// Start token cleanup routine (blacklist + refresh tokens)
 	middleware.CleanupTokens(database.DB)
