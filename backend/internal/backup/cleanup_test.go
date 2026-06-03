@@ -167,6 +167,46 @@ func TestCleanupFileDeleteFailure_PathNotCleared(t *testing.T) {
 	assert.Equal(t, protectedPath, updatedItem.LocalPhotoPath, "path should be preserved when deletion failed")
 }
 
+func TestCleanupPartialSuccess_OnlyClearedPathsUpdated(t *testing.T) {
+	task, db, dir := newTestTask(t)
+
+	expiredEnd := time.Now().Add(-40 * 24 * time.Hour)
+	flyer := models.Flyer{ShopName: "testshop", EndDate: expiredEnd}
+	require.NoError(t, db.Create(&flyer).Error)
+
+	// Page A: deletable
+	pageAPath := createFile(t, dir, "page_a.jpg")
+	pageA := models.FlyerPage{FlyerID: flyer.ID, LocalPath: pageAPath, SourceURL: "http://example.com/a.jpg"}
+	require.NoError(t, db.Create(&pageA).Error)
+
+	// Page B: locked directory — os.Remove will fail with EACCES
+	roDir := filepath.Join(dir, "locked")
+	require.NoError(t, os.MkdirAll(roDir, 0755))
+	pageBPath := filepath.Join(roDir, "page_b.jpg")
+	require.NoError(t, os.WriteFile(pageBPath, []byte("img"), 0644))
+	require.NoError(t, os.Chmod(roDir, 0555))
+	t.Cleanup(func() { os.Chmod(roDir, 0755) })
+
+	pageB := models.FlyerPage{FlyerID: flyer.ID, LocalPath: pageBPath, SourceURL: "http://example.com/b.jpg"}
+	require.NoError(t, db.Create(&pageB).Error)
+
+	task.cleanupExpiredFlyerImages()
+
+	// Page A: file gone, DB path cleared
+	_, err := os.Stat(pageAPath)
+	assert.True(t, os.IsNotExist(err), "page A file should be deleted")
+	var updatedA models.FlyerPage
+	require.NoError(t, db.First(&updatedA, pageA.ID).Error)
+	assert.Empty(t, updatedA.LocalPath, "page A DB path should be cleared")
+
+	// Page B: file still exists, DB path preserved for retry
+	_, err = os.Stat(pageBPath)
+	assert.NoError(t, err, "page B file should still exist")
+	var updatedB models.FlyerPage
+	require.NoError(t, db.First(&updatedB, pageB.ID).Error)
+	assert.Equal(t, pageBPath, updatedB.LocalPath, "page B DB path should be preserved for next run")
+}
+
 func TestCleanupSoftDeletedItem_FileCleaned(t *testing.T) {
 	task, db, dir := newTestTask(t)
 
