@@ -131,8 +131,64 @@ func TestCleanupIdempotent_MissingFile(t *testing.T) {
 	// Should not panic or error
 	assert.NotPanics(t, func() { task.cleanupExpiredFlyerImages() })
 
-	// DB path still cleared
+	// DB path still cleared (ENOENT is treated as success)
 	var updatedItem models.FlyerItem
 	require.NoError(t, db.First(&updatedItem, item.ID).Error)
+	assert.Empty(t, updatedItem.LocalPhotoPath)
+}
+
+func TestCleanupFileDeleteFailure_PathNotCleared(t *testing.T) {
+	task, db, dir := newTestTask(t)
+
+	expiredEnd := time.Now().Add(-40 * 24 * time.Hour)
+	flyer := models.Flyer{ShopName: "testshop", EndDate: expiredEnd}
+	require.NoError(t, db.Create(&flyer).Error)
+
+	// Create a read-only directory so os.Remove will fail with EACCES
+	roDir := filepath.Join(dir, "readonly")
+	require.NoError(t, os.MkdirAll(roDir, 0755))
+	protectedPath := filepath.Join(roDir, "item.png")
+	require.NoError(t, os.WriteFile(protectedPath, []byte("img"), 0644))
+	require.NoError(t, os.Chmod(roDir, 0555)) // remove write permission from dir
+	t.Cleanup(func() { os.Chmod(roDir, 0755) })
+
+	item := models.FlyerItem{FlyerID: flyer.ID, LocalPhotoPath: protectedPath, Name: "Locked"}
+	require.NoError(t, db.Create(&item).Error)
+
+	task.cleanupExpiredFlyerImages()
+
+	// File must still exist (deletion failed)
+	_, err := os.Stat(protectedPath)
+	assert.NoError(t, err, "file should not be deleted when os.Remove fails")
+
+	// DB path must NOT be cleared (so the next run can retry)
+	var updatedItem models.FlyerItem
+	require.NoError(t, db.Unscoped().First(&updatedItem, item.ID).Error)
+	assert.Equal(t, protectedPath, updatedItem.LocalPhotoPath, "path should be preserved when deletion failed")
+}
+
+func TestCleanupSoftDeletedItem_FileCleaned(t *testing.T) {
+	task, db, dir := newTestTask(t)
+
+	expiredEnd := time.Now().Add(-40 * 24 * time.Hour)
+	flyer := models.Flyer{ShopName: "testshop", EndDate: expiredEnd}
+	require.NoError(t, db.Create(&flyer).Error)
+
+	itemPath := createFile(t, dir, "soft_deleted.png")
+	item := models.FlyerItem{FlyerID: flyer.ID, LocalPhotoPath: itemPath, Name: "Ghost"}
+	require.NoError(t, db.Create(&item).Error)
+
+	// Soft-delete the item
+	require.NoError(t, db.Delete(&item).Error)
+
+	task.cleanupExpiredFlyerImages()
+
+	// File must be deleted even though the item is soft-deleted
+	_, err := os.Stat(itemPath)
+	assert.True(t, os.IsNotExist(err), "soft-deleted item file should still be cleaned up")
+
+	// DB path must be cleared on the soft-deleted row
+	var updatedItem models.FlyerItem
+	require.NoError(t, db.Unscoped().First(&updatedItem, item.ID).Error)
 	assert.Empty(t, updatedItem.LocalPhotoPath)
 }
