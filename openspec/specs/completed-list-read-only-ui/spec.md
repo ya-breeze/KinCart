@@ -1,4 +1,9 @@
-## ADDED Requirements
+# Completed List Read-Only UI
+
+## Purpose
+Hide the add-item UI when a list is completed so completed lists are read-only.
+
+## Requirements
 
 ### Requirement: Add-item UI hidden on completed list
 When a shopping list has status `completed`, the manager view SHALL hide all item-addition UI elements so that the list cannot be accidentally extended after the shopping trip is done.
