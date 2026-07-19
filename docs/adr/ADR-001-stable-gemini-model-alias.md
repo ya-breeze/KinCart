@@ -1,6 +1,6 @@
 # ADR-001: Use a stable Gemini model alias instead of a pinned version
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-07-19
 
 ## Context
