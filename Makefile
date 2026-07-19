@@ -65,7 +65,7 @@ lint-backend:
 
 
 lint-frontend:
-	cd frontend && npm run lint || echo "Linting failed or not configured"
+	cd frontend && npm run lint
 
 # Docker targets
 docker-up:

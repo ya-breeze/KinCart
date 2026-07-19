@@ -23,7 +23,10 @@ export default defineConfig([
       },
     },
     rules: {
-      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      // argsIgnorePattern mirrors varsIgnorePattern: a leading underscore already
+      // means "deliberately unused" in this codebase (e.g. getCategoryEmoji's
+      // _name, kept for positional compatibility with its callers).
+      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]', argsIgnorePattern: '^_' }],
     },
   },
 ])
