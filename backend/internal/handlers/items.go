@@ -129,8 +129,28 @@ func UpdateItem(c *gin.Context) {
 	// in isolation: a request that clears is_bought while setting is_absent lands
 	// on a legal state and must be allowed, even though it mentions is_absent on a
 	// currently-bought item.
-	patchBought, setsBought := updateData["is_bought"].(bool)
-	patchAbsent, setsAbsent := updateData["is_absent"].(bool)
+	// Read as "present and boolean". A plain type assertion would treat a
+	// non-bool (e.g. {"is_bought": 1}) as "field not set" and skip the checks
+	// below, while GORM still wrote the coerced value -- leaving a row holding
+	// both flags. Reject the malformed input instead.
+	boolField := func(key string) (value bool, present bool, wellFormed bool) {
+		raw, exists := updateData[key]
+		if !exists {
+			return false, false, true
+		}
+		b, isBool := raw.(bool)
+		if !isBool {
+			return false, true, false
+		}
+		return b, true, true
+	}
+
+	patchBought, setsBought, boughtWellFormed := boolField("is_bought")
+	patchAbsent, setsAbsent, absentWellFormed := boolField("is_absent")
+	if !boughtWellFormed || !absentWellFormed {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "is_bought and is_absent must be booleans"})
+		return
+	}
 
 	resultBought := item.IsBought
 	if setsBought {

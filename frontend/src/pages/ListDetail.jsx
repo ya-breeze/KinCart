@@ -978,7 +978,7 @@ const ListDetail = () => {
                 </div>
             )}
 
-            {isShopper && list.items?.some(i => i.is_urgent && !i.is_bought) && (
+            {isShopper && list.items?.some(i => i.is_urgent && !isDone(i)) && (
                 <div className="card" style={{ background: '#f97316', color: 'white', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '1rem', border: 'none' }}>
                     <AlertCircle size={24} />
                     <div style={{ flex: 1 }}>
@@ -1005,7 +1005,7 @@ const ListDetail = () => {
                                             {/* Bought wins over absent, so this control is hidden once an
                                                 item is bought -- the backend would reject the PATCH anyway. */}
                                             {!item.is_bought && (
-                                                <button onClick={() => toggleAbsent(item)} title={item.is_absent ? 'Mark as available' : 'Mark as not available in store'} style={{ width: '28px', height: '28px', borderRadius: '6px', border: `2px solid ${item.is_absent ? 'var(--danger)' : 'var(--border)'}`, background: item.is_absent ? 'var(--danger)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', color: item.is_absent ? 'white' : 'var(--text-muted)', flexShrink: 0 }}>
+                                                <button onClick={() => toggleAbsent(item)} aria-label={item.is_absent ? 'Mark as available' : 'Mark as not available in store'} aria-pressed={item.is_absent} title={item.is_absent ? 'Mark as available' : 'Mark as not available in store'} style={{ width: '28px', height: '28px', borderRadius: '6px', border: `2px solid ${item.is_absent ? 'var(--danger)' : 'var(--border)'}`, background: item.is_absent ? 'var(--danger)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', color: item.is_absent ? 'white' : 'var(--text-muted)', flexShrink: 0 }}>
                                                     <X size={16} />
                                                 </button>
                                             )}
@@ -1049,6 +1049,7 @@ const ListDetail = () => {
                     <div>
                         <button
                             onClick={() => setDoneExpanded(v => !v)}
+                            aria-expanded={doneExpanded}
                             title={doneExpanded ? 'Hide done items' : 'Show done items'}
                             style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', width: '100%', padding: '0.5rem 0', color: 'var(--text-muted)', fontWeight: 700, fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}
                         >

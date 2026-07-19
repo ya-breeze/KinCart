@@ -271,6 +271,26 @@ func TestItemsHandlers(t *testing.T) {
 			assert.True(t, got.IsAbsent)
 		})
 
+		t.Run("non-boolean flag values are rejected", func(t *testing.T) {
+			// Regression: a plain type assertion treated these as "not set", so the
+			// exclusivity check was skipped while GORM still wrote the coerced value.
+			// SQLite stores is_bought as INTEGER, so 1 became true and the row ended
+			// up both bought and absent.
+			for _, body := range []map[string]interface{}{
+				{"is_bought": 1},
+				{"is_absent": 1},
+				{"is_bought": "true"},
+			} {
+				it := newItem("Sage", false, true)
+				w := patch(it.ID, body)
+
+				assert.Equal(t, http.StatusBadRequest, w.Code, "body %v must be rejected", body)
+				got := reload(it.ID)
+				assert.False(t, got.IsBought && got.IsAbsent, "row must never hold both flags")
+				assert.True(t, got.IsAbsent, "rejected patch must leave the row untouched")
+			}
+		})
+
 		t.Run("unrelated patches on a bought item still work", func(t *testing.T) {
 			it := newItem("Chives", true, false)
 			w := patch(it.ID, map[string]interface{}{"name": "Fresh Chives"})
