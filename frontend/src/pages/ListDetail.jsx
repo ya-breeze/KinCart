@@ -305,6 +305,17 @@ const ListDetail = () => {
         } catch { showToast('Network error — could not update item'); }
     };
 
+    const toggleAbsent = async (item) => {
+        try {
+            const resp = await fetch(`${API_BASE_URL}/api/items/${item.id}`, { method: 'PATCH', body: JSON.stringify({ is_absent: !item.is_absent }) });
+            if (resp.ok) fetchList();
+            // The backend rejects marking a bought item absent (409-style 400).
+            // The control is hidden for bought items, so this only fires on a
+            // stale view; refetching resyncs it.
+            else showToast(await getApiError(resp, 'Failed to update item'));
+        } catch { showToast('Network error — could not update item'); }
+    };
+
     const deleteItem = (itemId) => {
         setItemToDelete(list.items.find(i => i.id === itemId));
     };
@@ -972,9 +983,18 @@ const ListDetail = () => {
                             {groupedItems[catId].map(item => (
                                 <div key={item.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: '1rem', opacity: item.is_bought ? 0.6 : 1, borderLeft: item.is_urgent ? '4px solid var(--danger)' : 'none', flexWrap: 'wrap' }}>
                                     {isShopper ? (
-                                        <button onClick={() => toggleItem(item)} title={item.is_bought ? 'Mark as not bought' : 'Mark as bought'} style={{ width: '28px', height: '28px', borderRadius: '6px', border: `2px solid ${item.is_bought ? 'var(--success)' : 'var(--border)'}`, background: item.is_bought ? 'var(--success)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', flexShrink: 0 }}>
-                                            {item.is_bought && <Check size={18} />}
-                                        </button>
+                                        <>
+                                            <button onClick={() => toggleItem(item)} title={item.is_bought ? 'Mark as not bought' : 'Mark as bought'} style={{ width: '28px', height: '28px', borderRadius: '6px', border: `2px solid ${item.is_bought ? 'var(--success)' : 'var(--border)'}`, background: item.is_bought ? 'var(--success)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', flexShrink: 0 }}>
+                                                {item.is_bought && <Check size={18} />}
+                                            </button>
+                                            {/* Bought wins over absent, so this control is hidden once an
+                                                item is bought -- the backend would reject the PATCH anyway. */}
+                                            {!item.is_bought && (
+                                                <button onClick={() => toggleAbsent(item)} title={item.is_absent ? 'Mark as available' : 'Mark as not available in store'} style={{ width: '28px', height: '28px', borderRadius: '6px', border: `2px solid ${item.is_absent ? 'var(--danger)' : 'var(--border)'}`, background: item.is_absent ? 'var(--danger)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', color: item.is_absent ? 'white' : 'var(--text-muted)', flexShrink: 0 }}>
+                                                    <X size={16} />
+                                                </button>
+                                            )}
+                                        </>
                                     ) : (
                                         <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--primary)', flexShrink: 0 }} />
                                     )}

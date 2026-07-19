@@ -11,7 +11,7 @@
 ## 2. Frontend — absent action
 
 - [ ] 2.1 Add `toggleAbsent(item)` in `ListDetail.jsx` → `PATCH {is_absent: !item.is_absent}` with `useToast`/`getApiError`
-- [ ] 2.2 Add a "not available" control next to the check-off on active shopper items; do not render it on bought items (the backend rejects that transition)
+- [x] 2.2 Add a "not available" control next to the check-off on active shopper items; do not render it on bought items (the backend rejects that transition)
 - [ ] 2.3 In the done section, show whether each item was bought or absent, with an undo control
 
 ## 3. Frontend — done section
