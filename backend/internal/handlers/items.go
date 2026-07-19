@@ -23,6 +23,15 @@ import (
 	"kincart/internal/utils"
 )
 
+// enforceBoughtAbsentExclusivity applies the "bought wins" invariant to an item
+// being created. Creation handlers bind a full models.Item from JSON, so a client
+// can name both flags in one payload; UpdateItem's guard never sees those requests.
+func enforceBoughtAbsentExclusivity(item *models.Item) {
+	if item.IsBought {
+		item.IsAbsent = false
+	}
+}
+
 func AddItemToList(c *gin.Context) {
 	listID := c.Param("id")
 	familyID := c.MustGet("family_id").(uuid.UUID)
@@ -43,6 +52,7 @@ func AddItemToList(c *gin.Context) {
 	item.TenantModel.ID = uuid.New()
 	item.TenantModel.FamilyID = familyID
 	item.ListID = list.ID
+	enforceBoughtAbsentExclusivity(&item)
 
 	// Verify category ownership if provided
 	if err := validateItemsFamily([]models.Item{item}, familyID); err != nil {
@@ -120,6 +130,56 @@ func UpdateItem(c *gin.Context) {
 			delete(updateData, "name")
 			delete(updateData, "price")
 			delete(updateData, "local_photo_path")
+		}
+	}
+
+	// Enforce is_bought / is_absent exclusivity; bought wins.
+	//
+	// Evaluate the state this patch would *produce* rather than judging the patch
+	// in isolation: a request that clears is_bought while setting is_absent lands
+	// on a legal state and must be allowed, even though it mentions is_absent on a
+	// currently-bought item.
+	//
+	// Read as "present and boolean". A plain type assertion would treat a
+	// non-bool (e.g. {"is_bought": 1}) as "field not set" and skip the checks
+	// below, while GORM still wrote the coerced value -- leaving a row holding
+	// both flags. Reject the malformed input instead.
+	boolField := func(key string) (value bool, present bool, wellFormed bool) {
+		raw, exists := updateData[key]
+		if !exists {
+			return false, false, true
+		}
+		b, isBool := raw.(bool)
+		if !isBool {
+			return false, true, false
+		}
+		return b, true, true
+	}
+
+	patchBought, setsBought, boughtWellFormed := boolField("is_bought")
+	patchAbsent, setsAbsent, absentWellFormed := boolField("is_absent")
+	if !boughtWellFormed || !absentWellFormed {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "is_bought and is_absent must be booleans"})
+		return
+	}
+
+	resultBought := item.IsBought
+	if setsBought {
+		resultBought = patchBought
+	}
+	resultAbsent := item.IsAbsent
+	if setsAbsent {
+		resultAbsent = patchAbsent
+	}
+
+	if resultBought && resultAbsent {
+		if setsBought && patchBought {
+			// Bought wins. Clear absent in the same Updates call so there is no
+			// window in which the row holds both flags.
+			updateData["is_absent"] = false
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "A bought item cannot be marked absent"})
+			return
 		}
 	}
 
@@ -609,6 +669,7 @@ func BulkAddItems(c *gin.Context) {
 		items[i].TenantModel.ID = uuid.New()
 		items[i].TenantModel.FamilyID = familyID
 		items[i].ListID = list.ID
+		enforceBoughtAbsentExclusivity(&items[i])
 	}
 
 	if err := database.DB.Create(&items).Error; err != nil {

@@ -195,7 +195,7 @@ try {
 
 **Multi-Tenant Models** (include `FamilyID`):
 - `ShoppingList` - Lists with status (planning/in-progress/completed)
-- `Item` - Individual shopping items with category, price, photo, flyer/receipt linking
+- `Item` - Individual shopping items with category, price, photo, flyer/receipt linking. `IsBought` and `IsAbsent` are **mutually exclusive** — see "Bought / Absent Exclusivity" below.
 - `Category` - User-defined categories with sort order
 - `Shop` - User-defined shops
 - `Receipt` - Uploaded receipts with parsed items
@@ -228,7 +228,7 @@ try {
 - `POST /api/lists/:id/items/bulk` - Bulk add items to list. Body: `[{name, quantity, unit, price?}]`. Returns `{created, items}`.
 - `POST /api/lists/:id/receipts` - Upload receipt
 - `POST /api/items/link-alias` - Create ItemAlias mapping planned→receipt name. Body: `{receipt_item_id, planned_item_id?|planned_name?}`. Exactly one of `planned_item_id` or `planned_name` must be set. If `planned_item_id` is set, the planned item is deleted after alias creation. Best-effort shop resolution via receipt chain. Items are scoped via `shopping_lists.family_id` JOIN (not `items.family_id` which may be zero in legacy rows).
-- `PATCH /api/items/:id` - Update item
+- `PATCH /api/items/:id` - Update item. Returns 400 if `is_bought`/`is_absent` are non-boolean, or if the request would leave the item both bought and absent (see "Bought / Absent Exclusivity").
 - `DELETE /api/items/:id` - Delete item
 - `POST /api/items/:id/photo` - Upload item photo
 - `GET /api/categories` - Get categories
@@ -327,6 +327,17 @@ Located in `e2e/tests/`:
 
    The `ReceiptMatchResponse` now includes `AlreadyBoughtItems []PlannedItemRef` — items that are bought (IsBought=true) but not yet linked to any receipt item (ReceiptItemID=nil). These appear as link targets in the match modal's expansion panel under an "already bought" divider.
 
-8. **Docker Deployment**: The app runs behind Nginx reverse proxy. Internal API routes (`/api/internal/*`) should only be accessible within the Docker network.
+8. **Bought / Absent Exclusivity**: `Item.IsBought` and `Item.IsAbsent` must never both be true. **Bought wins**: marking a bought item clears absent; marking an absent item bought is allowed and clears absent; marking a bought item absent is rejected.
 
-9. **Development Plan**: See `development_plan.md` for feature roadmap and implementation status.
+   Nothing in the type system enforces this — two independent booleans can represent the illegal state, so **every write path must uphold it deliberately**. The existing guards are:
+   - `UpdateItem` (`handlers/items.go`) — judges the state the patch would *produce*, not the fields it mentions, so `{is_bought:false, is_absent:true}` is legal. Rejects non-boolean values rather than ignoring them (a plain `.(bool)` assertion treats `{"is_bought": 1}` as "field not set" while GORM still writes the coerced value).
+   - `enforceBoughtAbsentExclusivity` (`handlers/items.go`) — called by `AddItemToList` and `BulkAddItems`, which bind a full `models.Item` from JSON and so never reach `UpdateItem`'s guard.
+   - `receipt_service.go` — both sites that mark an *existing* item bought (auto-match, manual match) also clear `IsAbsent`. The unmatch path deliberately does not restore it. The `IsBought: true` struct literals for receipt extras create new items, so they need no change.
+
+   **If you add a fourth write path to either flag, it must honour this too.** Both bypasses found during the original implementation (type coercion, then item creation) existed because a new path didn't know the rule.
+
+   In the shopper UI, "done" means `is_bought || is_absent`: such items leave their category group for the collapsed done section, and count toward the progress bar. Absent items are excluded from the list total, since they will never be paid for.
+
+9. **Docker Deployment**: The app runs behind Nginx reverse proxy. Internal API routes (`/api/internal/*`) should only be accessible within the Docker network.
+
+10. **Development Plan**: See `development_plan.md` for feature roadmap and implementation status.
