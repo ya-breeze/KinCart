@@ -1,9 +1,9 @@
 ## 1. Backend — model & persistence
 
-- [ ] 1.1 Add `ShopID *uuid.UUID` (`gorm:"type:uuid"`, `json:"shop_id"`) to `ShoppingList` in `internal/models/models.go`
-- [ ] 1.2 In `CreateList`, validate a non-null `shop_id` belongs to the family (`Where("id = ? AND family_id = ?")`), return 400 on mismatch, then persist
-- [ ] 1.3 In `UpdateList`, validate a non-null `shop_id` belongs to the family; ensure `shop_id: null` clears the association (tenant id/family_id preservation stays intact)
-- [ ] 1.4 Confirm `GetList`/`GetLists` return `shop_id` (no code change expected — verify serialization)
+- [x] 1.1 Add `ShopID *uuid.UUID` (`gorm:"type:uuid"`, `json:"shop_id"`) to `ShoppingList` in `internal/models/models.go`
+- [x] 1.2 In `CreateList`, validate a non-null `shop_id` belongs to the family (`Where("id = ? AND family_id = ?")`), return 400 on mismatch, then persist
+- [x] 1.3 In `UpdateList`, validate a non-null `shop_id` belongs to the family; ensure `shop_id: null` clears the association (tenant id/family_id preservation stays intact)
+- [x] 1.4 Confirm `GetList`/`GetLists` return `shop_id` (no code change expected — verify serialization)
 
 ## 2. Backend — tests
 
