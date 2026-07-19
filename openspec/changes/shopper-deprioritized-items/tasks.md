@@ -25,7 +25,7 @@
 ## 4. Frontend — manager badge
 
 - [x] 4.1 Render a "not found" badge on absent items in the manager view, in place within their category group (vanilla CSS per `.cursorrules`)
-- [ ] 4.2 Frontend test: manager view badges an absent item, does not badge a bought one, and drops the badge once the item is bought
+- [x] 4.2 Frontend test: manager view badges an absent item, does not badge a bought one, and drops the badge once the item is bought
 
 ## 5. Verification
 
