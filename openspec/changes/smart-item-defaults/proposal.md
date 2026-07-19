@@ -8,7 +8,7 @@ Every item is added with `Unit: "pcs"` and no category, so items constantly land
 - When an item is added, prefill its **unit** and **category** from history:
   - Unit is resolved per-shop first (using the list's shop from the `list-shop-route-order` change), falling back to the most common unit for that name across shops.
   - Category is resolved by item name (category is shop-independent).
-- When there is no history for an item, ask Gemini for a common-sense unit and category (mapped to an existing family category by name); leave defaults (`pcs` / uncategorized) if Gemini is unavailable or returns nothing usable.
+- When there is no history for an item, ask Gemini for a common-sense unit and a category **chosen from the family's own category list** (the prompt is given the family's category names and must return one of them or none — never a free-text/English guess, since families name categories in their own language). Leave defaults (`pcs` / uncategorized) if Gemini is unavailable or returns nothing usable.
 - Apply the inference in the paste-to-list preview and to receipt-created items so they no longer default into the first/"Uncategorized" category.
 
 ## Capabilities

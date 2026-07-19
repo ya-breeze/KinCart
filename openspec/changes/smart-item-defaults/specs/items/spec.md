@@ -36,7 +36,13 @@ When an item is added, the system SHALL prefill its unit and category from histo
 - **GIVEN** no history exists for the item name
 - **AND** the AI service is available
 - **WHEN** the item is added
-- **THEN** the system requests a common-sense unit and category and applies them, mapping the category to an existing family category by name (case-insensitive)
+- **THEN** the system requests a common-sense unit and a category **chosen from the family's own category names** (the AI is given the family's categories and must return one of them or none — it never invents a name)
+- **AND** the returned category name is matched to its category row using Cyrillic-safe (Go-lowercased) comparison, not SQL `LOWER()`
+
+#### Scenario: AI returns a category the family does not have
+- **GIVEN** the AI returns no category, or a name that does not match any of the family's categories
+- **WHEN** the item is added
+- **THEN** the item is left uncategorized (no category is invented)
 
 #### Scenario: Plain defaults when nothing is known
 - **GIVEN** no history exists and the AI service is unavailable or returns no usable category

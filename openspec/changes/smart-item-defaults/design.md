@@ -18,24 +18,24 @@ Items are created with `Unit` defaulting to `pcs` and `CategoryID` unset. Receip
 
 - **Store history on `ItemAlias`, not a new table.** Add `Unit string` and `CategoryID *uuid.UUID`. Aliases already key per family/name/shop and are already loaded in the hot paths, so this is the lowest-friction home. `upsertItemAlias` gains unit/category params and writes them (latest wins; keep an existing non-empty value if the new one is empty). Alternative considered: a dedicated `item_default` table — rejected as duplicative of alias history.
 
-- **Category is shop-independent; unit is per-shop.** Category resolution ignores shop (take the most recent/most frequent category recorded for the name). Unit resolution prefers the alias whose `ShopID` matches the list's shop, else the most common unit across that name's aliases. This matches the real-world pattern ("yogurt = a pack at Makro").
+- **Category is shop-independent; unit is per-shop.** Category resolution ignores shop and takes the **most recent** category recorded for the name (tie-broken by frequency). Unit resolution prefers the alias whose `ShopID` matches the list's shop, else the most common unit across that name's aliases. This matches the real-world pattern ("yogurt = a pack at Makro").
 
 - **One shared resolver.** Add `resolveItemDefaults(ctx, tx, familyID, name string, shopID *uuid.UUID) (unit string, categoryID *uuid.UUID)`:
   1. Load aliases for the name; if found, derive unit (shop-preferred → most common) and category (most recent non-null).
-  2. Else, if a Gemini client is available, request a common-sense `{unit, category}` and map the category string to an existing family `Category` by case-insensitive name; unmatched category names are dropped.
+  2. Else, if a Gemini client is available, request a common-sense unit and a category **chosen from the family's own category list** (the prompt is given the family's existing category names and must return one of them or none — it never invents a name). The returned name is matched back to the `Category` row using **Go-side lowercasing** (see the `LOWER()` note below), not a free-text English guess.
   3. Else return empty → caller keeps `pcs`/uncategorized.
   Callers only fill fields the request left empty, so an explicit user choice always wins.
 
 - **Wire points.** (a) `ParseListText` — enrich each `parsedItemResult` with resolved unit/category (using `req.ShopID`, and the target list's `shop_id` as a fallback) so the preview and the confirmed bulk-add carry them. (b) `receipt_service.go` new-item creation — replace the first-category default with `resolveItemDefaults`. `AddItemToList`/`BulkAddItems` fill empty unit/category via the resolver using the list's shop.
 
-- **Gemini category path.** Extend the shopping-list parse schema with an optional `category` per item (cheap — same call already parses the text), and add a minimal categorize helper for the single-item/receipt path. Category names are matched to existing family categories only; the feature never creates categories.
+- **Gemini category path — constrained choice, localized.** Families create their own categories and none are seeded, so a family's category names are frequently **non-English** (e.g. Czech/Russian). A free-text English guess would almost never match. Therefore the prompt is given the family's **actual category names** and must pick one of them (or return none). Extend the shopping-list parse schema with an optional `category` per item constrained to that list (cheap — same call already parses the text), and add a minimal categorize helper for the single-item/receipt path. The returned name is resolved to its `Category` via Go-lowercased comparison; unmatched/none → left uncategorized. The feature never creates categories.
 
 ## Risks / Trade-offs
 
 - [AI latency/cost on the receipt path] → Only call Gemini when history misses; batch within the existing parse call for paste. Receipt processing already runs in a background ticker, so an extra call there is acceptable and guarded by `s.gemini != nil`.
-- [Gemini returns a category that doesn't exist for the family] → Drop it (leave uncategorized) rather than inventing categories.
+- [Gemini returns a category outside the family's list] → The prompt constrains it to the family's own names; any unmatched/none result leaves the item uncategorized rather than inventing a category.
 - [Wrong remembered unit annoys the user] → Always overridable inline; latest purchase updates the memory, so it self-corrects.
-- [ASCII-only `LOWER()` pitfall for Cyrillic names] → Reuse the existing Go-lowercased `PlannedNameLower` index used elsewhere for alias lookups rather than SQL `LOWER()`.
+- [ASCII-only `LOWER()` pitfall for Cyrillic names] → Applies to **both** the alias name lookup **and** matching the AI-returned category name to a `Category` row. Use Go-side lowercasing (as the existing `PlannedNameLower` index does) — never SQL `LOWER()`, which only folds ASCII and would silently miss Cyrillic/Czech category names.
 
 ## Migration Plan
 
@@ -43,4 +43,4 @@ Items are created with `Unit` defaulting to `pcs` and `CategoryID` unset. Receip
 
 ## Open Questions
 
-- Should category memory prefer "most recent" or "most frequent" when a name was filed under different categories over time? Default: most recent, tie-broken by frequency. (Confirm during review.)
+- _(Resolved in review)_ Category memory uses **most recent**, tie-broken by frequency, when a name was filed under different categories over time.
