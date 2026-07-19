@@ -91,6 +91,7 @@ const ListDetail = () => {
         const shopId = list?.shop_id || '';
         setSelectedShopId(shopId);
         fetchShopOrder(shopId);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [list?.shop_id]);
 
     useEffect(() => {
@@ -113,33 +114,42 @@ const ListDetail = () => {
 
     const fetchShopOrder = async (shopId) => {
         if (!shopId) { setShopOrder([]); return; }
-        const resp = await fetch(`${API_BASE_URL}/api/shops/${shopId}/order`);
-        if (resp.ok) setShopOrder(await resp.json());
+        try {
+            const resp = await fetch(`${API_BASE_URL}/api/shops/${shopId}/order`);
+            if (resp.ok) {
+                setShopOrder(await resp.json());
+            } else {
+                // Silently falling back to default order would look like the shop's
+                // aisle layout — say so instead.
+                setShopOrder([]);
+                showToast(await getApiError(resp, 'Failed to load shop order — using default order'));
+            }
+        } catch {
+            setShopOrder([]);
+            showToast('Network error — using default category order');
+        }
     };
 
     // Persist the shop on the list so the route order is applied automatically on
     // the next visit, by whoever opens it. Both manager and shopper may change it.
+    // list.shop_id is the single source of truth: updating it drives the effect
+    // above, which syncs selectedShopId and fetches the order exactly once.
     const handleShopChange = async (e) => {
         const shopId = e.target.value;
-        const previousShopId = selectedShopId;
-        setSelectedShopId(shopId);
-        fetchShopOrder(shopId);
+        const previousShopId = list?.shop_id || null;
+        setList(prev => (prev ? { ...prev, shop_id: shopId || null } : prev));
         try {
             const resp = await fetch(`${API_BASE_URL}/api/lists/${id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ shop_id: shopId || null })
             });
-            if (resp.ok) {
-                setList(prev => (prev ? { ...prev, shop_id: shopId || null } : prev));
-            } else {
-                setSelectedShopId(previousShopId);
-                fetchShopOrder(previousShopId);
+            if (!resp.ok) {
+                setList(prev => (prev ? { ...prev, shop_id: previousShopId } : prev));
                 showToast(await getApiError(resp, 'Failed to save shop'));
             }
         } catch {
-            setSelectedShopId(previousShopId);
-            fetchShopOrder(previousShopId);
+            setList(prev => (prev ? { ...prev, shop_id: previousShopId } : prev));
             showToast('Network error — could not save shop');
         }
     };

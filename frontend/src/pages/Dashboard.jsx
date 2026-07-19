@@ -33,9 +33,14 @@ const Dashboard = () => {
 
     useEffect(() => {
         fetchLists();
-        fetchShops();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    // Shops are only needed by the create-list dialog, so fetch them when it opens.
+    useEffect(() => {
+        if (isCreateModalOpen) fetchShops();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isCreateModalOpen]);
 
     const fetchLists = async () => {
         try {

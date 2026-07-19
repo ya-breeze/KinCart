@@ -131,6 +131,7 @@ func DuplicateList(c *gin.Context) {
 	newList := models.ShoppingList{
 		TenantModel:     coremodels.TenantModel{ID: uuid.New(), FamilyID: familyID},
 		Title:           originalList.Title + " (Copy)",
+		ShopID:          originalList.ShopID,
 		Status:          "preparing",
 		EstimatedAmount: originalList.EstimatedAmount,
 	}

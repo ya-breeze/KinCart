@@ -214,6 +214,28 @@ func TestListShopAssociation(t *testing.T) {
 		}
 	})
 
+	t.Run("DuplicatePreservesShop", func(t *testing.T) {
+		r, family, shop := newShopTestEnv()
+		r.POST("/lists/:id/duplicate", DuplicateList)
+
+		list := models.ShoppingList{
+			TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID},
+			Title:       "Weekly",
+			Status:      "preparing",
+			ShopID:      &shop.ID,
+		}
+		database.DB.Create(&list)
+
+		w := do(r, http.MethodPost, "/lists/"+list.ID.String()+"/duplicate", "")
+
+		assert.Equal(t, http.StatusCreated, w.Code)
+		var copied models.ShoppingList
+		json.Unmarshal(w.Body.Bytes(), &copied)
+		if assert.NotNil(t, copied.ShopID, "duplicate must keep the shop so the route order still applies") {
+			assert.Equal(t, shop.ID, *copied.ShopID)
+		}
+	})
+
 	t.Run("UpdateWithNullShopClearsItAndKeepsOtherFields", func(t *testing.T) {
 		r, family, shop := newShopTestEnv()
 
