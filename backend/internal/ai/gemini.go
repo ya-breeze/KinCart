@@ -4,12 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
 
 	"google.golang.org/genai"
 )
+
+// defaultGeminiModel is a stable rolling alias that the provider keeps pointed
+// at a current Flash model, so a specific version's retirement does not break
+// AI features. Override with the GEMINI_MODEL env var.
+const defaultGeminiModel = "gemini-flash-latest"
 
 type GeminiClient struct {
 	client *genai.Client
@@ -135,10 +141,22 @@ func NewGeminiClient(ctx context.Context) (*GeminiClient, error) {
 		return nil, err
 	}
 
+	model := resolveGeminiModel()
+	slog.Info("Gemini client initialized", "model", model)
+
 	return &GeminiClient{
 		client: client,
-		model:  "gemini-2.0-flash",
+		model:  model,
 	}, nil
+}
+
+// resolveGeminiModel returns the configured Gemini model, falling back to the
+// stable alias when GEMINI_MODEL is unset.
+func resolveGeminiModel() string {
+	if m := os.Getenv("GEMINI_MODEL"); m != "" {
+		return m
+	}
+	return defaultGeminiModel
 }
 
 // buildReceiptSchema returns the shared JSON schema for receipt parsing responses.

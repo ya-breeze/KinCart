@@ -1,0 +1,21 @@
+## 1. Backend
+
+- [x] 1.1 Add `const defaultGeminiModel = "gemini-flash-latest"` in `internal/ai/gemini.go`
+- [x] 1.2 In `NewGeminiClient`, read `GEMINI_MODEL` env (fallback to `defaultGeminiModel`) instead of the hardcoded `gemini-2.0-flash`
+- [x] 1.3 Log the selected model via `slog.Info` at client creation
+
+## 2. Tests
+
+- [x] 2.1 Test: model resolves to `gemini-flash-latest` when `GEMINI_MODEL` unset
+- [x] 2.2 Test: model uses the env value when `GEMINI_MODEL` is set
+
+## 3. Docs
+
+- [x] 3.1 Add `docs/adr/ADR-001-stable-gemini-model-alias.md` (Status: Proposed)
+- [x] 3.2 Document `GEMINI_MODEL` in `CLAUDE.md` env vars section
+
+## 4. Verification
+
+- [x] 4.1 `go build`, `go vet`, and `go test ./internal/ai/` pass (golangci-lint not installed in this env; gofmt clean)
+- [ ] 4.2 Deploy to `kincart-wip` and verify: receipt upload parses (no NOT_FOUND error), paste-to-list uses Gemini (not fallback)
+- [ ] 4.3 Flip ADR status to Accepted on merge to main
