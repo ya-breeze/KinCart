@@ -1,6 +1,6 @@
 ## 1. Backend
 
-- [ ] 1.1 Add `IsAbsent bool` (`gorm:"default:false"`, `json:"is_absent"`) to `Item` in `internal/models/models.go`
+- [x] 1.1 Add `IsAbsent bool` (`gorm:"default:false"`, `json:"is_absent"`) to `Item` in `internal/models/models.go`
 - [ ] 1.2 Confirm `PATCH /api/items/:id` persists `is_absent` via the existing map-based `Updates` (add a handler test)
 - [ ] 1.3 Ensure `is_absent` is returned in list/item responses (serialization check)
 - [ ] 1.4 Add the exclusivity guard to `UpdateItem` in `internal/handlers/items.go`, before the `Updates` call: if the patch sets `is_bought: true`, force `is_absent: false` into the same map; if the item is already bought and the patch sets `is_absent: true`, return 400
