@@ -123,6 +123,35 @@ func UpdateItem(c *gin.Context) {
 		}
 	}
 
+	// Enforce is_bought / is_absent exclusivity; bought wins.
+	//
+	// Evaluate the state this patch would *produce* rather than judging the patch
+	// in isolation: a request that clears is_bought while setting is_absent lands
+	// on a legal state and must be allowed, even though it mentions is_absent on a
+	// currently-bought item.
+	patchBought, setsBought := updateData["is_bought"].(bool)
+	patchAbsent, setsAbsent := updateData["is_absent"].(bool)
+
+	resultBought := item.IsBought
+	if setsBought {
+		resultBought = patchBought
+	}
+	resultAbsent := item.IsAbsent
+	if setsAbsent {
+		resultAbsent = patchAbsent
+	}
+
+	if resultBought && resultAbsent {
+		if setsBought && patchBought {
+			// Bought wins. Clear absent in the same Updates call so there is no
+			// window in which the row holds both flags.
+			updateData["is_absent"] = false
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "A bought item cannot be marked absent"})
+			return
+		}
+	}
+
 	if err := database.DB.Model(&item).Updates(updateData).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update item"})
 		return

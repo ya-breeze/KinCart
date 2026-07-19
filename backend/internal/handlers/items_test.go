@@ -187,6 +187,98 @@ func TestItemsHandlers(t *testing.T) {
 		// models.Item would pass even if the field were dropped from the JSON.
 		assert.Contains(t, w.Body.String(), `"is_absent":true`)
 	})
+
+	t.Run("BoughtAbsentExclusivity", func(t *testing.T) {
+		setupItemTestDBIsolated()
+		family := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "Test Family"}}
+		database.DB.Create(&family)
+		list := models.ShoppingList{
+			TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID},
+			Title:       "Test List",
+		}
+		database.DB.Create(&list)
+
+		r := gin.New()
+		r.Use(func(c *gin.Context) {
+			c.Set("family_id", family.ID)
+			c.Next()
+		})
+		r.PATCH("/items/:id", UpdateItem)
+
+		newItem := func(name string, bought, absent bool) models.Item {
+			it := models.Item{
+				TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID},
+				Name:        name,
+				ListID:      list.ID,
+				IsBought:    bought,
+				IsAbsent:    absent,
+			}
+			database.DB.Create(&it)
+			return it
+		}
+		patch := func(id uuid.UUID, body map[string]interface{}) *httptest.ResponseRecorder {
+			jsonValue, _ := json.Marshal(body)
+			req, _ := http.NewRequest(http.MethodPatch, fmt.Sprintf("/items/%s", id.String()), bytes.NewBuffer(jsonValue))
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+			return w
+		}
+		reload := func(id uuid.UUID) models.Item {
+			var it models.Item
+			database.DB.First(&it, "id = ?", id)
+			return it
+		}
+
+		t.Run("marking an absent item bought clears absent", func(t *testing.T) {
+			it := newItem("Thyme", false, true)
+			w := patch(it.ID, map[string]interface{}{"is_bought": true})
+
+			assert.Equal(t, http.StatusOK, w.Code)
+			got := reload(it.ID)
+			assert.True(t, got.IsBought)
+			assert.False(t, got.IsAbsent, "bought must win over absent")
+		})
+
+		t.Run("a bought item cannot be marked absent", func(t *testing.T) {
+			it := newItem("Basil", true, false)
+			w := patch(it.ID, map[string]interface{}{"is_absent": true})
+
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+			got := reload(it.ID)
+			assert.True(t, got.IsBought, "rejected patch must leave the row untouched")
+			assert.False(t, got.IsAbsent)
+		})
+
+		t.Run("setting both at once resolves to bought", func(t *testing.T) {
+			it := newItem("Oregano", false, false)
+			w := patch(it.ID, map[string]interface{}{"is_bought": true, "is_absent": true})
+
+			assert.Equal(t, http.StatusOK, w.Code)
+			got := reload(it.ID)
+			assert.True(t, got.IsBought)
+			assert.False(t, got.IsAbsent)
+		})
+
+		t.Run("clearing bought while setting absent is allowed", func(t *testing.T) {
+			// The end state (absent, not bought) is legal, so this must not 400
+			// even though it names is_absent on a currently-bought item.
+			it := newItem("Parsley", true, false)
+			w := patch(it.ID, map[string]interface{}{"is_bought": false, "is_absent": true})
+
+			assert.Equal(t, http.StatusOK, w.Code)
+			got := reload(it.ID)
+			assert.False(t, got.IsBought)
+			assert.True(t, got.IsAbsent)
+		})
+
+		t.Run("unrelated patches on a bought item still work", func(t *testing.T) {
+			it := newItem("Chives", true, false)
+			w := patch(it.ID, map[string]interface{}{"name": "Fresh Chives"})
+
+			assert.Equal(t, http.StatusOK, w.Code)
+			assert.Equal(t, "Fresh Chives", reload(it.ID).Name)
+		})
+	})
 }
 
 func setupLinkAliasDB() {

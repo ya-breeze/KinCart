@@ -24,6 +24,12 @@ An item SHALL have an `is_absent` state that the shopper can set and clear. Abse
 - **WHEN** a request attempts to set `is_absent` to true
 - **THEN** the request is rejected with 400 and the item is left unchanged
 
+#### Scenario: Clearing bought while setting absent is allowed
+- **GIVEN** an item already marked bought
+- **WHEN** a single request sets `is_bought` to false and `is_absent` to true
+- **THEN** the request succeeds and the item ends up absent and not bought
+- **AND** exclusivity is judged on the state the request produces, not on the fields it mentions
+
 #### Scenario: Receipt matching clears absent
 - **GIVEN** an item the shopper marked absent
 - **WHEN** receipt matching marks that item bought
