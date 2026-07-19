@@ -5,8 +5,8 @@
 - [x] 1.3 Ensure `is_absent` is returned in list/item responses (serialization check)
 - [x] 1.4 Add the exclusivity guard to `UpdateItem` in `internal/handlers/items.go`, before the `Updates` call: if the patch sets `is_bought: true`, force `is_absent: false` into the same map; if the item is already bought and the patch sets `is_absent: true`, return 400
 - [x] 1.5 Handler tests for both transitions: marking an absent item bought clears `is_absent`; marking a bought item absent returns 400 and leaves the row unchanged
-- [ ] 1.6 In `internal/services/receipt_service.go`, clear `IsAbsent` on the two sites that mark an **existing** item bought — auto-match (`:455`) and manual match (`:642`). The `IsBought: true` struct literals at `:671`/`:755` create new items (receipt extras) whose `IsAbsent` is already false; leave them alone. Leave the unmatch path (`:624`) setting only `IsBought = false`
-- [ ] 1.7 Receipt-service test: an absent item matched by a receipt ends up bought and not absent (use ASCII item names — see CLAUDE.md note 7 on the `LOWER(receipt_name)` alias lookup)
+- [x] 1.6 In `internal/services/receipt_service.go`, clear `IsAbsent` on the two sites that mark an **existing** item bought — auto-match (`:455`) and manual match (`:642`). The `IsBought: true` struct literals at `:671`/`:755` create new items (receipt extras) whose `IsAbsent` is already false; leave them alone. Leave the unmatch path (`:624`) setting only `IsBought = false`
+- [x] 1.7 Receipt-service test: an absent item matched by a receipt ends up bought and not absent (use ASCII item names — see CLAUDE.md note 7 on the `LOWER(receipt_name)` alias lookup)
 
 ## 2. Frontend — absent action
 
