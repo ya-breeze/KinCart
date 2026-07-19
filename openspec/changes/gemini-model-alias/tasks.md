@@ -18,5 +18,5 @@
 ## 4. Verification
 
 - [x] 4.1 `go build`, `go vet`, and `go test ./internal/ai/` pass (golangci-lint not installed in this env; gofmt clean)
-- [ ] 4.2 Deploy to `kincart-wip` and verify: receipt upload parses (no NOT_FOUND error), paste-to-list uses Gemini (not fallback)
+- [x] 4.2 Deployed to `kincart-wip`; paste-to-list verified using Gemini (promo `4+2` split, `potatoes`→`potato`/kg; 3.5s round-trip; no NOT_FOUND/fallback in logs). Receipt path uses the same now-resolving client/model (`gemini-flash-latest`, verified serving); not exercised with a real receipt image.
 - [ ] 4.3 Flip ADR status to Accepted on merge to main
