@@ -717,6 +717,11 @@ const ListDetail = () => {
                                                             {item.is_urgent && (
                                                                 <span style={{ fontSize: 9.5, fontWeight: 800, color: '#b91c1c', background: '#fee2e2', padding: '1px 6px', borderRadius: 9999 }}>URGENT</span>
                                                             )}
+                                                            {/* Shopper couldn't find it. Bought wins over absent, so a
+                                                                bought item never carries this. */}
+                                                            {item.is_absent && (
+                                                                <span data-testid="item-not-found-badge" style={{ fontSize: 9.5, fontWeight: 800, color: '#9a3412', background: '#ffedd5', padding: '1px 6px', borderRadius: 9999 }}>Not found</span>
+                                                            )}
                                                             {item.flyer_item_id && (
                                                                 <span style={{ fontSize: 9.5, fontWeight: 800, color: '#065f46', background: '#d1fae5', padding: '1px 6px', borderRadius: 9999 }}>Sale Deal</span>
                                                             )}
