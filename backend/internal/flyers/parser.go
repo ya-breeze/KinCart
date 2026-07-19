@@ -8,7 +8,13 @@ import (
 	"strings"
 
 	"google.golang.org/genai"
+
+	"kincart/internal/ai"
 )
+
+// defaultFlyerModel is a stable rolling alias (see ADR-001). Override with the
+// GEMINI_FLYER_MODEL env var, e.g. to pin a stronger vision model.
+const defaultFlyerModel = "gemini-flash-latest"
 
 type Attachment struct {
 	Filename    string
@@ -36,6 +42,7 @@ type ParsedItem struct {
 
 type Parser struct {
 	client *genai.Client
+	model  string
 }
 
 func NewParser(apiKey string) (*Parser, error) {
@@ -46,7 +53,9 @@ func NewParser(apiKey string) (*Parser, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create genai client: %w", err)
 	}
-	return &Parser{client: client}, nil
+	model := ai.ResolveModel("GEMINI_FLYER_MODEL", defaultFlyerModel)
+	slog.Info("Flyer parser initialized", "model", model)
+	return &Parser{client: client, model: model}, nil
 }
 
 func (p *Parser) ParseFlyer(ctx context.Context, attachments []Attachment) (*ParsedFlyer, error) {
@@ -163,7 +172,7 @@ The bounding box should be generous enough to capture all the mentioned elements
 		},
 	}
 
-	resp, err := p.client.Models.GenerateContent(ctx, "gemini-3-flash-preview", []*genai.Content{content}, config)
+	resp, err := p.client.Models.GenerateContent(ctx, p.model, []*genai.Content{content}, config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate content: %w", err)
 	}
