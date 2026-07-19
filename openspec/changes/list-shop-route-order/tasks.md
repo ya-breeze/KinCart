@@ -26,4 +26,4 @@
 ## 5. Verification
 
 - [x] 5.1 `make lint` and `make test-backend` pass
-- [ ] 5.2 Manual/E2E check: manager creates a list with a shop; shopper opens it and sees shop-ordered categories without picking a shop; a list with no shop is unchanged
+- [x] 5.2 Manual/E2E check: manager creates a list with a shop; shopper opens it and sees shop-ordered categories without picking a shop; a list with no shop is unchanged
