@@ -142,7 +142,7 @@ func NewGeminiClient(ctx context.Context) (*GeminiClient, error) {
 	}
 
 	model := resolveGeminiModel()
-	slog.Info("Gemini client initialized", "model", model)
+	slog.Debug("Gemini client initialized", "model", model)
 
 	return &GeminiClient{
 		client: client,
@@ -150,13 +150,19 @@ func NewGeminiClient(ctx context.Context) (*GeminiClient, error) {
 	}, nil
 }
 
-// resolveGeminiModel returns the configured Gemini model, falling back to the
-// stable alias when GEMINI_MODEL is unset.
+// resolveGeminiModel returns the configured Gemini model for receipt/paste
+// parsing, falling back to the stable alias when GEMINI_MODEL is unset.
 func resolveGeminiModel() string {
-	if m := os.Getenv("GEMINI_MODEL"); m != "" {
+	return ResolveModel("GEMINI_MODEL", defaultGeminiModel)
+}
+
+// ResolveModel returns the model named by envVar, or fallback when it is unset.
+// Shared by every Gemini call site so no path pins a specific (retirable) model.
+func ResolveModel(envVar, fallback string) string {
+	if m := os.Getenv(envVar); m != "" {
 		return m
 	}
-	return defaultGeminiModel
+	return fallback
 }
 
 // buildReceiptSchema returns the shared JSON schema for receipt parsing responses.

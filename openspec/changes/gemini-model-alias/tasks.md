@@ -2,7 +2,8 @@
 
 - [x] 1.1 Add `const defaultGeminiModel = "gemini-flash-latest"` in `internal/ai/gemini.go`
 - [x] 1.2 In `NewGeminiClient`, read `GEMINI_MODEL` env (fallback to `defaultGeminiModel`) instead of the hardcoded `gemini-2.0-flash`
-- [x] 1.3 Log the selected model via `slog.Info` at client creation
+- [x] 1.3 Log the selected model at client creation (`slog.Debug` on the per-request client to avoid noise)
+- [x] 1.4 Add shared `ai.ResolveModel(envVar, fallback)`; route the flyer parser (`internal/flyers/parser.go`) through it via `GEMINI_FLYER_MODEL` (default `gemini-flash-latest`) instead of the hardcoded `gemini-3-flash-preview`
 
 ## 2. Tests
 

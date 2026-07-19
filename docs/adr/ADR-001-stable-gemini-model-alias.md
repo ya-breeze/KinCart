@@ -32,9 +32,17 @@ Flash model.
 ## Decision
 
 Default the Gemini model to the stable rolling alias **`gemini-flash-latest`** rather
-than a pinned version, and make the name configurable via the **`GEMINI_MODEL`**
-environment variable (used as the default when unset). The selected model is logged
-at client startup.
+than a pinned version, and make the name configurable via an environment variable
+(used as the default when unset). The selected model is logged at client startup.
+
+This applies to **every** Gemini call site, resolved through a single shared helper
+(`ai.ResolveModel`):
+
+- Receipt/paste parsing → `GEMINI_MODEL` (default `gemini-flash-latest`).
+- Flyer image parsing → `GEMINI_FLYER_MODEL` (default `gemini-flash-latest`). This
+  path previously pinned `gemini-3-flash-preview` — a preview model, which is exactly
+  the fragile case this ADR forbids. Operators who want a stronger vision model for
+  flyers can pin it via `GEMINI_FLYER_MODEL` without touching other features.
 
 ## Consequences
 

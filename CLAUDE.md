@@ -272,7 +272,8 @@ try {
 - `KINCART_SEED_USERS` - Auto-create users on startup: `Family:user:pass,Family2:user2:pass2`
 - `KINCART_SEED_FLYERS` - Seed flyer data: `Shop:Item1|Price1,Item2|Price2`
 - `GEMINI_API_KEY` - Google Gemini API key for AI features (receipt/flyer parsing, paste-list parsing)
-- `GEMINI_MODEL` - Gemini model name (default: `gemini-flash-latest`, a stable rolling alias). Pin a specific version here only if the alias regresses. See `docs/adr/ADR-001-stable-gemini-model-alias.md`.
+- `GEMINI_MODEL` - Gemini model for receipt/paste parsing (default: `gemini-flash-latest`, a stable rolling alias). Pin a specific version here only if the alias regresses. See `docs/adr/ADR-001-stable-gemini-model-alias.md`.
+- `GEMINI_FLYER_MODEL` - Gemini model for flyer image parsing (default: `gemini-flash-latest`). Separate from `GEMINI_MODEL` so a stronger vision model can be pinned for flyers without affecting other AI features.
 - `ENABLE_FLYER_SCHEDULER` - Set to `false` to disable the background flyer download+parse scheduler (default: on when `GEMINI_API_KEY` is set)
 - `ENABLE_RECEIPT_SCHEDULER` - Set to `false` to disable the background receipt processing scheduler (default: on when `GEMINI_API_KEY` is set)
 - `NGINX_HTTP_PORT` - Nginx HTTP port (default: 80)
