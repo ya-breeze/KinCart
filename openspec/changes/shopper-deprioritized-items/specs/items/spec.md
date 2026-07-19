@@ -2,7 +2,7 @@
 
 ### Requirement: Mark item as absent (out of stock)
 
-An item SHALL have an `is_absent` state, distinct from `is_bought`, that the shopper can set and clear. Absent means the item was not available in the store on this trip.
+An item SHALL have an `is_absent` state that the shopper can set and clear. Absent means the item was not available in the store on this trip. `is_absent` and `is_bought` SHALL be mutually exclusive: an item SHALL NOT be both at once, and bought takes precedence.
 
 #### Scenario: Shopper marks an item absent
 - **WHEN** the shopper taps the "mark absent" control on an active item
@@ -13,10 +13,26 @@ An item SHALL have an `is_absent` state, distinct from `is_bought`, that the sho
 - **WHEN** the shopper taps the control again
 - **THEN** `is_absent` is set to false and the item returns to the active list
 
-#### Scenario: Absent is independent of bought
+#### Scenario: Marking an absent item bought clears absent
 - **GIVEN** an item marked absent
 - **WHEN** the shopper marks it bought (e.g. found it after all)
-- **THEN** both states are tracked independently and the item is shown as bought
+- **THEN** `is_bought` is true and `is_absent` is cleared to false
+- **AND** the item is shown as bought, not as absent
+
+#### Scenario: A bought item cannot be marked absent
+- **GIVEN** an item already marked bought
+- **WHEN** a request attempts to set `is_absent` to true
+- **THEN** the request is rejected with 400 and the item is left unchanged
+
+#### Scenario: Receipt matching clears absent
+- **GIVEN** an item the shopper marked absent
+- **WHEN** receipt matching marks that item bought
+- **THEN** `is_absent` is cleared to false
+
+#### Scenario: Unmatching a receipt item does not restore absent
+- **GIVEN** an item that was marked absent and then marked bought by receipt matching
+- **WHEN** the receipt match is undone and `is_bought` returns to false
+- **THEN** `is_absent` remains false and the item returns to the active list
 
 #### Scenario: Absent and bought are visually distinguishable
 - **GIVEN** the done section contains one bought and one absent item
@@ -47,4 +63,24 @@ In the shopper view, items that are bought or absent SHALL be collected into a s
 
 #### Scenario: Manager view is unaffected
 - **WHEN** a manager views the list
-- **THEN** the done-section grouping does not apply; the manager view is unchanged
+- **THEN** the done-section grouping does not apply; the manager view keeps its existing grouping and ordering
+
+### Requirement: Manager sees which items were not found
+
+In the manager view, items marked absent SHALL be shown with a distinct "not found" badge, in place within their category group, so the manager can see what the shopper missed.
+
+#### Scenario: Absent item is badged for the manager
+- **GIVEN** a list containing an item marked absent
+- **WHEN** a manager views the list
+- **THEN** that item is shown with a "not found" badge
+- **AND** it stays in its category group rather than moving or being hidden
+
+#### Scenario: Bought items are not badged
+- **GIVEN** a list containing a bought item and an absent item
+- **WHEN** a manager views the list
+- **THEN** only the absent item carries the "not found" badge
+
+#### Scenario: Badge clears when the item is resolved
+- **GIVEN** an item shown to the manager with a "not found" badge
+- **WHEN** the item is later marked bought, or the absent mark is removed
+- **THEN** the badge is no longer shown
