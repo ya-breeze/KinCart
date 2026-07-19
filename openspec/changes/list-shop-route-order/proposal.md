@@ -19,6 +19,7 @@ A shopping list has no associated shop, so the shopper must pick a shop from a d
 
 ### Modified Capabilities
 - `lists`: A list gains an optional shop association that is persisted and returned; category ordering in the list view is driven by the list's shop.
+- `items`: The "Category grouping" requirement now orders groups by the list's associated shop automatically, replacing the old "when the user selects that shop on the list detail page" manual-selection behavior.
 
 ## Impact
 
