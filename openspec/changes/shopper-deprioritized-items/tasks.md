@@ -30,6 +30,6 @@
 
 ## 5. Verification
 
-- [ ] 5.1 `make lint`, `make test-backend`, `make test-frontend` pass
-- [ ] 5.2 E2E/manual: shopper marks items bought and absent → both sink to the collapsed done section; unmarking returns an item to its category; manager view grouping is unchanged but absent items are badged
-- [ ] 5.3 E2E/manual: mark an item absent, then mark it bought → it shows as bought and the manager badge is gone
+- [x] 5.1 `make lint`, `make test-backend`, `make test-frontend` pass
+- [x] 5.2 E2E/manual: shopper marks items bought and absent → both sink to the collapsed done section; unmarking returns an item to its category; manager view grouping is unchanged but absent items are badged
+- [x] 5.3 E2E/manual: mark an item absent, then mark it bought → it shows as bought and the manager badge is gone

@@ -83,16 +83,16 @@ test.describe('Shopping Lists Flow', () => {
         await expect(shopperListCard).toBeVisible({ timeout: 10000 });
         await shopperListCard.first().click();
 
-        // Toggle all items as bought (button title changes after each click, so always click .first())
+        // Toggle all items as bought. A bought item now leaves the active list
+        // entirely for the collapsed "done" section, so the active count drops by
+        // one per click. Assert on that count instead of re-reading it and racing
+        // the re-render — `.first()` can resolve to nothing mid-click otherwise.
         console.log('Toggling items...');
         const checkBtns = page.locator('button[title="Mark as bought"]');
         await expect(checkBtns.first()).toBeVisible({ timeout: 10000 });
-        while ((await checkBtns.count()) > 0) {
+        for (let remaining = await checkBtns.count(); remaining > 0; remaining--) {
             await checkBtns.first().click();
-            // Wait for the re-render (toggle is async — fetchList is called after PATCH)
-            await expect(page.locator('button[title="Mark as bought"]').first().or(
-                page.locator('span:has-text("100%")')
-            )).toBeVisible({ timeout: 5000 });
+            await expect(checkBtns).toHaveCount(remaining - 1, { timeout: 10000 });
         }
 
         // Progress should update to 100%
