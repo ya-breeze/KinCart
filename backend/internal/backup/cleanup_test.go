@@ -1,6 +1,7 @@
 package backup
 
 import (
+	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
@@ -12,7 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"log/slog"
 )
 
 func newTestTask(t *testing.T) (*Task, *gorm.DB, string) {
@@ -150,7 +150,7 @@ func TestCleanupFileDeleteFailure_PathNotCleared(t *testing.T) {
 	protectedPath := filepath.Join(roDir, "item.png")
 	require.NoError(t, os.WriteFile(protectedPath, []byte("img"), 0644))
 	require.NoError(t, os.Chmod(roDir, 0555)) // remove write permission from dir
-	t.Cleanup(func() { os.Chmod(roDir, 0755) })
+	t.Cleanup(func() { _ = os.Chmod(roDir, 0755) })
 
 	item := models.FlyerItem{FlyerID: flyer.ID, LocalPhotoPath: protectedPath, Name: "Locked"}
 	require.NoError(t, db.Create(&item).Error)
@@ -185,7 +185,7 @@ func TestCleanupPartialSuccess_OnlyClearedPathsUpdated(t *testing.T) {
 	pageBPath := filepath.Join(roDir, "page_b.jpg")
 	require.NoError(t, os.WriteFile(pageBPath, []byte("img"), 0644))
 	require.NoError(t, os.Chmod(roDir, 0555))
-	t.Cleanup(func() { os.Chmod(roDir, 0755) })
+	t.Cleanup(func() { _ = os.Chmod(roDir, 0755) })
 
 	pageB := models.FlyerPage{FlyerID: flyer.ID, LocalPath: pageBPath, SourceURL: "http://example.com/b.jpg"}
 	require.NoError(t, db.Create(&pageB).Error)
