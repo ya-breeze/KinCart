@@ -998,7 +998,7 @@ const ListDetail = () => {
                         </div>
                     </div>
                 </div>
-                {(isManager || (isShopper && list.status === 'ready for shopping')) && (
+                {isShopper && list.status === 'ready for shopping' && (
                     <div style={{ position: 'relative' }}>
                         <select value={selectedShopId} onChange={handleShopChange} title="Select a shop to reorder the list according to its layout" style={{ appearance: 'none', padding: '0.5rem 2rem 0.5rem 2.5rem', borderRadius: '20px', border: '1px solid var(--border)', fontSize: '0.8rem', fontWeight: 700, background: 'white', outline: 'none' }}>
                             <option value="">Default Order</option>

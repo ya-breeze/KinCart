@@ -54,8 +54,25 @@ async function addItem(page: Page, listId: string, name: string, categoryId: str
 
 /** Category group headers, top to bottom, as rendered in the list detail view. */
 async function renderedGroupOrder(page: Page, names: string[]): Promise<string[]> {
-    const texts = await page.locator('div').filter({ hasText: new RegExp(`^(${names.join('|')})$`) }).allTextContents();
-    return texts.filter(t => names.includes(t));
+    // Match the innermost element whose trimmed text is exactly a category name;
+    // querySelectorAll walks in document order, which is the on-screen order.
+    return page.evaluate((wanted: string[]) => {
+        const seen: string[] = [];
+        for (const el of Array.from(document.querySelectorAll('div'))) {
+            const t = el.textContent?.trim() ?? '';
+            if (wanted.includes(t) && !seen.includes(t)) seen.push(t);
+        }
+        return seen;
+    }, names);
+}
+
+/** The shop selector only exists in the shopper view of a ready list. */
+async function switchToShopper(page: Page) {
+    const modeLabel = page.locator('p', { hasText: /Mode/i });
+    if ((await modeLabel.textContent())?.includes('Manager')) {
+        await page.click('button:has-text("Switch to Shopper")');
+    }
+    await expect(page.locator('p:has-text("Shopper Mode")')).toBeVisible();
 }
 
 test.describe('List shop route order', () => {
@@ -114,7 +131,14 @@ test.describe('List shop route order', () => {
             data: { title: `Switch ${ts}` },
             headers: { 'Content-Type': 'application/json' },
         })).json();
+        const ready = await page.request.patch(`/api/lists/${list.id}`, {
+            data: { status: 'ready for shopping' },
+            headers: { 'Content-Type': 'application/json' },
+        });
+        expect(ready.ok()).toBeTruthy();
 
+        await page.goto('/');
+        await switchToShopper(page);
         await page.goto(`/list/${list.id}`);
         const selector = page.locator('select').filter({ hasText: 'Default Order' });
         await expect(selector).toBeVisible({ timeout: 10000 });
