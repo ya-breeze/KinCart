@@ -19,11 +19,11 @@
 
 ## 4. Frontend — list detail
 
-- [ ] 4.1 In `ListDetail.jsx`, initialize `selectedShopId` from `list.shop_id` after the list loads and fetch that shop's order
-- [ ] 4.2 In `handleShopChange`, PATCH the list with the new `shop_id` (for both manager and shopper) in addition to reordering the local view; handle errors via toast
-- [ ] 4.3 Verify `getSortedCategoryIds()` produces the shop's route order automatically on load and falls back to default when no shop / no order
+- [x] 4.1 In `ListDetail.jsx`, initialize `selectedShopId` from `list.shop_id` after the list loads and fetch that shop's order
+- [x] 4.2 In `handleShopChange`, PATCH the list with the new `shop_id` (for both manager and shopper) in addition to reordering the local view; handle errors via toast
+- [x] 4.3 Verify `getSortedCategoryIds()` produces the shop's route order automatically on load and falls back to default when no shop / no order
 
 ## 5. Verification
 
-- [ ] 5.1 `make lint` and `make test-backend` pass
+- [x] 5.1 `make lint` and `make test-backend` pass
 - [ ] 5.2 Manual/E2E check: manager creates a list with a shop; shopper opens it and sees shop-ordered categories without picking a shop; a list with no shop is unchanged

@@ -84,6 +84,14 @@ const ListDetail = () => {
 
     useEffect(() => { setChipsExpanded(false); setChipsOverflow(false); }, [id]);
 
+    // Adopt the list's persisted shop so its route order applies without the
+    // user picking a shop each visit.
+    useEffect(() => {
+        const shopId = list?.shop_id || '';
+        setSelectedShopId(shopId);
+        fetchShopOrder(shopId);
+    }, [list?.shop_id]);
+
     useEffect(() => {
         const el = chipsContainerRef.current;
         if (!el) return;
@@ -108,10 +116,31 @@ const ListDetail = () => {
         if (resp.ok) setShopOrder(await resp.json());
     };
 
-    const handleShopChange = (e) => {
+    // Persist the shop on the list so the route order is applied automatically on
+    // the next visit, by whoever opens it. Both manager and shopper may change it.
+    const handleShopChange = async (e) => {
         const shopId = e.target.value;
+        const previousShopId = selectedShopId;
         setSelectedShopId(shopId);
         fetchShopOrder(shopId);
+        try {
+            const resp = await fetch(`${API_BASE_URL}/api/lists/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ shop_id: shopId || null })
+            });
+            if (resp.ok) {
+                setList(prev => (prev ? { ...prev, shop_id: shopId || null } : prev));
+            } else {
+                setSelectedShopId(previousShopId);
+                fetchShopOrder(previousShopId);
+                showToast(await getApiError(resp, 'Failed to save shop'));
+            }
+        } catch {
+            setSelectedShopId(previousShopId);
+            fetchShopOrder(previousShopId);
+            showToast('Network error — could not save shop');
+        }
     };
 
     const fetchFrequentItems = async () => {
@@ -919,7 +948,7 @@ const ListDetail = () => {
                         </div>
                     </div>
                 </div>
-                {isShopper && list.status === 'ready for shopping' && (
+                {(isManager || (isShopper && list.status === 'ready for shopping')) && (
                     <div style={{ position: 'relative' }}>
                         <select value={selectedShopId} onChange={handleShopChange} title="Select a shop to reorder the list according to its layout" style={{ appearance: 'none', padding: '0.5rem 2rem 0.5rem 2.5rem', borderRadius: '20px', border: '1px solid var(--border)', fontSize: '0.8rem', fontWeight: 700, background: 'white', outline: 'none' }}>
                             <option value="">Default Order</option>
