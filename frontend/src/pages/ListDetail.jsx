@@ -456,17 +456,6 @@ const ListDetail = () => {
         return acc;
     }, {}) || {};
 
-    // Shopper view only: bought and absent items leave their category groups and
-    // collect in one "done" section at the bottom. groupedItems itself is left
-    // alone because the manager view renders from it and must stay unchanged.
-    const isDone = (item) => item.is_bought || item.is_absent;
-    const doneItems = list.items?.filter(isDone) || [];
-    const activeGroupedItems = Object.fromEntries(
-        Object.entries(groupedItems)
-            .map(([catId, items]) => [catId, items.filter(i => !isDone(i))])
-            .filter(([, items]) => items.length > 0)
-    );
-
     const sortedCatIds = getSortedCategoryIds();
     const finalSortedCatIds = [...sortedCatIds];
     Object.keys(groupedItems).forEach(catId => { if (!finalSortedCatIds.includes(catId)) finalSortedCatIds.push(catId); });
@@ -937,6 +926,17 @@ const ListDetail = () => {
     // SHOPPER VIEW — existing layout (unchanged)
     // ══════════════════════════════════════════════════════════════════════════
 
+    // Shopper view only: bought and absent items leave their category groups and
+    // collect in one "done" section at the bottom. groupedItems itself is left
+    // alone because the manager view renders from it and must stay unchanged.
+    const isDone = (item) => item.is_bought || item.is_absent;
+    const doneItems = list.items?.filter(isDone) || [];
+    const activeGroupedItems = Object.fromEntries(
+        Object.entries(groupedItems)
+            .map(([catId, items]) => [catId, items.filter(i => !isDone(i))])
+            .filter(([, items]) => items.length > 0)
+    );
+
     // Absent items are resolved for this trip, so they count as progress --
     // otherwise the bar sticks below 100% when the only leftovers are out of stock.
     // Exclusivity means an item is never counted twice here.
@@ -1010,16 +1010,16 @@ const ListDetail = () => {
                         <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{getCategoryName(catId)}</h3>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                             {activeGroupedItems[catId].map(item => (
-                                <div key={item.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: '1rem', opacity: item.is_bought ? 0.6 : 1, borderLeft: item.is_urgent ? '4px solid var(--danger)' : 'none', flexWrap: 'wrap' }}>
+                                // Everything here is active: activeGroupedItems filters out
+                                // anything bought or absent, so neither flag can be true.
+                                <div key={item.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: '1rem', borderLeft: item.is_urgent ? '4px solid var(--danger)' : 'none', flexWrap: 'wrap' }}>
                                     {isShopper ? (
                                         <>
-                                            <button onClick={() => toggleItem(item)} title={item.is_bought ? 'Mark as not bought' : 'Mark as bought'} style={{ width: '28px', height: '28px', borderRadius: '6px', border: `2px solid ${item.is_bought ? 'var(--success)' : 'var(--border)'}`, background: item.is_bought ? 'var(--success)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', flexShrink: 0 }}>
-                                                {item.is_bought && <Check size={18} />}
-                                            </button>
+                                            <button onClick={() => toggleItem(item)} aria-label="Mark as bought" title="Mark as bought" style={{ width: '28px', height: '28px', borderRadius: '6px', border: '2px solid var(--border)', background: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} />
                                             {/* Bought wins over absent, so this control is hidden once an
                                                 item is bought -- the backend would reject the PATCH anyway. */}
                                             {!item.is_bought && (
-                                                <button onClick={() => toggleAbsent(item)} aria-label={item.is_absent ? 'Mark as available' : 'Mark as not available in store'} aria-pressed={item.is_absent} title={item.is_absent ? 'Mark as available' : 'Mark as not available in store'} style={{ width: '28px', height: '28px', borderRadius: '6px', border: `2px solid ${item.is_absent ? 'var(--danger)' : 'var(--border)'}`, background: item.is_absent ? 'var(--danger)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', color: item.is_absent ? 'white' : 'var(--text-muted)', flexShrink: 0 }}>
+                                                <button onClick={() => toggleAbsent(item)} aria-label="Mark as not available in store" title="Mark as not available in store" style={{ width: '28px', height: '28px', borderRadius: '6px', border: '2px solid var(--border)', background: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', flexShrink: 0 }}>
                                                     <X size={16} />
                                                 </button>
                                             )}
@@ -1035,7 +1035,7 @@ const ListDetail = () => {
                                     <div style={{ flex: 1 }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-                                                <p className="text-break" style={{ fontWeight: 800, textDecoration: item.is_bought ? 'line-through' : 'none', fontSize: '1.15rem', color: 'var(--text-dark)' }}>{item.name}</p>
+                                                <p className="text-break" style={{ fontWeight: 800, fontSize: '1.15rem', color: 'var(--text-dark)' }}>{item.name}</p>
                                                 {item.flyer_item_id && (<span style={{ fontSize: '0.65rem', background: 'var(--primary)', color: 'white', padding: '2px 8px', borderRadius: '6px', fontWeight: 900, display: 'flex', alignItems: 'center', gap: '4px', textTransform: 'uppercase' }}><ShoppingCart size={10} /> Sale Deal</span>)}
                                                 {item.receipt_item_id && (<span style={{ fontSize: '0.65rem', background: 'var(--text-dark)', color: 'white', padding: '2px 8px', borderRadius: '6px', fontWeight: 900, display: 'flex', alignItems: 'center', gap: '4px', textTransform: 'uppercase' }}><Receipt size={10} /> Found in Receipt</span>)}
                                                 <span style={{ fontSize: '0.9rem', background: 'var(--success)', color: 'white', padding: '4px 12px', borderRadius: '20px', fontWeight: 800, boxShadow: 'var(--shadow-sm)', whiteSpace: 'nowrap' }}>{item.quantity || 1} {item.unit || 'pcs'}</span>
