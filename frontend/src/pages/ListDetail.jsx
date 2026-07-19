@@ -478,7 +478,7 @@ const ListDetail = () => {
         if (selectedShopId && shopOrder.length > 0) {
             const orderMap = {};
             shopOrder.forEach(o => (orderMap[o.category_id] = o.sort_order));
-            return [...allCatIds].sort((a, b) => (orderMap[a] || 999) - (orderMap[b] || 999));
+            return [...allCatIds].sort((a, b) => (orderMap[a] ?? 999) - (orderMap[b] ?? 999));
         }
         return [...allCatIds].sort((a, b) => {
             const catA = categories.find(c => c.id === a);

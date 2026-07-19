@@ -58,7 +58,7 @@ async function renderedGroupOrder(page: Page, names: string[]): Promise<string[]
     // querySelectorAll walks in document order, which is the on-screen order.
     return page.evaluate((wanted: string[]) => {
         const seen: string[] = [];
-        for (const el of Array.from(document.querySelectorAll('div'))) {
+        for (const el of Array.from(document.querySelectorAll('*'))) {
             const t = el.textContent?.trim() ?? '';
             if (wanted.includes(t) && !seen.includes(t)) seen.push(t);
         }
