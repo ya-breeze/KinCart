@@ -13,9 +13,9 @@
 
 ## 3. Frontend — create dialog
 
-- [ ] 3.1 In `Dashboard.jsx`, fetch shops and add a shop `<select>` to the create-list dialog with a default "No shop / default order" option
-- [ ] 3.2 Include `shop_id` (or omit/null when unset) in the create-list POST body
-- [ ] 3.3 Use the `useToast`/`getApiError` error pattern for the shops fetch and create call
+- [x] 3.1 In `Dashboard.jsx`, fetch shops and add a shop `<select>` to the create-list dialog with a default "No shop / default order" option
+- [x] 3.2 Include `shop_id` (or omit/null when unset) in the create-list POST body
+- [x] 3.3 Use the `useToast`/`getApiError` error pattern for the shops fetch and create call
 
 ## 4. Frontend — list detail
 
