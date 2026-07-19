@@ -100,7 +100,7 @@ test.describe('List shop route order', () => {
 
         await page.goto(`/list/${plainList.id}`);
         await expect(page.locator(`text=milk ${ts}`)).toBeVisible({ timeout: 10000 });
-        expect(await renderedGroupOrder(page, [alpha, beta])).toEqual([alpha, beta]);
+        await expect.poll(() => renderedGroupOrder(page, [alpha, beta]), { timeout: 10000 }).toEqual([alpha, beta]);
 
         // The same items on a list bound to the shop follow the shop's aisle order,
         // with no shop selected by hand in this session.
@@ -114,12 +114,12 @@ test.describe('List shop route order', () => {
 
         await page.goto(`/list/${shopList.id}`);
         await expect(page.locator(`text=milk2 ${ts}`)).toBeVisible({ timeout: 10000 });
-        expect(await renderedGroupOrder(page, [alpha, beta])).toEqual([beta, alpha]);
+        await expect.poll(() => renderedGroupOrder(page, [alpha, beta]), { timeout: 10000 }).toEqual([beta, alpha]);
 
         // Reloading keeps the order — it is persisted, not session state.
         await page.reload();
         await expect(page.locator(`text=milk2 ${ts}`)).toBeVisible({ timeout: 10000 });
-        expect(await renderedGroupOrder(page, [alpha, beta])).toEqual([beta, alpha]);
+        await expect.poll(() => renderedGroupOrder(page, [alpha, beta]), { timeout: 10000 }).toEqual([beta, alpha]);
     });
 
     test('changing the shop on a list persists across a reload', async ({ page }) => {
