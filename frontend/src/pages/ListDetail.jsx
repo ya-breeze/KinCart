@@ -31,7 +31,6 @@ const ListDetail = () => {
     const [list, setList] = useState(null);
     const [categories, setCategories] = useState([]);
     const [shops, setShops] = useState([]);
-    const [selectedShopId, setSelectedShopId] = useState('');
     const [shopOrder, setShopOrder] = useState([]);
     const [frequentItems, setFrequentItems] = useState([]);
     const [aliases, setAliases] = useState([]);
@@ -85,14 +84,14 @@ const ListDetail = () => {
 
     useEffect(() => { setChipsExpanded(false); setChipsOverflow(false); setDoneExpanded(false); }, [id]);
 
-    // Adopt the list's persisted shop so its route order applies without the
-    // user picking a shop each visit.
+    // The list's persisted shop is the only source of truth for the selection,
+    // so its route order applies without the user picking a shop each visit.
+    const selectedShopId = list?.shop_id || '';
+
     useEffect(() => {
-        const shopId = list?.shop_id || '';
-        setSelectedShopId(shopId);
-        fetchShopOrder(shopId);
+        fetchShopOrder(selectedShopId);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [list?.shop_id]);
+    }, [selectedShopId]);
 
     useEffect(() => {
         const el = chipsContainerRef.current;
@@ -131,9 +130,9 @@ const ListDetail = () => {
     };
 
     // Persist the shop on the list so the route order is applied automatically on
-    // the next visit, by whoever opens it. Both manager and shopper may change it.
-    // list.shop_id is the single source of truth: updating it drives the effect
-    // above, which syncs selectedShopId and fetches the order exactly once.
+    // the next visit, by whoever opens it. Only reachable from the shopper view;
+    // the manager sets the shop when creating the list. Writing list.shop_id
+    // drives the effect above, which refetches the order exactly once.
     const handleShopChange = async (e) => {
         const shopId = e.target.value;
         const previousShopId = list?.shop_id || null;

@@ -36,9 +36,12 @@ const Dashboard = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // Shops are only needed by the create-list dialog, so fetch them when it opens.
+    // Shops are only needed by the create-list dialog, so fetch them when it
+    // opens. Closing it clears the pick, so a cancelled selection cannot carry
+    // over into the next list the user creates.
     useEffect(() => {
         if (isCreateModalOpen) fetchShops();
+        else setNewListShopId('');
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isCreateModalOpen]);
 
