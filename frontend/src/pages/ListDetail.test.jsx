@@ -1,5 +1,5 @@
 /** @vitest-environment happy-dom */
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import ListDetail from './ListDetail';
 import { BrowserRouter } from 'react-router-dom';
@@ -81,5 +81,41 @@ describe('ListDetail — manager "not found" badge', () => {
         expect(await screen.findByText('Saffron')).toBeInTheDocument();
         // Exclusivity is enforced server-side, so exactly one badge is correct here.
         expect(screen.getAllByTestId('item-not-found-badge')).toHaveLength(1);
+    });
+});
+
+describe('ListDetail — shopper done section', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        mockMode.current = 'shopper';
+    });
+
+    it('offers a direct "Bought" action on an absent row, and Undo', async () => {
+        mockFetchWithItems([item({ id: 'a', name: 'Saffron', is_absent: true })]);
+        renderList();
+
+        // Done section is collapsed by default; expand it.
+        fireEvent.click(await screen.findByText(/1 done/i));
+
+        expect(screen.getByRole('button', { name: /mark Saffron as bought/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /mark Saffron as available/i })).toBeInTheDocument();
+    });
+
+    it('a bought row offers Undo but no "Bought" action', async () => {
+        mockFetchWithItems([item({ id: 'b', name: 'Butter', is_bought: true })]);
+        renderList();
+
+        fireEvent.click(await screen.findByText(/1 done/i));
+
+        expect(screen.queryByRole('button', { name: /mark Butter as bought/i })).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /mark Butter as not bought/i })).toBeInTheDocument();
+    });
+
+    it('hides the done section entirely when nothing is done', async () => {
+        mockFetchWithItems([item({ id: 'c', name: 'Bread' })]);
+        renderList();
+
+        expect(await screen.findByText('Bread')).toBeInTheDocument();
+        expect(screen.queryByText(/done$/i)).not.toBeInTheDocument();
     });
 });

@@ -1069,8 +1069,23 @@ const ListDetail = () => {
                                             {item.is_bought ? 'Bought' : 'Not found'}
                                         </span>
                                         <p className="text-break" style={{ flex: 1, fontWeight: 700, textDecoration: item.is_bought ? 'line-through' : 'none', color: 'var(--text-dark)' }}>{item.name}</p>
+                                        {/* "Found it after all": marking an absent item bought is a
+                                            real in-store event, so it gets a direct control rather
+                                            than forcing undo → hunt for the row → check off. The
+                                            server clears is_absent on this transition. */}
+                                        {!item.is_bought && (
+                                            <button
+                                                onClick={() => toggleItem(item)}
+                                                aria-label={`Mark ${item.name} as bought`}
+                                                title="Found it after all — mark as bought"
+                                                style={{ padding: '0.25rem 0.6rem', borderRadius: '6px', border: '1px solid var(--success)', background: 'var(--success)', color: 'white', fontWeight: 700, fontSize: '0.8rem', flexShrink: 0 }}
+                                            >
+                                                Bought
+                                            </button>
+                                        )}
                                         <button
                                             onClick={() => (item.is_bought ? toggleItem(item) : toggleAbsent(item))}
+                                            aria-label={item.is_bought ? `Mark ${item.name} as not bought` : `Mark ${item.name} as available`}
                                             title={item.is_bought ? 'Mark as not bought' : 'Mark as available'}
                                             style={{ padding: '0.25rem 0.6rem', borderRadius: '6px', border: '1px solid var(--border)', color: 'var(--text-muted)', fontWeight: 700, fontSize: '0.8rem', flexShrink: 0 }}
                                         >

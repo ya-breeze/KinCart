@@ -58,6 +58,15 @@ In the shopper view (`ListDetail.jsx`, from ~line 900), items are grouped by cat
 
 - **Absent control placement.** A small secondary control (e.g. a "not available" icon button) next to the check-off on each active item. In the done section, each item shows whether it was bought or absent and offers an undo.
 
+- **Absent rows also offer a direct "bought" action.** The spec requires the shopper to be
+  able to mark an absent item bought ("found it after all"), and the backend clears `is_absent`
+  on that transition. Undo alone does not satisfy it: the shopper would have to un-mark absent,
+  scroll back to find the item in its category group, then check it off — three interactions
+  and a screen change for one real-world event. So an absent row in the done section carries
+  both **Bought** (→ `toggleItem`, which the server resolves to bought-and-not-absent) and
+  **Undo** (→ `toggleAbsent`). Bought rows keep Undo alone, since "un-buy" is the only sensible
+  reversal there.
+
 - **Progress bar treats absent as resolved.** The progress bar currently uses `is_bought`. Absent items are "handled" for the trip, so completion counts `is_bought || is_absent` in the shopper view; the estimated total still only sums actual/bought prices (absent items contribute no spend). This keeps the bar from being stuck at <100% when the only remaining items are out of stock.
 
 ## Risks / Trade-offs
