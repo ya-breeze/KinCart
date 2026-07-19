@@ -7,9 +7,9 @@
 
 ## 2. Backend — tests
 
-- [ ] 2.1 Add handler test: create list with a valid `shop_id` persists it; response includes it
-- [ ] 2.2 Add handler test: create/update with a `shop_id` from another family is rejected (400) and not persisted
-- [ ] 2.3 Add handler test: `PATCH {shop_id: null}` clears the association **and** leaves `title`/`status` unchanged (guards the full-`Save` path from clobbering unsent fields)
+- [x] 2.1 Add handler test: create list with a valid `shop_id` persists it; response includes it
+- [x] 2.2 Add handler test: create/update with a `shop_id` from another family is rejected (400) and not persisted
+- [x] 2.3 Add handler test: `PATCH {shop_id: null}` clears the association **and** leaves `title`/`status` unchanged (guards the full-`Save` path from clobbering unsent fields)
 
 ## 3. Frontend — create dialog
 
