@@ -453,6 +453,9 @@ func (s *ReceiptService) applyItemMatches(tx *gorm.DB, receiptID uuid.UUID, fami
 			// Auto-match: link and mark bought
 			item := itemByID[*plan.PlannedItemID]
 			item.IsBought = true
+			// The receipt proves it was bought, so a shopper's earlier "not
+			// found" is stale. Bought and absent are mutually exclusive.
+			item.IsAbsent = false
 			item.Price = parsedItem.Price
 			item.Quantity = parsedItem.Quantity
 
@@ -640,6 +643,8 @@ func (s *ReceiptService) ConfirmMatch(ctx context.Context, receiptItemID uint, p
 
 			item.ReceiptItemID = &receiptItemID
 			item.IsBought = true
+			// See auto-match above: a confirmed purchase clears absent.
+			item.IsAbsent = false
 			item.Price = receiptItem.Price
 			item.Quantity = receiptItem.Quantity
 			if err := tx.Save(&item).Error; err != nil {

@@ -7,12 +7,12 @@ import (
 	"testing"
 	"time"
 
-	"kincart/internal/models"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+
+	"kincart/internal/models"
 )
 
 func newTestTask(t *testing.T) (*Task, *gorm.DB, string) {
