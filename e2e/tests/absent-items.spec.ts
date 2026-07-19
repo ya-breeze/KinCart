@@ -84,6 +84,17 @@ test.describe('Absent (out of stock) items', () => {
         const foundItBtn = page.getByRole('button', { name: /mark Saffron as bought/i });
         await expect(foundItBtn).toBeVisible();
 
+        // Undo returns it to its category group and the done section disappears
+        // (spec: "Restoring an item returns it to its category group").
+        await page.getByRole('button', { name: /mark Saffron as available/i }).click();
+        await expect(absentBtn).toHaveCount(activeBefore, { timeout: 10000 });
+        await expect(doneToggle).toHaveCount(0);
+
+        // Put it back to absent for the rest of the flow.
+        await absentBtn.first().click();
+        await expect(doneToggle).toContainText('1 done', { timeout: 10000 });
+        await doneToggle.click();
+
         // Manager sees the "Not found" badge (task 5.2).
         await page.click('button[title="Back to Dashboard"]');
         await ensureManagerMode(page);

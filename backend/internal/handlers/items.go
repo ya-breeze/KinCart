@@ -23,6 +23,15 @@ import (
 	"kincart/internal/utils"
 )
 
+// enforceBoughtAbsentExclusivity applies the "bought wins" invariant to an item
+// being created. Creation handlers bind a full models.Item from JSON, so a client
+// can name both flags in one payload; UpdateItem's guard never sees those requests.
+func enforceBoughtAbsentExclusivity(item *models.Item) {
+	if item.IsBought {
+		item.IsAbsent = false
+	}
+}
+
 func AddItemToList(c *gin.Context) {
 	listID := c.Param("id")
 	familyID := c.MustGet("family_id").(uuid.UUID)
@@ -43,6 +52,7 @@ func AddItemToList(c *gin.Context) {
 	item.TenantModel.ID = uuid.New()
 	item.TenantModel.FamilyID = familyID
 	item.ListID = list.ID
+	enforceBoughtAbsentExclusivity(&item)
 
 	// Verify category ownership if provided
 	if err := validateItemsFamily([]models.Item{item}, familyID); err != nil {
@@ -129,6 +139,7 @@ func UpdateItem(c *gin.Context) {
 	// in isolation: a request that clears is_bought while setting is_absent lands
 	// on a legal state and must be allowed, even though it mentions is_absent on a
 	// currently-bought item.
+	//
 	// Read as "present and boolean". A plain type assertion would treat a
 	// non-bool (e.g. {"is_bought": 1}) as "field not set" and skip the checks
 	// below, while GORM still wrote the coerced value -- leaving a row holding
@@ -658,6 +669,7 @@ func BulkAddItems(c *gin.Context) {
 		items[i].TenantModel.ID = uuid.New()
 		items[i].TenantModel.FamilyID = familyID
 		items[i].ListID = list.ID
+		enforceBoughtAbsentExclusivity(&items[i])
 	}
 
 	if err := database.DB.Create(&items).Error; err != nil {

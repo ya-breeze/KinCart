@@ -103,6 +103,38 @@ func TestItemsHandlers(t *testing.T) {
 		assert.True(t, updated.IsBought)
 	})
 
+	t.Run("CreatedItemCannotBeBothBoughtAndAbsent", func(t *testing.T) {
+		// AddItemToList binds a full models.Item, so a client can name both flags
+		// in one payload -- UpdateItem's guard never sees these requests.
+		setupItemTestDBIsolated()
+		family := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "Test Family"}}
+		database.DB.Create(&family)
+		list := models.ShoppingList{
+			TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID},
+			Title:       "Test List",
+		}
+		database.DB.Create(&list)
+
+		r := gin.New()
+		r.Use(func(c *gin.Context) {
+			c.Set("family_id", family.ID)
+			c.Next()
+		})
+		r.POST("/lists/:id/items", AddItemToList)
+
+		body := map[string]interface{}{"name": "Milk", "is_bought": true, "is_absent": true}
+		jsonValue, _ := json.Marshal(body)
+		req, _ := http.NewRequest(http.MethodPost, fmt.Sprintf("/lists/%s/items", list.ID.String()), bytes.NewBuffer(jsonValue))
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusCreated, w.Code)
+		var created models.Item
+		database.DB.Where("list_id = ? AND name = ?", list.ID, "Milk").First(&created)
+		assert.True(t, created.IsBought)
+		assert.False(t, created.IsAbsent, "bought wins on create, as it does on update")
+	})
+
 	t.Run("UpdateItemPersistsIsAbsent", func(t *testing.T) {
 		setupItemTestDBIsolated()
 		family := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "Test Family"}}
