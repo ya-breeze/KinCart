@@ -102,6 +102,56 @@ func TestItemsHandlers(t *testing.T) {
 		assert.Equal(t, "Organic Milk", updated.Name)
 		assert.True(t, updated.IsBought)
 	})
+
+	t.Run("UpdateItemPersistsIsAbsent", func(t *testing.T) {
+		setupItemTestDBIsolated()
+		family := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "Test Family"}}
+		database.DB.Create(&family)
+		list := models.ShoppingList{
+			TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID},
+			Title:       "Test List",
+		}
+		database.DB.Create(&list)
+		item := models.Item{
+			TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID},
+			Name:        "Saffron",
+			ListID:      list.ID,
+		}
+		database.DB.Create(&item)
+
+		r := gin.New()
+		r.Use(func(c *gin.Context) {
+			c.Set("family_id", family.ID)
+			c.Next()
+		})
+		r.PATCH("/items/:id", UpdateItem)
+
+		// Setting is_absent true must round-trip through the map-based Updates.
+		updateData := map[string]interface{}{"is_absent": true}
+		jsonValue, _ := json.Marshal(updateData)
+		req, _ := http.NewRequest(http.MethodPatch, fmt.Sprintf("/items/%s", item.ID.String()), bytes.NewBuffer(jsonValue))
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		var updated models.Item
+		database.DB.First(&updated, "id = ?", item.ID)
+		assert.True(t, updated.IsAbsent)
+		assert.False(t, updated.IsBought)
+
+		// And clearing it again must stick. GORM's map-based Updates does not skip
+		// false here (unlike struct updates, where false is the zero value and would
+		// be dropped) -- this assertion is what guards that distinction.
+		clearData := map[string]interface{}{"is_absent": false}
+		jsonValue, _ = json.Marshal(clearData)
+		req, _ = http.NewRequest(http.MethodPatch, fmt.Sprintf("/items/%s", item.ID.String()), bytes.NewBuffer(jsonValue))
+		w = httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		database.DB.First(&updated, "id = ?", item.ID)
+		assert.False(t, updated.IsAbsent)
+	})
 }
 
 func setupLinkAliasDB() {
