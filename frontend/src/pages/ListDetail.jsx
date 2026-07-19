@@ -83,7 +83,7 @@ const ListDetail = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [id]);
 
-    useEffect(() => { setChipsExpanded(false); setChipsOverflow(false); }, [id]);
+    useEffect(() => { setChipsExpanded(false); setChipsOverflow(false); setDoneExpanded(false); }, [id]);
 
     useEffect(() => {
         const el = chipsContainerRef.current;
@@ -310,7 +310,7 @@ const ListDetail = () => {
         try {
             const resp = await fetch(`${API_BASE_URL}/api/items/${item.id}`, { method: 'PATCH', body: JSON.stringify({ is_absent: !item.is_absent }) });
             if (resp.ok) fetchList();
-            // The backend rejects marking a bought item absent (409-style 400).
+            // The backend rejects marking a bought item absent with a 400.
             // The control is hidden for bought items, so this only fires on a
             // stale view; refetching resyncs it.
             else showToast(await getApiError(resp, 'Failed to update item'));
@@ -473,7 +473,11 @@ const ListDetail = () => {
 
     const getCategoryName = (catId) => categories.find(c => c.id === catId)?.name || (catId === 'uncategorized' ? 'Uncategorized' : 'Unknown');
 
-    const total = list.items?.reduce((s, i) => s + ((i.price || 0) * (i.quantity || 1)), 0) || 0;
+    // Absent items are out of stock, so they will never be paid for — excluding
+    // them keeps this figure honest as "what this costs" rather than drifting
+    // further from reality with every item the shopper can't find.
+    const total = list.items?.filter(i => !i.is_absent)
+        .reduce((s, i) => s + ((i.price || 0) * (i.quantity || 1)), 0) || 0;
 
     // ── shared modals (used in both views) ────────────────────────────────────
 

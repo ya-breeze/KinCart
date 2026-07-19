@@ -111,6 +111,23 @@ describe('ListDetail — shopper done section', () => {
         expect(screen.getByRole('button', { name: /mark Butter as not bought/i })).toBeInTheDocument();
     });
 
+    it('excludes absent items from the total', async () => {
+        // An out-of-stock item is never paid for, so it must not inflate the
+        // figure the shopper reads as "what this costs". design.md promises this.
+        mockFetchWithItems([
+            item({ id: 'a', name: 'Saffron', price: 100, is_absent: true }),
+            item({ id: 'b', name: 'Bread', price: 200 }),
+        ]);
+        renderList();
+
+        expect(await screen.findByText('Bread')).toBeInTheDocument();
+        // 200.00 also appears as Bread's own price line, so the load-bearing
+        // assertion is the negative one: 300.00 is what the header showed before
+        // absent items were excluded.
+        expect(screen.getAllByText(/200\.00/).length).toBeGreaterThan(0);
+        expect(screen.queryByText(/300\.00/)).not.toBeInTheDocument();
+    });
+
     it('hides the done section entirely when nothing is done', async () => {
         mockFetchWithItems([item({ id: 'c', name: 'Bread' })]);
         renderList();

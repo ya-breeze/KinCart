@@ -67,7 +67,9 @@ In the shopper view (`ListDetail.jsx`, from ~line 900), items are grouped by cat
   **Undo** (→ `toggleAbsent`). Bought rows keep Undo alone, since "un-buy" is the only sensible
   reversal there.
 
-- **Progress bar treats absent as resolved.** The progress bar currently uses `is_bought`. Absent items are "handled" for the trip, so completion counts `is_bought || is_absent` in the shopper view; the estimated total still only sums actual/bought prices (absent items contribute no spend). This keeps the bar from being stuck at <100% when the only remaining items are out of stock.
+- **Progress bar treats absent as resolved.** The progress bar currently uses `is_bought`. Absent items are "handled" for the trip, so completion counts `is_bought || is_absent` in the shopper view. This keeps the bar from being stuck at <100% when the only remaining items are out of stock.
+
+  The list total excludes absent items and otherwise sums `price × quantity` over every item, bought or not — it is an estimate of what the trip costs, and an out-of-stock item will never be paid for. Note this figure is shared with the manager view's "est." label, so a shopper marking items absent lowers the number the manager sees too; that is intended, since the manager's estimate should also reflect what is actually obtainable.
 
 ## Risks / Trade-offs
 
