@@ -70,6 +70,27 @@ describe('ListDetail — manager "not found" badge', () => {
         expect(screen.queryByTestId('item-not-found-badge')).not.toBeInTheDocument();
     });
 
+    it('explains the estimate/count gap when items are absent', async () => {
+        mockFetchWithItems([
+            item({ id: 'a', name: 'Saffron', price: 100, is_absent: true }),
+            item({ id: 'b', name: 'Bread', price: 200 }),
+        ]);
+        renderList();
+
+        expect(await screen.findByText('Bread')).toBeInTheDocument();
+        // Count covers both items; the estimate covers only Bread, and says so.
+        expect(screen.getByText(/2 items/)).toBeInTheDocument();
+        expect(screen.getByText(/excl\. 1 not found/)).toBeInTheDocument();
+    });
+
+    it('omits the exclusion note when nothing is absent', async () => {
+        mockFetchWithItems([item({ id: 'b', name: 'Bread', price: 200 })]);
+        renderList();
+
+        expect(await screen.findByText('Bread')).toBeInTheDocument();
+        expect(screen.queryByText(/excl\./)).not.toBeInTheDocument();
+    });
+
     it('badges only the absent item when several states are mixed', async () => {
         mockFetchWithItems([
             item({ id: 'a', name: 'Saffron', is_absent: true }),

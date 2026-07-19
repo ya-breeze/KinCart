@@ -478,6 +478,7 @@ const ListDetail = () => {
     // further from reality with every item the shopper can't find.
     const total = list.items?.filter(i => !i.is_absent)
         .reduce((s, i) => s + ((i.price || 0) * (i.quantity || 1)), 0) || 0;
+    const absentCount = list.items?.filter(i => i.is_absent).length || 0;
 
     // ── shared modals (used in both views) ────────────────────────────────────
 
@@ -651,7 +652,11 @@ const ListDetail = () => {
                                 )}
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
                                     <span style={{ fontSize: 11, color: '#64748b', fontVariantNumeric: 'tabular-nums' }}>
+                                        {/* The count covers every item; the estimate excludes absent
+                                            ones, since they will never be paid for. Say so rather than
+                                            leaving the two numbers quietly covering different sets. */}
                                         {list.items?.length || 0} items · est. <b style={{ color: '#0f172a' }}>{total.toFixed(0)} {currency}</b>
+                                        {absentCount > 0 && ` (excl. ${absentCount} not found)`}
                                     </span>
                                     <button onClick={cycleStatus} data-testid="status-badge" title="Click to change status" style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', padding: '1px 6px', borderRadius: 9999, background: statusStyle.bg, color: statusStyle.color, border: 'none', cursor: 'pointer', minHeight: 'unset' }}>
                                         {statusStyle.label}
