@@ -152,6 +152,41 @@ func TestItemsHandlers(t *testing.T) {
 		database.DB.First(&updated, "id = ?", item.ID)
 		assert.False(t, updated.IsAbsent)
 	})
+
+	t.Run("GetListSerializesIsAbsent", func(t *testing.T) {
+		// Not setupItemTestDBIsolated: GetList does Preload("Receipts"), which
+		// errors into a 404 unless the receipts table exists.
+		setupLinkAliasDB()
+		family := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "Test Family"}}
+		database.DB.Create(&family)
+		list := models.ShoppingList{
+			TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID},
+			Title:       "Test List",
+		}
+		database.DB.Create(&list)
+		database.DB.Create(&models.Item{
+			TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID},
+			Name:        "Cardamom",
+			ListID:      list.ID,
+			IsAbsent:    true,
+		})
+
+		r := gin.New()
+		r.Use(func(c *gin.Context) {
+			c.Set("family_id", family.ID)
+			c.Next()
+		})
+		r.GET("/lists/:id", GetList)
+
+		req, _ := http.NewRequest(http.MethodGet, fmt.Sprintf("/lists/%s", list.ID.String()), nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		// Assert on the wire format, not the decoded struct: decoding into
+		// models.Item would pass even if the field were dropped from the JSON.
+		assert.Contains(t, w.Body.String(), `"is_absent":true`)
+	})
 }
 
 func setupLinkAliasDB() {
