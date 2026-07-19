@@ -10,17 +10,17 @@
 
 ## 2. Frontend — absent action
 
-- [ ] 2.1 Add `toggleAbsent(item)` in `ListDetail.jsx` → `PATCH {is_absent: !item.is_absent}` with `useToast`/`getApiError`
+- [x] 2.1 Add `toggleAbsent(item)` in `ListDetail.jsx` → `PATCH {is_absent: !item.is_absent}` with `useToast`/`getApiError`
 - [x] 2.2 Add a "not available" control next to the check-off on active shopper items; do not render it on bought items (the backend rejects that transition)
-- [ ] 2.3 In the done section, show whether each item was bought or absent, with an undo control
+- [x] 2.3 In the done section, show whether each item was bought or absent, with an undo control
 
 ## 3. Frontend — done section
 
-- [ ] 3.1 Partition shopper items into active (`!is_bought && !is_absent`) and done (`is_bought || is_absent`)
-- [ ] 3.2 Keep active items grouped by category/route order; render done items in one collapsed section at the bottom with a "N done" count
-- [ ] 3.3 Hide the done section entirely when there are no done items
-- [ ] 3.4 Update the progress bar to count `is_bought || is_absent`; keep the estimated total summing only actual spend
-- [ ] 3.5 Leave the manager view grouping and ordering unchanged
+- [x] 3.1 Partition shopper items into active (`!is_bought && !is_absent`) and done (`is_bought || is_absent`)
+- [x] 3.2 Keep active items grouped by category/route order; render done items in one collapsed section at the bottom with a "N done" count
+- [x] 3.3 Hide the done section entirely when there are no done items
+- [x] 3.4 Update the progress bar to count `is_bought || is_absent`; keep the estimated total summing only actual spend
+- [x] 3.5 Leave the manager view grouping and ordering unchanged
 
 ## 4. Frontend — manager badge
 

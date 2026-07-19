@@ -68,6 +68,7 @@ const ListDetail = () => {
 
     // ── manager inline row expansion ──
     const [expandedId, setExpandedId] = useState(null);
+    const [doneExpanded, setDoneExpanded] = useState(false);  // shopper "done" section, collapsed by default
     const [expandedEdits, setExpandedEdits] = useState({});
 
     const queryDebounceRef = useRef(null);
@@ -454,6 +455,17 @@ const ListDetail = () => {
         acc[catId].push(item);
         return acc;
     }, {}) || {};
+
+    // Shopper view only: bought and absent items leave their category groups and
+    // collect in one "done" section at the bottom. groupedItems itself is left
+    // alone because the manager view renders from it and must stay unchanged.
+    const isDone = (item) => item.is_bought || item.is_absent;
+    const doneItems = list.items?.filter(isDone) || [];
+    const activeGroupedItems = Object.fromEntries(
+        Object.entries(groupedItems)
+            .map(([catId, items]) => [catId, items.filter(i => !isDone(i))])
+            .filter(([, items]) => items.length > 0)
+    );
 
     const sortedCatIds = getSortedCategoryIds();
     const finalSortedCatIds = [...sortedCatIds];
@@ -911,7 +923,10 @@ const ListDetail = () => {
     // SHOPPER VIEW — existing layout (unchanged)
     // ══════════════════════════════════════════════════════════════════════════
 
-    const progress = list.items?.length ? (list.items.filter(i => i.is_bought).length / list.items.length) * 100 : 0;
+    // Absent items are resolved for this trip, so they count as progress --
+    // otherwise the bar sticks below 100% when the only leftovers are out of stock.
+    // Exclusivity means an item is never counted twice here.
+    const progress = list.items?.length ? (list.items.filter(isDone).length / list.items.length) * 100 : 0;
 
     return (
         <div className="container">
@@ -976,11 +991,11 @@ const ListDetail = () => {
 
             {/* Grouped Items */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', marginBottom: '6rem' }}>
-                {finalSortedCatIds.filter(catId => groupedItems[catId]).map(catId => (
+                {finalSortedCatIds.filter(catId => activeGroupedItems[catId]).map(catId => (
                     <div key={catId}>
                         <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{getCategoryName(catId)}</h3>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                            {groupedItems[catId].map(item => (
+                            {activeGroupedItems[catId].map(item => (
                                 <div key={item.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: '1rem', opacity: item.is_bought ? 0.6 : 1, borderLeft: item.is_urgent ? '4px solid var(--danger)' : 'none', flexWrap: 'wrap' }}>
                                     {isShopper ? (
                                         <>
@@ -1028,6 +1043,39 @@ const ListDetail = () => {
                         </div>
                     </div>
                 ))}
+
+                {/* Done section: bought + absent, collapsed by default, hidden when empty */}
+                {doneItems.length > 0 && (
+                    <div>
+                        <button
+                            onClick={() => setDoneExpanded(v => !v)}
+                            title={doneExpanded ? 'Hide done items' : 'Show done items'}
+                            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', width: '100%', padding: '0.5rem 0', color: 'var(--text-muted)', fontWeight: 700, fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}
+                        >
+                            <ChevronDown size={16} style={{ transform: doneExpanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
+                            {doneItems.length} done
+                        </button>
+                        {doneExpanded && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
+                                {doneItems.map(item => (
+                                    <div key={item.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', opacity: 0.65, flexWrap: 'wrap' }}>
+                                        <span style={{ fontSize: '0.65rem', background: item.is_bought ? 'var(--success)' : 'var(--danger)', color: 'white', padding: '2px 8px', borderRadius: '6px', fontWeight: 900, textTransform: 'uppercase', flexShrink: 0 }}>
+                                            {item.is_bought ? 'Bought' : 'Not found'}
+                                        </span>
+                                        <p className="text-break" style={{ flex: 1, fontWeight: 700, textDecoration: item.is_bought ? 'line-through' : 'none', color: 'var(--text-dark)' }}>{item.name}</p>
+                                        <button
+                                            onClick={() => (item.is_bought ? toggleItem(item) : toggleAbsent(item))}
+                                            title={item.is_bought ? 'Mark as not bought' : 'Mark as available'}
+                                            style={{ padding: '0.25rem 0.6rem', borderRadius: '6px', border: '1px solid var(--border)', color: 'var(--text-muted)', fontWeight: 700, fontSize: '0.8rem', flexShrink: 0 }}
+                                        >
+                                            Undo
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
 
             {isShopper && list.status === 'ready for shopping' && (
