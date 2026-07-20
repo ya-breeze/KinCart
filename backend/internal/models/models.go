@@ -23,6 +23,7 @@ type User struct {
 type ShoppingList struct {
 	coremodels.TenantModel
 	Title           string     `gorm:"not null" json:"title"`
+	ShopID          *uuid.UUID `gorm:"type:uuid" json:"shop_id"`
 	Status          string     `json:"status"` // "planning", "in-progress", "completed"
 	EstimatedAmount float64    `json:"estimated_amount"`
 	ActualAmount    float64    `json:"actual_amount"`
@@ -38,6 +39,7 @@ type Item struct {
 	Quantity         float64   `gorm:"default:1" json:"quantity"`
 	Unit             string    `gorm:"default:'pcs'" json:"unit"` // "pcs", "kg", "100g", etc.
 	IsBought         bool      `gorm:"default:false" json:"is_bought"`
+	IsAbsent         bool      `gorm:"default:false" json:"is_absent"`
 	Price            float64   `json:"price"`
 	LocalPhotoPath   string    `json:"local_photo_path"`
 	IsUrgent         bool      `gorm:"default:false" json:"is_urgent"`

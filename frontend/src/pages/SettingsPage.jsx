@@ -205,8 +205,8 @@ const SettingsPage = () => {
         shopOrder.forEach(o => orderMap[o.category_id] = o.sort_order);
 
         return [...categories].sort((a, b) => {
-            const orderA = orderMap[a.id] || 999;
-            const orderB = orderMap[b.id] || 999;
+            const orderA = orderMap[a.id] ?? 999;
+            const orderB = orderMap[b.id] ?? 999;
             return orderA - orderB;
         });
     };

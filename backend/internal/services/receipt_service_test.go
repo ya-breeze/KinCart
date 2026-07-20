@@ -713,3 +713,31 @@ func TestConfirmMatch_AlreadyBoughtItem_UpdatesPriceAndLinks(t *testing.T) {
 	db.Model(&models.Item{}).Where("list_id = ?", listID).Count(&itemCount)
 	assert.Equal(t, int64(1), itemCount, "no duplicate item should be created")
 }
+
+// TestConfirmMatch_AbsentItem_ClearsAbsent verifies that a receipt match resolves
+// an item the shopper had marked "not found": the purchase is proof they got it,
+// so IsAbsent must be cleared rather than left contradicting IsBought.
+func TestConfirmMatch_AbsentItem_ClearsAbsent(t *testing.T) {
+	db, svc, familyID, listID, receiptItemID := setupConfirmMatchFixture(t)
+
+	// Shopper marked it absent in-store; the receipt later proves otherwise.
+	// ASCII name on purpose -- the alias lookup uses LOWER(receipt_name),
+	// which only behaves for ASCII in SQLite (see CLAUDE.md note 7).
+	planned := models.Item{
+		TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: familyID},
+		Name:        "Butter",
+		ListID:      listID,
+		IsBought:    false,
+		IsAbsent:    true,
+	}
+	db.Create(&planned)
+
+	err := svc.ConfirmMatch(context.Background(), receiptItemID, &planned.ID, familyID)
+	assert.NoError(t, err)
+
+	var updated models.Item
+	db.First(&updated, "id = ?", planned.ID)
+	assert.True(t, updated.IsBought, "a matched receipt item must be bought")
+	assert.False(t, updated.IsAbsent, "bought and absent are mutually exclusive")
+	assert.NotNil(t, updated.ReceiptItemID)
+}

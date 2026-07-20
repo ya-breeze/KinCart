@@ -102,6 +102,235 @@ func TestItemsHandlers(t *testing.T) {
 		assert.Equal(t, "Organic Milk", updated.Name)
 		assert.True(t, updated.IsBought)
 	})
+
+	t.Run("CreatedItemCannotBeBothBoughtAndAbsent", func(t *testing.T) {
+		// AddItemToList binds a full models.Item, so a client can name both flags
+		// in one payload -- UpdateItem's guard never sees these requests.
+		setupItemTestDBIsolated()
+		family := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "Test Family"}}
+		database.DB.Create(&family)
+		list := models.ShoppingList{
+			TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID},
+			Title:       "Test List",
+		}
+		database.DB.Create(&list)
+
+		r := gin.New()
+		r.Use(func(c *gin.Context) {
+			c.Set("family_id", family.ID)
+			c.Next()
+		})
+		r.POST("/lists/:id/items", AddItemToList)
+
+		body := map[string]interface{}{"name": "Milk", "is_bought": true, "is_absent": true}
+		jsonValue, _ := json.Marshal(body)
+		req, _ := http.NewRequest(http.MethodPost, fmt.Sprintf("/lists/%s/items", list.ID.String()), bytes.NewBuffer(jsonValue))
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusCreated, w.Code)
+		var created models.Item
+		database.DB.Where("list_id = ? AND name = ?", list.ID, "Milk").First(&created)
+		assert.True(t, created.IsBought)
+		assert.False(t, created.IsAbsent, "bought wins on create, as it does on update")
+	})
+
+	t.Run("UpdateItemPersistsIsAbsent", func(t *testing.T) {
+		setupItemTestDBIsolated()
+		family := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "Test Family"}}
+		database.DB.Create(&family)
+		list := models.ShoppingList{
+			TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID},
+			Title:       "Test List",
+		}
+		database.DB.Create(&list)
+		item := models.Item{
+			TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID},
+			Name:        "Saffron",
+			ListID:      list.ID,
+		}
+		database.DB.Create(&item)
+
+		r := gin.New()
+		r.Use(func(c *gin.Context) {
+			c.Set("family_id", family.ID)
+			c.Next()
+		})
+		r.PATCH("/items/:id", UpdateItem)
+
+		// Setting is_absent true must round-trip through the map-based Updates.
+		updateData := map[string]interface{}{"is_absent": true}
+		jsonValue, _ := json.Marshal(updateData)
+		req, _ := http.NewRequest(http.MethodPatch, fmt.Sprintf("/items/%s", item.ID.String()), bytes.NewBuffer(jsonValue))
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		var updated models.Item
+		database.DB.First(&updated, "id = ?", item.ID)
+		assert.True(t, updated.IsAbsent)
+		assert.False(t, updated.IsBought)
+
+		// And clearing it again must stick. GORM's map-based Updates does not skip
+		// false here (unlike struct updates, where false is the zero value and would
+		// be dropped) -- this assertion is what guards that distinction.
+		clearData := map[string]interface{}{"is_absent": false}
+		jsonValue, _ = json.Marshal(clearData)
+		req, _ = http.NewRequest(http.MethodPatch, fmt.Sprintf("/items/%s", item.ID.String()), bytes.NewBuffer(jsonValue))
+		w = httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		database.DB.First(&updated, "id = ?", item.ID)
+		assert.False(t, updated.IsAbsent)
+	})
+
+	t.Run("GetListSerializesIsAbsent", func(t *testing.T) {
+		// Not setupItemTestDBIsolated: GetList does Preload("Receipts"), which
+		// errors into a 404 unless the receipts table exists.
+		setupLinkAliasDB()
+		family := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "Test Family"}}
+		database.DB.Create(&family)
+		list := models.ShoppingList{
+			TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID},
+			Title:       "Test List",
+		}
+		database.DB.Create(&list)
+		database.DB.Create(&models.Item{
+			TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID},
+			Name:        "Cardamom",
+			ListID:      list.ID,
+			IsAbsent:    true,
+		})
+
+		r := gin.New()
+		r.Use(func(c *gin.Context) {
+			c.Set("family_id", family.ID)
+			c.Next()
+		})
+		r.GET("/lists/:id", GetList)
+
+		req, _ := http.NewRequest(http.MethodGet, fmt.Sprintf("/lists/%s", list.ID.String()), nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		// Assert on the wire format, not the decoded struct: decoding into
+		// models.Item would pass even if the field were dropped from the JSON.
+		assert.Contains(t, w.Body.String(), `"is_absent":true`)
+	})
+
+	t.Run("BoughtAbsentExclusivity", func(t *testing.T) {
+		setupItemTestDBIsolated()
+		family := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "Test Family"}}
+		database.DB.Create(&family)
+		list := models.ShoppingList{
+			TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID},
+			Title:       "Test List",
+		}
+		database.DB.Create(&list)
+
+		r := gin.New()
+		r.Use(func(c *gin.Context) {
+			c.Set("family_id", family.ID)
+			c.Next()
+		})
+		r.PATCH("/items/:id", UpdateItem)
+
+		newItem := func(name string, bought, absent bool) models.Item {
+			it := models.Item{
+				TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID},
+				Name:        name,
+				ListID:      list.ID,
+				IsBought:    bought,
+				IsAbsent:    absent,
+			}
+			database.DB.Create(&it)
+			return it
+		}
+		patch := func(id uuid.UUID, body map[string]interface{}) *httptest.ResponseRecorder {
+			jsonValue, _ := json.Marshal(body)
+			req, _ := http.NewRequest(http.MethodPatch, fmt.Sprintf("/items/%s", id.String()), bytes.NewBuffer(jsonValue))
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+			return w
+		}
+		reload := func(id uuid.UUID) models.Item {
+			var it models.Item
+			database.DB.First(&it, "id = ?", id)
+			return it
+		}
+
+		t.Run("marking an absent item bought clears absent", func(t *testing.T) {
+			it := newItem("Thyme", false, true)
+			w := patch(it.ID, map[string]interface{}{"is_bought": true})
+
+			assert.Equal(t, http.StatusOK, w.Code)
+			got := reload(it.ID)
+			assert.True(t, got.IsBought)
+			assert.False(t, got.IsAbsent, "bought must win over absent")
+		})
+
+		t.Run("a bought item cannot be marked absent", func(t *testing.T) {
+			it := newItem("Basil", true, false)
+			w := patch(it.ID, map[string]interface{}{"is_absent": true})
+
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+			got := reload(it.ID)
+			assert.True(t, got.IsBought, "rejected patch must leave the row untouched")
+			assert.False(t, got.IsAbsent)
+		})
+
+		t.Run("setting both at once resolves to bought", func(t *testing.T) {
+			it := newItem("Oregano", false, false)
+			w := patch(it.ID, map[string]interface{}{"is_bought": true, "is_absent": true})
+
+			assert.Equal(t, http.StatusOK, w.Code)
+			got := reload(it.ID)
+			assert.True(t, got.IsBought)
+			assert.False(t, got.IsAbsent)
+		})
+
+		t.Run("clearing bought while setting absent is allowed", func(t *testing.T) {
+			// The end state (absent, not bought) is legal, so this must not 400
+			// even though it names is_absent on a currently-bought item.
+			it := newItem("Parsley", true, false)
+			w := patch(it.ID, map[string]interface{}{"is_bought": false, "is_absent": true})
+
+			assert.Equal(t, http.StatusOK, w.Code)
+			got := reload(it.ID)
+			assert.False(t, got.IsBought)
+			assert.True(t, got.IsAbsent)
+		})
+
+		t.Run("non-boolean flag values are rejected", func(t *testing.T) {
+			// Regression: a plain type assertion treated these as "not set", so the
+			// exclusivity check was skipped while GORM still wrote the coerced value.
+			// SQLite stores is_bought as INTEGER, so 1 became true and the row ended
+			// up both bought and absent.
+			for _, body := range []map[string]interface{}{
+				{"is_bought": 1},
+				{"is_absent": 1},
+				{"is_bought": "true"},
+			} {
+				it := newItem("Sage", false, true)
+				w := patch(it.ID, body)
+
+				assert.Equal(t, http.StatusBadRequest, w.Code, "body %v must be rejected", body)
+				got := reload(it.ID)
+				assert.False(t, got.IsBought && got.IsAbsent, "row must never hold both flags")
+				assert.True(t, got.IsAbsent, "rejected patch must leave the row untouched")
+			}
+		})
+
+		t.Run("unrelated patches on a bought item still work", func(t *testing.T) {
+			it := newItem("Chives", true, false)
+			w := patch(it.ID, map[string]interface{}{"name": "Fresh Chives"})
+
+			assert.Equal(t, http.StatusOK, w.Code)
+			assert.Equal(t, "Fresh Chives", reload(it.ID).Name)
+		})
+	})
 }
 
 func setupLinkAliasDB() {

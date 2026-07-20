@@ -52,6 +52,11 @@ func CreateList(c *gin.Context) {
 	list.TenantModel.FamilyID = familyID
 	list.Status = "preparing"
 
+	if err := validateShopFamily(list.ShopID, familyID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
 	if err := validateItemsFamily(list.Items, familyID); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -88,6 +93,11 @@ func UpdateList(c *gin.Context) {
 	list.TenantModel.ID = tenantID
 	list.TenantModel.FamilyID = tenantFamilyID
 
+	if err := validateShopFamily(list.ShopID, familyID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
 	if err := validateItemsFamily(list.Items, familyID); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -121,6 +131,7 @@ func DuplicateList(c *gin.Context) {
 	newList := models.ShoppingList{
 		TenantModel:     coremodels.TenantModel{ID: uuid.New(), FamilyID: familyID},
 		Title:           originalList.Title + " (Copy)",
+		ShopID:          originalList.ShopID,
 		Status:          "preparing",
 		EstimatedAmount: originalList.EstimatedAmount,
 	}

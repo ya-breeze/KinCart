@@ -31,7 +31,6 @@ const ListDetail = () => {
     const [list, setList] = useState(null);
     const [categories, setCategories] = useState([]);
     const [shops, setShops] = useState([]);
-    const [selectedShopId, setSelectedShopId] = useState('');
     const [shopOrder, setShopOrder] = useState([]);
     const [frequentItems, setFrequentItems] = useState([]);
     const [aliases, setAliases] = useState([]);
@@ -68,6 +67,7 @@ const ListDetail = () => {
 
     // ── manager inline row expansion ──
     const [expandedId, setExpandedId] = useState(null);
+    const [doneExpanded, setDoneExpanded] = useState(false);  // shopper "done" section, collapsed by default
     const [expandedEdits, setExpandedEdits] = useState({});
 
     const queryDebounceRef = useRef(null);
@@ -82,7 +82,16 @@ const ListDetail = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [id]);
 
-    useEffect(() => { setChipsExpanded(false); setChipsOverflow(false); }, [id]);
+    useEffect(() => { setChipsExpanded(false); setChipsOverflow(false); setDoneExpanded(false); }, [id]);
+
+    // The list's persisted shop is the only source of truth for the selection,
+    // so its route order applies without the user picking a shop each visit.
+    const selectedShopId = list?.shop_id || '';
+
+    useEffect(() => {
+        fetchShopOrder(selectedShopId);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedShopId]);
 
     useEffect(() => {
         const el = chipsContainerRef.current;
@@ -104,14 +113,44 @@ const ListDetail = () => {
 
     const fetchShopOrder = async (shopId) => {
         if (!shopId) { setShopOrder([]); return; }
-        const resp = await fetch(`${API_BASE_URL}/api/shops/${shopId}/order`);
-        if (resp.ok) setShopOrder(await resp.json());
+        try {
+            const resp = await fetch(`${API_BASE_URL}/api/shops/${shopId}/order`);
+            if (resp.ok) {
+                setShopOrder(await resp.json());
+            } else {
+                // Silently falling back to default order would look like the shop's
+                // aisle layout — say so instead.
+                setShopOrder([]);
+                showToast(await getApiError(resp, 'Failed to load shop order — using default order'));
+            }
+        } catch {
+            setShopOrder([]);
+            showToast('Network error — using default category order');
+        }
     };
 
-    const handleShopChange = (e) => {
+    // Persist the shop on the list so the route order is applied automatically on
+    // the next visit, by whoever opens it. Only reachable from the shopper view;
+    // the manager sets the shop when creating the list. Writing list.shop_id
+    // drives the effect above, which refetches the order exactly once.
+    const handleShopChange = async (e) => {
         const shopId = e.target.value;
-        setSelectedShopId(shopId);
-        fetchShopOrder(shopId);
+        const previousShopId = list?.shop_id || null;
+        setList(prev => (prev ? { ...prev, shop_id: shopId || null } : prev));
+        try {
+            const resp = await fetch(`${API_BASE_URL}/api/lists/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ shop_id: shopId || null })
+            });
+            if (!resp.ok) {
+                setList(prev => (prev ? { ...prev, shop_id: previousShopId } : prev));
+                showToast(await getApiError(resp, 'Failed to save shop'));
+            }
+        } catch {
+            setList(prev => (prev ? { ...prev, shop_id: previousShopId } : prev));
+            showToast('Network error — could not save shop');
+        }
     };
 
     const fetchFrequentItems = async () => {
@@ -305,6 +344,17 @@ const ListDetail = () => {
         } catch { showToast('Network error — could not update item'); }
     };
 
+    const toggleAbsent = async (item) => {
+        try {
+            const resp = await fetch(`${API_BASE_URL}/api/items/${item.id}`, { method: 'PATCH', body: JSON.stringify({ is_absent: !item.is_absent }) });
+            if (resp.ok) fetchList();
+            // The backend rejects marking a bought item absent with a 400.
+            // The control is hidden for bought items, so this only fires on a
+            // stale view; refetching resyncs it.
+            else showToast(await getApiError(resp, 'Failed to update item'));
+        } catch { showToast('Network error — could not update item'); }
+    };
+
     const deleteItem = (itemId) => {
         setItemToDelete(list.items.find(i => i.id === itemId));
     };
@@ -427,7 +477,7 @@ const ListDetail = () => {
         if (selectedShopId && shopOrder.length > 0) {
             const orderMap = {};
             shopOrder.forEach(o => (orderMap[o.category_id] = o.sort_order));
-            return [...allCatIds].sort((a, b) => (orderMap[a] || 999) - (orderMap[b] || 999));
+            return [...allCatIds].sort((a, b) => (orderMap[a] ?? 999) - (orderMap[b] ?? 999));
         }
         return [...allCatIds].sort((a, b) => {
             const catA = categories.find(c => c.id === a);
@@ -450,7 +500,12 @@ const ListDetail = () => {
 
     const getCategoryName = (catId) => categories.find(c => c.id === catId)?.name || (catId === 'uncategorized' ? 'Uncategorized' : 'Unknown');
 
-    const total = list.items?.reduce((s, i) => s + ((i.price || 0) * (i.quantity || 1)), 0) || 0;
+    // Absent items are out of stock, so they will never be paid for — excluding
+    // them keeps this figure honest as "what this costs" rather than drifting
+    // further from reality with every item the shopper can't find.
+    const total = list.items?.filter(i => !i.is_absent)
+        .reduce((s, i) => s + ((i.price || 0) * (i.quantity || 1)), 0) || 0;
+    const absentCount = list.items?.filter(i => i.is_absent).length || 0;
 
     // ── shared modals (used in both views) ────────────────────────────────────
 
@@ -624,7 +679,11 @@ const ListDetail = () => {
                                 )}
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
                                     <span style={{ fontSize: 11, color: '#64748b', fontVariantNumeric: 'tabular-nums' }}>
+                                        {/* The count covers every item; the estimate excludes absent
+                                            ones, since they will never be paid for. Say so rather than
+                                            leaving the two numbers quietly covering different sets. */}
                                         {list.items?.length || 0} items · est. <b style={{ color: '#0f172a' }}>{total.toFixed(0)} {currency}</b>
+                                        {absentCount > 0 && ` (excl. ${absentCount} not found)`}
                                     </span>
                                     <button onClick={cycleStatus} data-testid="status-badge" title="Click to change status" style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', padding: '1px 6px', borderRadius: 9999, background: statusStyle.bg, color: statusStyle.color, border: 'none', cursor: 'pointer', minHeight: 'unset' }}>
                                         {statusStyle.label}
@@ -693,6 +752,11 @@ const ListDetail = () => {
                                                             <span data-testid="item-name" style={{ fontSize: 14, fontWeight: 600, color: '#0f172a' }}>{item.name}</span>
                                                             {item.is_urgent && (
                                                                 <span style={{ fontSize: 9.5, fontWeight: 800, color: '#b91c1c', background: '#fee2e2', padding: '1px 6px', borderRadius: 9999 }}>URGENT</span>
+                                                            )}
+                                                            {/* Shopper couldn't find it. Bought wins over absent, so a
+                                                                bought item never carries this. */}
+                                                            {item.is_absent && (
+                                                                <span data-testid="item-not-found-badge" style={{ fontSize: 9.5, fontWeight: 800, color: '#9a3412', background: '#ffedd5', padding: '1px 6px', borderRadius: 9999 }}>Not found</span>
                                                             )}
                                                             {item.flyer_item_id && (
                                                                 <span style={{ fontSize: 9.5, fontWeight: 800, color: '#065f46', background: '#d1fae5', padding: '1px 6px', borderRadius: 9999 }}>Sale Deal</span>
@@ -900,7 +964,21 @@ const ListDetail = () => {
     // SHOPPER VIEW — existing layout (unchanged)
     // ══════════════════════════════════════════════════════════════════════════
 
-    const progress = list.items?.length ? (list.items.filter(i => i.is_bought).length / list.items.length) * 100 : 0;
+    // Shopper view only: bought and absent items leave their category groups and
+    // collect in one "done" section at the bottom. groupedItems itself is left
+    // alone because the manager view renders from it and must stay unchanged.
+    const isDone = (item) => item.is_bought || item.is_absent;
+    const doneItems = list.items?.filter(isDone) || [];
+    const activeGroupedItems = Object.fromEntries(
+        Object.entries(groupedItems)
+            .map(([catId, items]) => [catId, items.filter(i => !isDone(i))])
+            .filter(([, items]) => items.length > 0)
+    );
+
+    // Absent items are resolved for this trip, so they count as progress --
+    // otherwise the bar sticks below 100% when the only leftovers are out of stock.
+    // Exclusivity means an item is never counted twice here.
+    const progress = list.items?.length ? (list.items.filter(isDone).length / list.items.length) * 100 : 0;
 
     return (
         <div className="container">
@@ -952,7 +1030,7 @@ const ListDetail = () => {
                 </div>
             )}
 
-            {isShopper && list.items?.some(i => i.is_urgent && !i.is_bought) && (
+            {isShopper && list.items?.some(i => i.is_urgent && !isDone(i)) && (
                 <div className="card" style={{ background: '#f97316', color: 'white', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '1rem', border: 'none' }}>
                     <AlertCircle size={24} />
                     <div style={{ flex: 1 }}>
@@ -965,16 +1043,25 @@ const ListDetail = () => {
 
             {/* Grouped Items */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', marginBottom: '6rem' }}>
-                {finalSortedCatIds.filter(catId => groupedItems[catId]).map(catId => (
+                {finalSortedCatIds.filter(catId => activeGroupedItems[catId]).map(catId => (
                     <div key={catId}>
                         <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{getCategoryName(catId)}</h3>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                            {groupedItems[catId].map(item => (
-                                <div key={item.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: '1rem', opacity: item.is_bought ? 0.6 : 1, borderLeft: item.is_urgent ? '4px solid var(--danger)' : 'none', flexWrap: 'wrap' }}>
+                            {activeGroupedItems[catId].map(item => (
+                                // Everything here is active: activeGroupedItems filters out
+                                // anything bought or absent, so neither flag can be true.
+                                <div key={item.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: '1rem', borderLeft: item.is_urgent ? '4px solid var(--danger)' : 'none', flexWrap: 'wrap' }}>
                                     {isShopper ? (
-                                        <button onClick={() => toggleItem(item)} title={item.is_bought ? 'Mark as not bought' : 'Mark as bought'} style={{ width: '28px', height: '28px', borderRadius: '6px', border: `2px solid ${item.is_bought ? 'var(--success)' : 'var(--border)'}`, background: item.is_bought ? 'var(--success)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', flexShrink: 0 }}>
-                                            {item.is_bought && <Check size={18} />}
-                                        </button>
+                                        <>
+                                            <button onClick={() => toggleItem(item)} aria-label="Mark as bought" title="Mark as bought" style={{ width: '28px', height: '28px', borderRadius: '6px', border: '2px solid var(--border)', background: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} />
+                                            {/* Bought wins over absent, so this control is hidden once an
+                                                item is bought -- the backend would reject the PATCH anyway. */}
+                                            {!item.is_bought && (
+                                                <button onClick={() => toggleAbsent(item)} aria-label="Mark as not available in store" title="Mark as not available in store" style={{ width: '28px', height: '28px', borderRadius: '6px', border: '2px solid var(--border)', background: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', flexShrink: 0 }}>
+                                                    <X size={16} />
+                                                </button>
+                                            )}
+                                        </>
                                     ) : (
                                         <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--primary)', flexShrink: 0 }} />
                                     )}
@@ -986,7 +1073,7 @@ const ListDetail = () => {
                                     <div style={{ flex: 1 }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-                                                <p className="text-break" style={{ fontWeight: 800, textDecoration: item.is_bought ? 'line-through' : 'none', fontSize: '1.15rem', color: 'var(--text-dark)' }}>{item.name}</p>
+                                                <p className="text-break" style={{ fontWeight: 800, fontSize: '1.15rem', color: 'var(--text-dark)' }}>{item.name}</p>
                                                 {item.flyer_item_id && (<span style={{ fontSize: '0.65rem', background: 'var(--primary)', color: 'white', padding: '2px 8px', borderRadius: '6px', fontWeight: 900, display: 'flex', alignItems: 'center', gap: '4px', textTransform: 'uppercase' }}><ShoppingCart size={10} /> Sale Deal</span>)}
                                                 {item.receipt_item_id && (<span style={{ fontSize: '0.65rem', background: 'var(--text-dark)', color: 'white', padding: '2px 8px', borderRadius: '6px', fontWeight: 900, display: 'flex', alignItems: 'center', gap: '4px', textTransform: 'uppercase' }}><Receipt size={10} /> Found in Receipt</span>)}
                                                 <span style={{ fontSize: '0.9rem', background: 'var(--success)', color: 'white', padding: '4px 12px', borderRadius: '20px', fontWeight: 800, boxShadow: 'var(--shadow-sm)', whiteSpace: 'nowrap' }}>{item.quantity || 1} {item.unit || 'pcs'}</span>
@@ -1008,6 +1095,55 @@ const ListDetail = () => {
                         </div>
                     </div>
                 ))}
+
+                {/* Done section: bought + absent, collapsed by default, hidden when empty */}
+                {doneItems.length > 0 && (
+                    <div>
+                        <button
+                            onClick={() => setDoneExpanded(v => !v)}
+                            aria-expanded={doneExpanded}
+                            title={doneExpanded ? 'Hide done items' : 'Show done items'}
+                            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', width: '100%', padding: '0.5rem 0', color: 'var(--text-muted)', fontWeight: 700, fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}
+                        >
+                            <ChevronDown size={16} style={{ transform: doneExpanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
+                            {doneItems.length} done
+                        </button>
+                        {doneExpanded && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
+                                {doneItems.map(item => (
+                                    <div key={item.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', opacity: 0.65, flexWrap: 'wrap' }}>
+                                        <span style={{ fontSize: '0.65rem', background: item.is_bought ? 'var(--success)' : 'var(--danger)', color: 'white', padding: '2px 8px', borderRadius: '6px', fontWeight: 900, textTransform: 'uppercase', flexShrink: 0 }}>
+                                            {item.is_bought ? 'Bought' : 'Not found'}
+                                        </span>
+                                        <p className="text-break" style={{ flex: 1, fontWeight: 700, textDecoration: item.is_bought ? 'line-through' : 'none', color: 'var(--text-dark)' }}>{item.name}</p>
+                                        {/* "Found it after all": marking an absent item bought is a
+                                            real in-store event, so it gets a direct control rather
+                                            than forcing undo → hunt for the row → check off. The
+                                            server clears is_absent on this transition. */}
+                                        {!item.is_bought && (
+                                            <button
+                                                onClick={() => toggleItem(item)}
+                                                aria-label={`Mark ${item.name} as bought`}
+                                                title="Found it after all — mark as bought"
+                                                style={{ padding: '0.25rem 0.6rem', borderRadius: '6px', border: '1px solid var(--success)', background: 'var(--success)', color: 'white', fontWeight: 700, fontSize: '0.8rem', flexShrink: 0 }}
+                                            >
+                                                Bought
+                                            </button>
+                                        )}
+                                        <button
+                                            onClick={() => (item.is_bought ? toggleItem(item) : toggleAbsent(item))}
+                                            aria-label={item.is_bought ? `Mark ${item.name} as not bought` : `Mark ${item.name} as available`}
+                                            title={item.is_bought ? 'Mark as not bought' : 'Mark as available'}
+                                            style={{ padding: '0.25rem 0.6rem', borderRadius: '6px', border: '1px solid var(--border)', color: 'var(--text-muted)', fontWeight: 700, fontSize: '0.8rem', flexShrink: 0 }}
+                                        >
+                                            Undo
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
 
             {isShopper && list.status === 'ready for shopping' && (

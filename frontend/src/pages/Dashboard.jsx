@@ -13,6 +13,8 @@ const Dashboard = () => {
     const [lists, setLists] = useState([]);
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [newListTitle, setNewListTitle] = useState('');
+    const [shops, setShops] = useState([]);
+    const [newListShopId, setNewListShopId] = useState('');
     const [isPendingPanelOpen, setIsPendingPanelOpen] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
 
@@ -34,6 +36,15 @@ const Dashboard = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // Shops are only needed by the create-list dialog, so fetch them when it
+    // opens. Closing it clears the pick, so a cancelled selection cannot carry
+    // over into the next list the user creates.
+    useEffect(() => {
+        if (isCreateModalOpen) fetchShops();
+        else setNewListShopId('');
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isCreateModalOpen]);
+
     const fetchLists = async () => {
         try {
             const resp = await fetch(`${API_BASE_URL}/api/lists`);
@@ -44,6 +55,19 @@ const Dashboard = () => {
             }
         } catch {
             showToast('Network error — could not load lists');
+        }
+    };
+
+    const fetchShops = async () => {
+        try {
+            const resp = await fetch(`${API_BASE_URL}/api/shops`);
+            if (resp.ok) {
+                setShops(await resp.json());
+            } else {
+                showToast(await getApiError(resp, 'Failed to load shops'));
+            }
+        } catch {
+            showToast('Network error — could not load shops');
         }
     };
 
@@ -91,10 +115,14 @@ const Dashboard = () => {
             const resp = await fetch(`${API_BASE_URL}/api/lists`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title: newListTitle.trim() })
+                body: JSON.stringify({
+                    title: newListTitle.trim(),
+                    shop_id: newListShopId || null
+                })
             });
             if (resp.ok) {
                 setNewListTitle('');
+                setNewListShopId('');
                 setIsCreateModalOpen(false);
                 fetchLists();
             } else {
@@ -472,6 +500,18 @@ const Dashboard = () => {
                         autoFocus
                         style={{ padding: '0.75rem', borderRadius: '12px', border: '1px solid var(--border)', fontWeight: 700, width: '100%' }}
                     />
+                    <label className="input-label" style={{ marginTop: '0.75rem' }}>Shop</label>
+                    <select
+                        value={newListShopId}
+                        onChange={e => setNewListShopId(e.target.value)}
+                        title="Category order follows this shop's aisle layout"
+                        style={{ padding: '0.75rem', borderRadius: '12px', border: '1px solid var(--border)', width: '100%', background: 'white' }}
+                    >
+                        <option value="">No shop / default order</option>
+                        {shops.map(shop => (
+                            <option key={shop.id} value={shop.id}>{shop.name}</option>
+                        ))}
+                    </select>
                 </div>
             </Modal>
         </div >
