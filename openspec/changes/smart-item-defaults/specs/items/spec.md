@@ -35,9 +35,16 @@ When an item is added, the system SHALL prefill its unit and category from histo
 #### Scenario: AI fallback for an unseen item
 - **GIVEN** no history exists for the item name
 - **AND** the AI service is available
-- **WHEN** the item is added
+- **WHEN** the item is added **via the paste preview or receipt processing**
 - **THEN** the system requests a common-sense unit and a category **chosen from the family's own category names** (the AI is given the family's categories and must return one of them or none — it never invents a name)
 - **AND** the returned category name is matched to its category row using Cyrillic-safe (Go-lowercased) comparison, not SQL `LOWER()`
+
+#### Scenario: Manual add never waits on AI
+- **GIVEN** no history exists for the item name
+- **AND** the AI service is available
+- **WHEN** the item is added directly to a list (single or bulk add, not via the paste preview)
+- **THEN** no AI request is made and the item keeps unit `pcs` and remains uncategorized
+- **AND** the add completes with no added latency versus today
 
 #### Scenario: AI returns a category the family does not have
 - **GIVEN** the AI returns no category, or a name that does not match any of the family's categories
