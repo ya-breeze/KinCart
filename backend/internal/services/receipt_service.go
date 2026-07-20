@@ -612,9 +612,18 @@ func (s *ReceiptService) ConfirmMatch(ctx context.Context, receiptItemID uint, p
 
 	wasPreviouslyMatched := receiptItem.MatchedItemID != nil
 
-	// Resolve defaults for a possible new item before the transaction, so neither
-	// the history read nor the AI fallback holds the write lock.
-	newUnit, newCategoryID := s.resolveNewReceiptItemDefaults(ctx, familyID, receiptItem.Name, receipt.ShopID, receiptItem.Unit)
+	// A new list item is created only when linking to no planned item and this
+	// receipt item was not already matched (the `default` switch branch below).
+	// Resolve its defaults only in that case — otherwise linking to an existing
+	// planned item, or unmatching, would pay for a history read and a possible
+	// synchronous Gemini call whose result is discarded. Resolved before the
+	// transaction so neither the history read nor the AI fallback holds the write lock.
+	var newUnit string
+	var newCategoryID uuid.UUID
+	willCreateNewItem := plannedItemID == nil && !wasPreviouslyMatched
+	if willCreateNewItem {
+		newUnit, newCategoryID = s.resolveNewReceiptItemDefaults(ctx, familyID, receiptItem.Name, receipt.ShopID, receiptItem.Unit)
+	}
 
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		// Clear any previous association when re-matching

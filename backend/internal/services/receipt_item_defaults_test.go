@@ -146,6 +146,34 @@ func TestConfirmMatch_NewItemAIUnmatchedLeavesUncategorized(t *testing.T) {
 	assert.Equal(t, uuid.Nil, item.CategoryID, "an unmatched AI name invents no category")
 }
 
+// Linking a receipt item to an existing planned item creates no new item, so it must
+// not pay for a history read + AI call whose result would be discarded.
+func TestConfirmMatch_LinkingExistingItemSkipsResolution(t *testing.T) {
+	aiCalls := 0
+	mock := &MockParser{
+		SuggestDefaultFunc: func(_ context.Context, _ string, _ []string) (ai.SuggestedItemDefaults, error) {
+			aiCalls++
+			return ai.SuggestedItemDefaults{}, nil
+		},
+	}
+	db, svc, familyID, receiptItemID := receiptFixture(t, mock, "тофу")
+
+	// An existing planned item on the receipt's list, with no history for its name,
+	// so resolution — if wrongly run — would fall through to the AI.
+	var ri models.ReceiptItem
+	require.NoError(t, db.First(&ri, receiptItemID).Error)
+	var receipt models.Receipt
+	require.NoError(t, db.First(&receipt, "id = ?", ri.ReceiptID).Error)
+	planned := models.Item{
+		TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: familyID},
+		Name:        "planned thing", ListID: *receipt.ListID, IsBought: false,
+	}
+	require.NoError(t, db.Create(&planned).Error)
+
+	require.NoError(t, svc.ConfirmMatch(context.Background(), receiptItemID, &planned.ID, familyID))
+	assert.Equal(t, 0, aiCalls, "linking an existing item must not trigger the AI categorize call")
+}
+
 // ConfirmAllMatches applies remembered categories to every unmatched item it creates.
 func TestConfirmAllMatches_NewItemsUseRememberedCategory(t *testing.T) {
 	db, svc, familyID, receiptItemID := receiptFixture(t, nil, "yogurt")
