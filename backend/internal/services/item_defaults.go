@@ -90,6 +90,53 @@ func ResolveItemDefaultsBatch(ctx context.Context, tx *gorm.DB, familyID uuid.UU
 	return out, nil
 }
 
+// LoadFamilyCategories returns the family's categories in display order. Callers
+// pass the result to both the AI (as the set of names it may choose from) and
+// MatchCategoryName (to resolve what it chose), so a single load serves both.
+func LoadFamilyCategories(ctx context.Context, tx *gorm.DB, familyID uuid.UUID) ([]models.Category, error) {
+	var categories []models.Category
+	if err := tx.WithContext(ctx).
+		Where("family_id = ?", familyID).
+		Order("sort_order asc").
+		Find(&categories).Error; err != nil {
+		return nil, err
+	}
+	return categories, nil
+}
+
+// CategoryNames extracts the names to offer the AI as its allowed choices.
+func CategoryNames(categories []models.Category) []string {
+	names := make([]string, 0, len(categories))
+	for _, c := range categories {
+		if c.Name != "" {
+			names = append(names, c.Name)
+		}
+	}
+	return names
+}
+
+// MatchCategoryName resolves a category name to one of the family's category rows,
+// returning nil when nothing matches. An unmatched name leaves the item
+// uncategorized; this never creates a category.
+//
+// Comparison is Go-side lowercased, never SQL LOWER(): SQLite's LOWER() folds ASCII
+// only, so "Молочное" and "молочное" would not compare equal and the match would
+// silently fail for exactly the non-English families the constrained-enum design
+// exists to serve.
+func MatchCategoryName(categories []models.Category, name string) *uuid.UUID {
+	want := strings.ToLower(strings.TrimSpace(name))
+	if want == "" {
+		return nil
+	}
+	for i := range categories {
+		if strings.ToLower(strings.TrimSpace(categories[i].Name)) == want {
+			id := categories[i].ID
+			return &id
+		}
+	}
+	return nil
+}
+
 // resolveUnit prefers the unit recorded at shopID, falling back to the most common
 // unit for this name across all shops.
 func resolveUnit(group []models.ItemAlias, shopID *uuid.UUID) string {

@@ -571,15 +571,12 @@ func ParseListText(c *gin.Context) {
 
 	// The model may only pick from the family's own category names — they are
 	// user-created and frequently not in English, so a free-text guess would match
-	// nothing. No categories means no category property in the schema at all.
-	var categories []models.Category
-	if err := database.DB.Where("family_id = ?", familyID).Order("sort_order asc").Find(&categories).Error; err != nil {
+	// nothing. The same slice resolves whatever it picks back to a row.
+	categories, err := services.LoadFamilyCategories(c.Request.Context(), database.DB, familyID)
+	if err != nil {
 		slog.Warn("Could not load categories for parse enrichment", "error", err)
 	}
-	categoryNames := make([]string, 0, len(categories))
-	for _, cat := range categories {
-		categoryNames = append(categoryNames, cat.Name)
-	}
+	categoryNames := services.CategoryNames(categories)
 
 	var parsedItems []ai.ParsedShoppingItem
 	geminiClient, err := ai.NewGeminiClient(c.Request.Context())
