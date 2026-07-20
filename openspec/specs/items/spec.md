@@ -2,9 +2,7 @@
 
 ## Purpose
 Manage the items within a shopping list — adding, editing, checking off, and grouping them.
-
 ## Requirements
-
 ### Requirement: Add item via quick-add bar
 
 The manager SHALL be able to add items by typing in the quick-add bar at the top of the list detail page.
@@ -230,7 +228,7 @@ In the manager view, items marked absent SHALL be shown with a distinct "not fou
 
 ### Requirement: Category grouping
 
-Items SHALL be displayed grouped by their assigned category.
+Items SHALL be displayed grouped by their assigned category. When the list has an associated shop with a configured aisle order, the groups SHALL follow that shop's order automatically; otherwise they follow the default category sort order.
 
 #### Scenario: Items grouped by category in list detail
 - **GIVEN** a list with items assigned to "Dairy" and "Vegetables"
@@ -242,5 +240,17 @@ Items SHALL be displayed grouped by their assigned category.
 
 #### Scenario: Shop-specific category order applied when shop is selected
 - **GIVEN** the manager has configured a custom aisle order for a shop
-- **WHEN** the user selects that shop on the list detail page
+- **WHEN** the shopper selects that shop on the list detail page
 - **THEN** category groups are reordered to match that shop's aisle layout
+- **AND** the selection is persisted on the list, so it still applies on the next visit
+
+#### Scenario: Category order follows the list's shop automatically
+- **GIVEN** the list has an associated shop for which the manager configured a custom aisle order
+- **WHEN** the list is viewed
+- **THEN** category groups are ordered to match that shop's aisle layout without the user selecting the shop each visit
+
+#### Scenario: Default order when the list has no shop
+- **GIVEN** the list has no associated shop, or its shop has no configured aisle order
+- **WHEN** the list is viewed
+- **THEN** category groups follow the default category sort order
+

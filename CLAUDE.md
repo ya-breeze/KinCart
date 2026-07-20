@@ -194,7 +194,7 @@ try {
 ### Database Models
 
 **Multi-Tenant Models** (include `FamilyID`):
-- `ShoppingList` - Lists with status (planning/in-progress/completed)
+- `ShoppingList` - Lists with status (planning/in-progress/completed) and an optional `ShopID *uuid.UUID` (`shop_id`, nullable). When set, the list detail view groups categories by that shop's saved aisle order automatically; when null it falls back to `Category.SortOrder`. Copied by `DuplicateList`, and validated against the family on create/update.
 - `Item` - Individual shopping items with category, price, photo, flyer/receipt linking. `IsBought` and `IsAbsent` are **mutually exclusive** — see "Bought / Absent Exclusivity" below.
 - `Category` - User-defined categories with sort order
 - `Shop` - User-defined shops
@@ -220,7 +220,7 @@ try {
 - `POST /api/auth/logout` - Logout (blacklists token)
 - `GET /api/lists` - List all shopping lists for family
 - `POST /api/lists` - Create new list
-- `PATCH /api/lists/:id` - Update list
+- `PATCH /api/lists/:id` - Update list. Accepts `shop_id` (a shop in the family, or `null` to clear); a `shop_id` from another family is rejected with 400. Binds into the loaded row then `Save`s, so omitted fields keep their stored values.
 - `POST /api/lists/:id/duplicate` - Clone list
 - `DELETE /api/lists/:id` - Delete list
 - `POST /api/lists/:id/items` - Add item to list

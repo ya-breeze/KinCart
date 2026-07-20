@@ -31,7 +31,6 @@ const ListDetail = () => {
     const [list, setList] = useState(null);
     const [categories, setCategories] = useState([]);
     const [shops, setShops] = useState([]);
-    const [selectedShopId, setSelectedShopId] = useState('');
     const [shopOrder, setShopOrder] = useState([]);
     const [frequentItems, setFrequentItems] = useState([]);
     const [aliases, setAliases] = useState([]);
@@ -85,6 +84,15 @@ const ListDetail = () => {
 
     useEffect(() => { setChipsExpanded(false); setChipsOverflow(false); setDoneExpanded(false); }, [id]);
 
+    // The list's persisted shop is the only source of truth for the selection,
+    // so its route order applies without the user picking a shop each visit.
+    const selectedShopId = list?.shop_id || '';
+
+    useEffect(() => {
+        fetchShopOrder(selectedShopId);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedShopId]);
+
     useEffect(() => {
         const el = chipsContainerRef.current;
         if (!el) return;
@@ -105,14 +113,44 @@ const ListDetail = () => {
 
     const fetchShopOrder = async (shopId) => {
         if (!shopId) { setShopOrder([]); return; }
-        const resp = await fetch(`${API_BASE_URL}/api/shops/${shopId}/order`);
-        if (resp.ok) setShopOrder(await resp.json());
+        try {
+            const resp = await fetch(`${API_BASE_URL}/api/shops/${shopId}/order`);
+            if (resp.ok) {
+                setShopOrder(await resp.json());
+            } else {
+                // Silently falling back to default order would look like the shop's
+                // aisle layout — say so instead.
+                setShopOrder([]);
+                showToast(await getApiError(resp, 'Failed to load shop order — using default order'));
+            }
+        } catch {
+            setShopOrder([]);
+            showToast('Network error — using default category order');
+        }
     };
 
-    const handleShopChange = (e) => {
+    // Persist the shop on the list so the route order is applied automatically on
+    // the next visit, by whoever opens it. Only reachable from the shopper view;
+    // the manager sets the shop when creating the list. Writing list.shop_id
+    // drives the effect above, which refetches the order exactly once.
+    const handleShopChange = async (e) => {
         const shopId = e.target.value;
-        setSelectedShopId(shopId);
-        fetchShopOrder(shopId);
+        const previousShopId = list?.shop_id || null;
+        setList(prev => (prev ? { ...prev, shop_id: shopId || null } : prev));
+        try {
+            const resp = await fetch(`${API_BASE_URL}/api/lists/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ shop_id: shopId || null })
+            });
+            if (!resp.ok) {
+                setList(prev => (prev ? { ...prev, shop_id: previousShopId } : prev));
+                showToast(await getApiError(resp, 'Failed to save shop'));
+            }
+        } catch {
+            setList(prev => (prev ? { ...prev, shop_id: previousShopId } : prev));
+            showToast('Network error — could not save shop');
+        }
     };
 
     const fetchFrequentItems = async () => {
@@ -439,7 +477,7 @@ const ListDetail = () => {
         if (selectedShopId && shopOrder.length > 0) {
             const orderMap = {};
             shopOrder.forEach(o => (orderMap[o.category_id] = o.sort_order));
-            return [...allCatIds].sort((a, b) => (orderMap[a] || 999) - (orderMap[b] || 999));
+            return [...allCatIds].sort((a, b) => (orderMap[a] ?? 999) - (orderMap[b] ?? 999));
         }
         return [...allCatIds].sort((a, b) => {
             const catA = categories.find(c => c.id === a);
