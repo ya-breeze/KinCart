@@ -836,7 +836,10 @@ func LinkItemAsAlias(c *gin.Context) {
 	}
 
 	// Upsert alias
-	alias, err := services.UpsertItemAlias(database.DB, familyID, plannedName, scannedItem.Name, scannedItem.Price, shopID)
+	// The scanned item is the one actually bought, so its unit/category are what
+	// history should remember for this name.
+	alias, err := services.UpsertItemAlias(database.DB, familyID, plannedName, scannedItem.Name, scannedItem.Price, shopID,
+		scannedItem.Unit, services.CategoryIDPtr(scannedItem.CategoryID))
 	if err != nil {
 		slog.Error("Failed to upsert item alias", "planned", plannedName, "receipt", scannedItem.Name, "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create alias"})

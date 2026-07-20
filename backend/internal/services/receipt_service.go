@@ -652,7 +652,7 @@ func (s *ReceiptService) ConfirmMatch(ctx context.Context, receiptItemID uint, p
 			}
 
 			// Upsert ItemAlias for future auto-matching
-			s.upsertItemAlias(tx, familyID, item.Name, receiptItem.Name, receiptItem.Price, receipt.ShopID)
+			s.upsertItemAlias(tx, familyID, item.Name, receiptItem.Name, receiptItem.Price, receipt.ShopID, item.Unit, CategoryIDPtr(item.CategoryID))
 			s.updateItemFrequency(tx, familyID, item.Name, receiptItem.Price)
 
 			receiptItem.MatchedItemID = plannedItemID
@@ -685,7 +685,7 @@ func (s *ReceiptService) ConfirmMatch(ctx context.Context, receiptItemID uint, p
 			}
 
 			// Self-alias so it's recognized in future receipts
-			s.upsertItemAlias(tx, familyID, receiptItem.Name, receiptItem.Name, receiptItem.Price, receipt.ShopID)
+			s.upsertItemAlias(tx, familyID, receiptItem.Name, receiptItem.Name, receiptItem.Price, receipt.ShopID, newItem.Unit, CategoryIDPtr(newItem.CategoryID))
 			s.updateItemFrequency(tx, familyID, receiptItem.Name, receiptItem.Price)
 
 			receiptItem.MatchedItemID = &newItem.ID
@@ -767,7 +767,7 @@ func (s *ReceiptService) ConfirmAllMatches(ctx context.Context, receiptID uuid.U
 				if err := tx.Create(&newItem).Error; err != nil {
 					return fmt.Errorf("failed to create item from receipt in confirm-all for %q: %w", ri.Name, err)
 				}
-				s.upsertItemAlias(tx, familyID, ri.Name, ri.Name, ri.Price, receipt.ShopID)
+				s.upsertItemAlias(tx, familyID, ri.Name, ri.Name, ri.Price, receipt.ShopID, newItem.Unit, CategoryIDPtr(newItem.CategoryID))
 				s.updateItemFrequency(tx, familyID, ri.Name, ri.Price)
 
 				ri.MatchedItemID = &newItem.ID
@@ -807,7 +807,12 @@ func (s *ReceiptService) checkAndUpdateReceiptStatus(db *gorm.DB, receiptID uuid
 
 // UpsertItemAlias creates or increments a planned_name → receipt_name mapping for a family.
 // Returns the resulting alias record.
-func UpsertItemAlias(tx *gorm.DB, familyID uuid.UUID, plannedName, receiptName string, price float64, shopID *uuid.UUID) (*models.ItemAlias, error) {
+//
+// unit and categoryID record what the item was bought as, so later additions of the
+// same name can be prefilled. Latest wins, but an empty unit or nil categoryID never
+// erases a value already recorded — a caller that simply does not know (an item with
+// no category set, say) must not wipe out history gathered from earlier purchases.
+func UpsertItemAlias(tx *gorm.DB, familyID uuid.UUID, plannedName, receiptName string, price float64, shopID *uuid.UUID, unit string, categoryID *uuid.UUID) (*models.ItemAlias, error) {
 	plannedLower := strings.ToLower(plannedName)
 	receiptLower := strings.ToLower(receiptName)
 
@@ -832,6 +837,8 @@ func UpsertItemAlias(tx *gorm.DB, familyID uuid.UUID, plannedName, receiptName s
 			ReceiptNameLower: receiptLower,
 			ShopID:           shopID,
 			LastPrice:        price,
+			Unit:             unit,
+			CategoryID:       categoryID,
 			PurchaseCount:    1,
 			LastUsedAt:       time.Now(),
 		}
@@ -843,15 +850,33 @@ func UpsertItemAlias(tx *gorm.DB, familyID uuid.UUID, plannedName, receiptName s
 	alias.PurchaseCount++
 	alias.LastPrice = price
 	alias.LastUsedAt = time.Now()
+	// Latest wins, but only when the caller actually knows: an empty unit or nil
+	// category leaves whatever earlier purchases recorded intact.
+	if unit != "" {
+		alias.Unit = unit
+	}
+	if categoryID != nil {
+		alias.CategoryID = categoryID
+	}
 	if err := tx.Save(&alias).Error; err != nil {
 		return nil, err
 	}
 	return &alias, nil
 }
 
+// CategoryIDPtr converts an Item's non-pointer CategoryID into the nullable form
+// ItemAlias stores, mapping the zero UUID ("uncategorized") to nil so it is recorded
+// as "unknown" rather than as a category that does not exist.
+func CategoryIDPtr(id uuid.UUID) *uuid.UUID {
+	if id == uuid.Nil {
+		return nil
+	}
+	return &id
+}
+
 // upsertItemAlias is the internal wrapper used by receipt processing; swallows errors with a warning.
-func (s *ReceiptService) upsertItemAlias(tx *gorm.DB, familyID uuid.UUID, plannedName string, receiptName string, price float64, shopID *uuid.UUID) {
-	if _, err := UpsertItemAlias(tx, familyID, plannedName, receiptName, price, shopID); err != nil {
+func (s *ReceiptService) upsertItemAlias(tx *gorm.DB, familyID uuid.UUID, plannedName string, receiptName string, price float64, shopID *uuid.UUID, unit string, categoryID *uuid.UUID) {
+	if _, err := UpsertItemAlias(tx, familyID, plannedName, receiptName, price, shopID, unit, categoryID); err != nil {
 		slog.Warn("Failed to upsert item alias", "planned", plannedName, "receipt", receiptName, "error", err)
 	}
 }
