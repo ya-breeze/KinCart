@@ -419,7 +419,7 @@ func GetFrequentItems(c *gin.Context) {
 	for _, fi := range freqItems {
 		var aliases []models.ItemAlias
 		database.DB.Preload("Shop").
-			Where("family_id = ? AND LOWER(planned_name) = ?", familyID, strings.ToLower(fi.ItemName)).
+			Where("family_id = ? AND planned_name_lower = ?", familyID, strings.ToLower(fi.ItemName)).
 			Order("purchase_count DESC").
 			Find(&aliases)
 
@@ -597,18 +597,22 @@ func ParseListText(c *gin.Context) {
 		names[i] = strings.ToLower(item.Name)
 	}
 
+	// Match on the indexed planned_name_lower column, populated Go-side (and
+	// backfilled in db.go). SQLite's LOWER() folds ASCII only, so the previous
+	// LOWER(planned_name) comparison silently found nothing for Cyrillic or
+	// accented Czech names — the price hint, and now the unit/category defaults,
+	// simply never appeared for them.
 	var aliases []models.ItemAlias
 	if len(names) > 0 {
 		database.DB.Preload("Shop").
-			Where("family_id = ? AND LOWER(planned_name) IN ?", familyID, names).
+			Where("family_id = ? AND planned_name_lower IN ?", familyID, names).
 			Order("purchase_count DESC").
 			Find(&aliases)
 	}
 
 	byName := make(map[string][]models.ItemAlias)
 	for _, a := range aliases {
-		key := strings.ToLower(a.PlannedName)
-		byName[key] = append(byName[key], a)
+		byName[a.PlannedNameLower] = append(byName[a.PlannedNameLower], a)
 	}
 
 	var shopID *uuid.UUID
