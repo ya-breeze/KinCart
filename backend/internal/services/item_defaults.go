@@ -1,0 +1,167 @@
+package services
+
+import (
+	"context"
+	"strings"
+
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+
+	"kincart/internal/models"
+)
+
+// ItemDefaults is the unit and category an item name should be prefilled with.
+// A zero ItemDefaults means "nothing known" — the caller keeps its own defaults
+// (`pcs` / uncategorized) rather than treating this as an instruction to clear.
+type ItemDefaults struct {
+	Unit       string
+	CategoryID *uuid.UUID
+}
+
+// Known reports whether anything at all was resolved.
+func (d ItemDefaults) Known() bool {
+	return d.Unit != "" || d.CategoryID != nil
+}
+
+// ResolveItemDefaults resolves the unit and category to prefill for a single item
+// name, from this family's purchase history.
+//
+// Unit is resolved per-shop: an alias recorded at shopID wins, because the same
+// item is routinely a pack at one shop and loose at another. Category ignores shop
+// entirely — where a thing belongs in the aisle layout does not change per store.
+//
+// History only. The AI fallback for never-seen items lives at the call sites that
+// can afford it (paste preview, receipt processing), not here, so that a synchronous
+// add can call this freely without risking a network round-trip.
+func ResolveItemDefaults(ctx context.Context, tx *gorm.DB, familyID uuid.UUID, name string, shopID *uuid.UUID) (ItemDefaults, error) {
+	byName, err := ResolveItemDefaultsBatch(ctx, tx, familyID, []string{name}, shopID)
+	if err != nil {
+		return ItemDefaults{}, err
+	}
+	return byName[strings.ToLower(name)], nil
+}
+
+// ResolveItemDefaultsBatch resolves defaults for many names in a single query, keyed
+// by the Go-lowercased name. Callers resolving more than one item MUST use this rather
+// than looping over ResolveItemDefaults, which would issue one query per name.
+func ResolveItemDefaultsBatch(ctx context.Context, tx *gorm.DB, familyID uuid.UUID, names []string, shopID *uuid.UUID) (map[string]ItemDefaults, error) {
+	out := make(map[string]ItemDefaults, len(names))
+	if len(names) == 0 {
+		return out, nil
+	}
+
+	// Go-lowercased, matched against the indexed planned_name_lower column. SQLite's
+	// LOWER() folds ASCII only, so a SQL-side comparison would silently miss every
+	// Cyrillic and accented Czech name — exactly the families this feature is for.
+	lowered := make([]string, 0, len(names))
+	seen := make(map[string]struct{}, len(names))
+	for _, n := range names {
+		l := strings.ToLower(n)
+		if l == "" {
+			continue
+		}
+		if _, dup := seen[l]; dup {
+			continue
+		}
+		seen[l] = struct{}{}
+		lowered = append(lowered, l)
+	}
+	if len(lowered) == 0 {
+		return out, nil
+	}
+
+	var aliases []models.ItemAlias
+	if err := tx.WithContext(ctx).
+		Where("family_id = ? AND planned_name_lower IN ?", familyID, lowered).
+		Find(&aliases).Error; err != nil {
+		return nil, err
+	}
+
+	grouped := make(map[string][]models.ItemAlias, len(lowered))
+	for _, a := range aliases {
+		grouped[a.PlannedNameLower] = append(grouped[a.PlannedNameLower], a)
+	}
+	for name, group := range grouped {
+		out[name] = ItemDefaults{
+			Unit:       resolveUnit(group, shopID),
+			CategoryID: resolveCategory(group),
+		}
+	}
+	return out, nil
+}
+
+// resolveUnit prefers the unit recorded at shopID, falling back to the most common
+// unit for this name across all shops.
+func resolveUnit(group []models.ItemAlias, shopID *uuid.UUID) string {
+	if shopID != nil {
+		atShop := make([]models.ItemAlias, 0, len(group))
+		for _, a := range group {
+			if a.ShopID != nil && *a.ShopID == *shopID {
+				atShop = append(atShop, a)
+			}
+		}
+		if u := mostCommonUnit(atShop); u != "" {
+			return u
+		}
+	}
+	return mostCommonUnit(group)
+}
+
+// mostCommonUnit picks the unit backed by the most purchases, breaking ties toward
+// the most recently used so the answer is stable rather than map-order dependent.
+func mostCommonUnit(group []models.ItemAlias) string {
+	type tally struct {
+		count int
+		best  models.ItemAlias
+	}
+	tallies := make(map[string]*tally)
+	for _, a := range group {
+		if a.Unit == "" {
+			continue
+		}
+		t, ok := tallies[a.Unit]
+		if !ok {
+			tallies[a.Unit] = &tally{count: a.PurchaseCount, best: a}
+			continue
+		}
+		t.count += a.PurchaseCount
+		if a.LastUsedAt.After(t.best.LastUsedAt) {
+			t.best = a
+		}
+	}
+
+	var winner string
+	var winning *tally
+	for unit, t := range tallies {
+		switch {
+		case winning == nil,
+			t.count > winning.count,
+			t.count == winning.count && t.best.LastUsedAt.After(winning.best.LastUsedAt):
+			winner, winning = unit, t
+		}
+	}
+	return winner
+}
+
+// resolveCategory takes the most recently recorded category for this name, breaking
+// ties by purchase count. Most-recent rather than most-frequent so that deliberately
+// recategorising an item takes effect on the next add instead of being outvoted by
+// however many times it was filed the old way.
+func resolveCategory(group []models.ItemAlias) *uuid.UUID {
+	var best *models.ItemAlias
+	for i := range group {
+		a := &group[i]
+		if a.CategoryID == nil {
+			continue
+		}
+		if best == nil ||
+			a.LastUsedAt.After(best.LastUsedAt) ||
+			(a.LastUsedAt.Equal(best.LastUsedAt) && a.PurchaseCount > best.PurchaseCount) {
+			best = a
+		}
+	}
+	if best == nil {
+		return nil
+	}
+	return best.CategoryID
+}

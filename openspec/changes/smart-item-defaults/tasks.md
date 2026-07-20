@@ -6,7 +6,7 @@
 
 ## 2. Backend — resolver
 
-- [ ] 2.1 Implement `resolveItemDefaults(ctx, tx, familyID, name, shopID)` returning `(unit, categoryID)`: alias history first (unit shop-preferred → most common; category most-recent), using the Go-lowercased name index. Add a batch form `resolveItemDefaultsBatch(..., names []string, ...)` that derives defaults from already-loaded aliases, for the paste and bulk paths
+- [x] 2.1 Implement `resolveItemDefaults(ctx, tx, familyID, name, shopID)` returning `(unit, categoryID)`: alias history first (unit shop-preferred → most common; category most-recent), using the Go-lowercased name index. Add a batch form `resolveItemDefaultsBatch(..., names []string, ...)` that derives defaults from already-loaded aliases, for the paste and bulk paths
 - [ ] 2.2 Add the Gemini fallback **for the paste-preview and receipt paths only**: give the prompt the family's existing category names and constrain the returned `category` to one of them (or none — never invented); extend the shopping-list parse schema with that optional per-item `category`; add a minimal single-item categorize helper for the receipt path; guard on `gemini != nil`
 - [ ] 2.3 Resolve the AI-returned category name to a `Category` row using Go-side lowercasing (never SQL `LOWER()`, which misses Cyrillic/Czech names); unmatched/none → leave uncategorized
 - [ ] 2.4 Unit tests for the resolver: shop-preferred unit, cross-shop fallback, category-from-history (most-recent, tie-broken by frequency), AI category constrained to family list, non-ASCII category name matched Go-side, empty when unknown, explicit value not overridden
