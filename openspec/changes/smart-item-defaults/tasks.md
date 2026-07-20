@@ -17,7 +17,7 @@
 - [x] 3.2 Regression test for 3.1: a Cyrillic-named item with alias history gets its price hint (and now unit/category) in the paste preview. Note `receipt_service_test.go` deliberately uses ASCII names because of this same trap — the new test must use a non-ASCII name on purpose
 - [x] 3.3 `ParseListText`: enrich each result with resolved unit/category from the already-loaded `byName` aliases (use `req.ShopID`, fall back to the list's `shop_id`). Do not call the per-item resolver inside the loop — it would reintroduce the N+1 that `items.go:585` avoids
 - [x] 3.4 `AddItemToList` and `BulkAddItems`: fill empty unit/category from alias history only, using the list's shop. **No Gemini call on these paths** — an unseen item keeps `pcs`/uncategorized
-- [ ] 3.5 `receipt_service.go` (both new-item creation sites, ~665 and ~740): replace the first-category default with `resolveItemDefaults`
+- [x] 3.5 `receipt_service.go` (both new-item creation sites, ~665 and ~740): replace the first-category default with `resolveItemDefaults`
 - [ ] 3.6 Tests: receipt-created item lands in the remembered category, not the first-by-sort-order one; manual add of an unseen item issues no AI call
 
 ## 4. Frontend
