@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -37,6 +38,47 @@ func enforceBoughtAbsentExclusivity(item *models.Item) {
 	}
 }
 
+// applyRememberedDefaults fills the unit and category the request left unspecified
+// from this family's purchase history, using the list's shop for per-shop unit memory.
+//
+// History only, deliberately: these are the synchronous add paths, so an unseen item
+// keeps pcs/uncategorized rather than blocking the request on an AI round-trip. The
+// AI fallback lives on the paste preview (batched into the parse call already in
+// flight) and receipt processing (a background ticker).
+//
+// Resolution is batched, so a bulk add of N items costs one query rather than N.
+func applyRememberedDefaults(ctx context.Context, items []models.Item, familyID uuid.UUID, shopID *uuid.UUID) {
+	names := make([]string, 0, len(items))
+	for i := range items {
+		// "pcs" is the default the client sends when the user picked nothing, so it
+		// counts as unspecified — same rule the paste preview applies.
+		needsUnit := items[i].Unit == "" || items[i].Unit == defaultItemUnit
+		if needsUnit || items[i].CategoryID == uuid.Nil {
+			names = append(names, items[i].Name)
+		}
+	}
+	if len(names) == 0 {
+		return
+	}
+
+	byName, err := services.ResolveItemDefaultsBatch(ctx, database.DB, familyID, names, shopID)
+	if err != nil {
+		// A missing hint is not worth failing the add over.
+		slog.Warn("Could not resolve remembered item defaults", "error", err)
+		return
+	}
+
+	for i := range items {
+		defaults := byName[strings.ToLower(items[i].Name)]
+		if defaults.Unit != "" && (items[i].Unit == "" || items[i].Unit == defaultItemUnit) {
+			items[i].Unit = defaults.Unit
+		}
+		if items[i].CategoryID == uuid.Nil && defaults.CategoryID != nil {
+			items[i].CategoryID = *defaults.CategoryID
+		}
+	}
+}
+
 func AddItemToList(c *gin.Context) {
 	listID := c.Param("id")
 	familyID := c.MustGet("family_id").(uuid.UUID)
@@ -58,6 +100,12 @@ func AddItemToList(c *gin.Context) {
 	item.TenantModel.FamilyID = familyID
 	item.ListID = list.ID
 	enforceBoughtAbsentExclusivity(&item)
+
+	// Before validation: a category filled in from history belongs to this family
+	// by construction, so it passes the ownership check below.
+	single := []models.Item{item}
+	applyRememberedDefaults(c.Request.Context(), single, familyID, list.ShopID)
+	item = single[0]
 
 	// Verify category ownership if provided
 	if err := validateItemsFamily([]models.Item{item}, familyID); err != nil {
@@ -737,6 +785,13 @@ func BulkAddItems(c *gin.Context) {
 		items[i].TenantModel.FamilyID = familyID
 		items[i].ListID = list.ID
 		enforceBoughtAbsentExclusivity(&items[i])
+	}
+
+	applyRememberedDefaults(c.Request.Context(), items, familyID, list.ShopID)
+
+	if err := validateItemsFamily(items, familyID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 
 	if err := database.DB.Create(&items).Error; err != nil {
