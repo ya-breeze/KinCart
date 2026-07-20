@@ -1,6 +1,6 @@
 ## 1. Backend — model & history
 
-- [ ] 1.1 Add `Unit string` and `CategoryID *uuid.UUID` to `ItemAlias` in `internal/models/models.go`
+- [x] 1.1 Add `Unit string` and `CategoryID *uuid.UUID` to `ItemAlias` in `internal/models/models.go`
 - [ ] 1.2 Extend `upsertItemAlias` to accept and persist unit + category (latest wins; keep existing non-empty value when the new one is empty)
 - [ ] 1.3 Update all `upsertItemAlias` call sites in `receipt_service.go` to pass the item's unit and category
 
