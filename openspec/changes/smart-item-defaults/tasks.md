@@ -28,5 +28,5 @@
 
 ## 5. Verification
 
-- [ ] 5.1 `make lint`, `make test-backend`, `make test-frontend` pass
-- [ ] 5.2 E2E/manual: paste a known item → correct unit/category prefilled; upload a receipt with a known item → lands in the right category; unseen item with AI → sensible guess; with AI off → plain defaults, no error
+- [x] 5.1 `make lint`, `make test-backend`, `make test-frontend` pass
+- [x] 5.2 E2E/manual: paste a known item → correct unit/category prefilled; upload a receipt with a known item → lands in the right category; unseen item with AI → sensible guess; with AI off → plain defaults, no error
