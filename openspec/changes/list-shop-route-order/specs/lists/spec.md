@@ -2,7 +2,7 @@
 
 ### Requirement: List shop association
 
-A shopping list SHALL have an optional associated shop (`shop_id`), which determines the category ordering used when viewing the list. The association is nullable; a list may have no shop.
+A shopping list SHALL have an optional associated shop (`shop_id`), which determines the category ordering used when viewing the list. The association is nullable; a list may have no shop. The manager sets the shop when creating the list; the shopper may change it from the list detail view while shopping.
 
 #### Scenario: Create a list with a shop
 - **WHEN** the user creates a list and selects a shop in the create-list dialog
@@ -17,14 +17,18 @@ A shopping list SHALL have an optional associated shop (`shop_id`), which determ
 - **WHEN** a create or update request supplies a `shop_id` that does not belong to the requester's family
 - **THEN** the request is rejected with a validation error and the list's shop is not changed
 
-#### Scenario: Change a list's shop
-- **WHEN** a user (manager or shopper) selects a different shop for a list
+#### Scenario: Shopper changes a list's shop
+- **WHEN** the shopper selects a different shop for a list that is ready for shopping
 - **THEN** the list's `shop_id` is persisted via the list update endpoint
 - **AND** subsequent loads of the list reflect the new shop
 
 #### Scenario: Clear a list's shop
-- **WHEN** a user sets a list's shop selector back to "No shop / default order"
+- **WHEN** the shopper sets a list's shop selector back to "Default Order"
 - **THEN** the list's `shop_id` is persisted as null
+
+#### Scenario: Duplicating a list keeps its shop
+- **WHEN** a list with an associated shop is duplicated
+- **THEN** the copy carries the same `shop_id`, so its route order still applies
 
 #### Scenario: List responses include the shop
 - **WHEN** a client fetches a list or the list collection

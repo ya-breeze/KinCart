@@ -8,7 +8,7 @@ Multi-tenancy is via kin-core `TenantModel`: handlers must scope every query by 
 
 **Goals:**
 - Persist an optional shop on a list so the shopper's list auto-sorts by that shop's route.
-- Let the manager set the shop at creation and change it on the list detail.
+- Let the manager set the shop at creation and the shopper change it on the list detail.
 - Keep the default behavior identical when no shop is set.
 
 **Non-Goals:**
@@ -24,7 +24,7 @@ Multi-tenancy is via kin-core `TenantModel`: handlers must scope every query by 
 
 - **`UpdateList` must accept clearing the shop.** Because `UpdateList` uses `ShouldBindJSON` into the loaded struct then `Save`, sending `shop_id: null` naturally clears it. We keep the existing tenant-field preservation logic (id/family_id are restored after bind). No partial-PATCH semantics needed — the frontend already sends the full list object on update.
 
-- **Frontend: initialize from `list.shop_id`, persist on change.** `ListDetail.jsx` sets `selectedShopId` from `list.shop_id` once the list loads (and fetches that shop's order). `handleShopChange` continues to reorder the local view and additionally PATCHes the list with the new `shop_id` for both manager and shopper. `Dashboard.jsx` create dialog adds a shop `<select>` (options fetched from `/api/shops`, plus a "No shop / default order" empty option) and includes `shop_id` in the create body.
+- **Frontend: derive from `list.shop_id`, persist on change.** `ListDetail.jsx` derives the selected shop from `list.shop_id` and fetches that shop's order when it changes. `handleShopChange` PATCHes the list with the new `shop_id` and reverts the view if the request fails. Note `ListDetail` has two render trees (`if (isManager)` returns its own); the selector lives in the shopper tree only, so a manager-side control would need separate UI. `Dashboard.jsx` create dialog adds a shop `<select>` (options fetched from `/api/shops`, plus a "No shop / default order" empty option) and includes `shop_id` in the create body.
 
 - **Reuse `getSortedCategoryIds()` unchanged in logic.** It already produces shop-ordered ids when `selectedShopId` + `shopOrder` are set, with unordered categories falling to the end (`|| 999`). Initializing `selectedShopId` from the persisted value is the only change needed to make it apply automatically.
 
