@@ -12,6 +12,12 @@ Items SHALL be displayed grouped by their assigned category. When the list has a
 - **GIVEN** a list where some items have no category assigned
 - **THEN** those items appear under an "Uncategorized" group after all categorized groups
 
+#### Scenario: Shop-specific category order applied when shop is selected
+- **GIVEN** the manager has configured a custom aisle order for a shop
+- **WHEN** the shopper selects that shop on the list detail page
+- **THEN** category groups are reordered to match that shop's aisle layout
+- **AND** the selection is persisted on the list, so it still applies on the next visit
+
 #### Scenario: Category order follows the list's shop automatically
 - **GIVEN** the list has an associated shop for which the manager configured a custom aisle order
 - **WHEN** the list is viewed
