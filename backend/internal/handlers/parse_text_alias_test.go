@@ -144,3 +144,80 @@ func TestParseListText_StillMatchesASCIIAliasName(t *testing.T) {
 	require.Len(t, results, 1)
 	assert.Equal(t, float64(1.25), results[0]["suggested_price"])
 }
+
+// History supplies the unit when the pasted text named none.
+func TestParseListText_RememberedUnitFillsUnspecified(t *testing.T) {
+	setupParseTextTestDB(t)
+
+	family := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "Smiths"}}
+	require.NoError(t, database.DB.Create(&family).Error)
+	list := models.ShoppingList{
+		TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID},
+		Title:       "Weekly",
+	}
+	require.NoError(t, database.DB.Create(&list).Error)
+
+	cat := models.Category{
+		TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID},
+		Name:        "Dairy",
+	}
+	require.NoError(t, database.DB.Create(&cat).Error)
+
+	alias := models.ItemAlias{
+		FamilyID: family.ID, PlannedName: "yogurt", PlannedNameLower: "yogurt",
+		ReceiptName: "greek yogurt", ReceiptNameLower: "greek yogurt",
+		Unit: "pack", CategoryID: &cat.ID, LastPrice: 2.5, PurchaseCount: 4,
+		LastUsedAt: time.Now(),
+	}
+	require.NoError(t, database.DB.Create(&alias).Error)
+
+	results := postParseText(t, family.ID, list.ID, "yogurt")
+	require.Len(t, results, 1)
+
+	assert.Equal(t, "pack", results[0]["unit"], "no unit in the text → history fills it")
+	assert.Equal(t, cat.ID.String(), results[0]["suggested_category_id"])
+	assert.Equal(t, "Dairy", results[0]["suggested_category_name"])
+}
+
+// A unit written into the text is an explicit choice and must survive.
+func TestParseListText_ExplicitUnitBeatsHistory(t *testing.T) {
+	setupParseTextTestDB(t)
+
+	family := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "Smiths"}}
+	require.NoError(t, database.DB.Create(&family).Error)
+	list := models.ShoppingList{
+		TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID},
+		Title:       "Weekly",
+	}
+	require.NoError(t, database.DB.Create(&list).Error)
+
+	alias := models.ItemAlias{
+		FamilyID: family.ID, PlannedName: "mouka", PlannedNameLower: "mouka",
+		ReceiptName: "mouka hladká", ReceiptNameLower: "mouka hladká",
+		Unit: "pack", PurchaseCount: 9, LastUsedAt: time.Now(),
+	}
+	require.NoError(t, database.DB.Create(&alias).Error)
+
+	results := postParseText(t, family.ID, list.ID, "2 kg mouka")
+	require.Len(t, results, 1)
+	assert.Equal(t, "kg", results[0]["unit"],
+		"an explicitly pasted unit is a user choice and is never overridden by history")
+}
+
+// An item with no history and no AI pick keeps the plain defaults.
+func TestParseListText_UnknownItemKeepsPlainDefaults(t *testing.T) {
+	setupParseTextTestDB(t)
+
+	family := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "Smiths"}}
+	require.NoError(t, database.DB.Create(&family).Error)
+	list := models.ShoppingList{
+		TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID},
+		Title:       "Weekly",
+	}
+	require.NoError(t, database.DB.Create(&list).Error)
+
+	results := postParseText(t, family.ID, list.ID, "dragonfruit")
+	require.Len(t, results, 1)
+	assert.Equal(t, "pcs", results[0]["unit"])
+	assert.Nil(t, results[0]["suggested_category_id"], "nothing known invents nothing")
+}

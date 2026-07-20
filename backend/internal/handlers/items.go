@@ -23,6 +23,11 @@ import (
 	"kincart/internal/utils"
 )
 
+// defaultItemUnit is what Item.Unit defaults to and what the parsers emit when the
+// text names no unit. Treated as "unspecified" when deciding whether remembered
+// history may override a parsed unit.
+const defaultItemUnit = "pcs"
+
 // enforceBoughtAbsentExclusivity applies the "bought wins" invariant to an item
 // being created. Creation handlers bind a full models.Item from JSON, so a client
 // can name both flags in one payload; UpdateItem's guard never sees those requests.
@@ -551,6 +556,77 @@ type parsedItemResult struct {
 	SuggestedPrice float64             `json:"suggested_price,omitempty"`
 	AliasCount     int                 `json:"alias_count,omitempty"`
 	Variants       []parsedItemVariant `json:"variants,omitempty"`
+	// Resolved category for this item, from purchase history or the AI's
+	// constrained pick. Name travels with the ID so the preview can show it
+	// without loading the category list itself.
+	SuggestedCategoryID   *uuid.UUID `json:"suggested_category_id,omitempty"`
+	SuggestedCategoryName string     `json:"suggested_category_name,omitempty"`
+}
+
+// enrichParsedItem attaches the price hint, alias variants and the resolved unit and
+// category to one parsed item.
+//
+// matched is this name's slice of the aliases ParseListText already batch-loaded, so
+// nothing here queries: resolving per item would reintroduce the N+1 that batch load
+// exists to avoid.
+func enrichParsedItem(item ai.ParsedShoppingItem, matched []models.ItemAlias,
+	shopID *uuid.UUID, categories []models.Category) parsedItemResult {
+	result := parsedItemResult{ParsedShoppingItem: item, AliasCount: len(matched)}
+
+	defaults := services.ItemDefaultsFromAliases(matched, shopID)
+
+	// A unit written into the pasted text is an explicit choice and wins. "pcs" is
+	// what the parsers emit when the text named no unit, so it does not count as
+	// explicit and history may override it — otherwise a remembered unit could never
+	// apply, since parsing always yields some unit.
+	if defaults.Unit != "" && (result.Unit == "" || result.Unit == defaultItemUnit) {
+		result.Unit = defaults.Unit
+	}
+
+	// History first, then the AI's pick. The schema constrains that pick to the
+	// family's own category names, but it is still matched Go-side: an unmatched
+	// name leaves the item uncategorized rather than inventing a category.
+	switch {
+	case defaults.CategoryID != nil:
+		result.SuggestedCategoryID = defaults.CategoryID
+	case item.Category != "":
+		result.SuggestedCategoryID = services.MatchCategoryName(categories, item.Category)
+	}
+	for _, cat := range categories {
+		if result.SuggestedCategoryID != nil && cat.ID == *result.SuggestedCategoryID {
+			result.SuggestedCategoryName = cat.Name
+			break
+		}
+	}
+
+	if len(matched) == 0 {
+		return result
+	}
+
+	// Reorder so the shop-preferred alias is first (becomes the default variant)
+	if shopID != nil {
+		for j, a := range matched {
+			if a.ShopID != nil && *a.ShopID == *shopID {
+				matched[0], matched[j] = matched[j], matched[0]
+				break
+			}
+		}
+	}
+	result.SuggestedPrice = matched[0].LastPrice
+	result.Variants = make([]parsedItemVariant, len(matched))
+	for j, a := range matched {
+		shopName := ""
+		if a.Shop != nil {
+			shopName = a.Shop.Name
+		}
+		result.Variants[j] = parsedItemVariant{
+			ReceiptName: a.ReceiptName,
+			ShopName:    shopName,
+			LastPrice:   a.LastPrice,
+			Count:       a.PurchaseCount,
+		}
+	}
+	return result
 }
 
 func ParseListText(c *gin.Context) {
@@ -615,43 +691,21 @@ func ParseListText(c *gin.Context) {
 		byName[a.PlannedNameLower] = append(byName[a.PlannedNameLower], a)
 	}
 
+	// The request's shop wins; otherwise fall back to the shop the list itself is
+	// for, so per-shop unit memory still applies when the client doesn't name one.
 	var shopID *uuid.UUID
 	if req.ShopID != "" {
 		if parsed, err := uuid.Parse(req.ShopID); err == nil {
 			shopID = &parsed
 		}
 	}
+	if shopID == nil {
+		shopID = list.ShopID
+	}
 
 	results := make([]parsedItemResult, len(parsedItems))
 	for i, item := range parsedItems {
-		matched := byName[strings.ToLower(item.Name)]
-		result := parsedItemResult{ParsedShoppingItem: item, AliasCount: len(matched)}
-		if len(matched) > 0 {
-			// Reorder so shop-preferred alias is first (becomes default variant)
-			if shopID != nil {
-				for j, a := range matched {
-					if a.ShopID != nil && *a.ShopID == *shopID {
-						matched[0], matched[j] = matched[j], matched[0]
-						break
-					}
-				}
-			}
-			result.SuggestedPrice = matched[0].LastPrice
-			result.Variants = make([]parsedItemVariant, len(matched))
-			for j, a := range matched {
-				shopName := ""
-				if a.Shop != nil {
-					shopName = a.Shop.Name
-				}
-				result.Variants[j] = parsedItemVariant{
-					ReceiptName: a.ReceiptName,
-					ShopName:    shopName,
-					LastPrice:   a.LastPrice,
-					Count:       a.PurchaseCount,
-				}
-			}
-		}
-		results[i] = result
+		results[i] = enrichParsedItem(item, byName[strings.ToLower(item.Name)], shopID, categories)
 	}
 
 	c.JSON(http.StatusOK, results)

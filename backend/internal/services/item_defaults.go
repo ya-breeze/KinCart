@@ -82,12 +82,20 @@ func ResolveItemDefaultsBatch(ctx context.Context, tx *gorm.DB, familyID uuid.UU
 		grouped[a.PlannedNameLower] = append(grouped[a.PlannedNameLower], a)
 	}
 	for name, group := range grouped {
-		out[name] = ItemDefaults{
-			Unit:       resolveUnit(group, shopID),
-			CategoryID: resolveCategory(group),
-		}
+		out[name] = ItemDefaultsFromAliases(group, shopID)
 	}
 	return out, nil
+}
+
+// ItemDefaultsFromAliases derives the defaults from aliases the caller has already
+// loaded. ParseListText batch-loads aliases for the whole paste to build its price
+// hints and variants; it applies the same rules through this rather than re-querying
+// per item, which would undo that batching.
+func ItemDefaultsFromAliases(group []models.ItemAlias, shopID *uuid.UUID) ItemDefaults {
+	return ItemDefaults{
+		Unit:       resolveUnit(group, shopID),
+		CategoryID: resolveCategory(group),
+	}
 }
 
 // LoadFamilyCategories returns the family's categories in display order. Callers
