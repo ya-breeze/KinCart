@@ -22,9 +22,9 @@
 
 ## 4. Frontend
 
-- [ ] 4.1 Surface the suggested unit and category in the paste preview (`PasteItemsPanel.jsx`) so the user can see/adjust before confirming
-- [ ] 4.2 Ensure confirmed bulk-add carries unit + category_id through to creation
-- [ ] 4.3 Error handling via `useToast`/`getApiError` for any new fetches
+- [x] 4.1 Surface the suggested unit and category in the paste preview (`PasteItemsPanel.jsx`) so the user can see/adjust before confirming
+- [x] 4.2 Ensure confirmed bulk-add carries unit + category_id through to creation
+- [x] 4.3 Error handling via `useToast`/`getApiError` for any new fetches
 
 ## 5. Verification
 
