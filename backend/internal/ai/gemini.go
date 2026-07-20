@@ -55,25 +55,49 @@ type ParsedShoppingItem struct {
 	Name     string  `json:"name"`
 	Quantity float64 `json:"quantity"`
 	Unit     string  `json:"unit"`
+	// Category is one of the family's own category names, or empty when the model
+	// had no confident pick. Never a name the family does not already have — the
+	// schema constrains it to an enum of their categories.
+	Category string `json:"category,omitempty"`
 }
 
 type parsedShoppingListResponse struct {
 	Items []ParsedShoppingItem `json:"items"`
 }
 
-func buildShoppingListSchema() *genai.Schema {
+// buildShoppingListSchema returns the parse schema, optionally constraining each
+// item's category to one of the family's own category names.
+//
+// The enum is what keeps this usable for non-English families: they name their
+// categories themselves ("Mléčné výrobky", "Молочное"), and a free-text guess would
+// come back in English and match nothing. With no categories to choose from, the
+// property is omitted entirely rather than sent as an empty enum, which is not a
+// valid schema.
+func buildShoppingListSchema(categories []string) *genai.Schema {
+	itemProps := map[string]*genai.Schema{
+		"name":     {Type: genai.TypeString, Description: "Clean item name in nominative case"},
+		"quantity": {Type: genai.TypeNumber},
+		"unit":     {Type: genai.TypeString, Description: "One of: pcs, kg, g, 100g, l, ml, pack"},
+	}
+	if len(categories) > 0 {
+		itemProps["category"] = &genai.Schema{
+			Type: genai.TypeString,
+			Enum: categories,
+			Description: "The single best-fitting category for this item, chosen from the " +
+				"listed values. Omit entirely if none clearly fits — do not guess.",
+		}
+	}
+
 	return &genai.Schema{
 		Type: genai.TypeObject,
 		Properties: map[string]*genai.Schema{
 			"items": {
 				Type: genai.TypeArray,
 				Items: &genai.Schema{
-					Type: genai.TypeObject,
-					Properties: map[string]*genai.Schema{
-						"name":     {Type: genai.TypeString, Description: "Clean item name in nominative case"},
-						"quantity": {Type: genai.TypeNumber},
-						"unit":     {Type: genai.TypeString, Description: "One of: pcs, kg, g, 100g, l, ml, pack"},
-					},
+					Type:       genai.TypeObject,
+					Properties: itemProps,
+					// category stays optional: forcing it would make the model invent a
+					// pick for items that genuinely fit none of the family's categories.
 					Required: []string{"name", "quantity", "unit"},
 				},
 			},
@@ -82,7 +106,18 @@ func buildShoppingListSchema() *genai.Schema {
 	}
 }
 
-func (c *GeminiClient) ParseShoppingText(ctx context.Context, text string) ([]ParsedShoppingItem, error) {
+// categoryPromptSuffix tells the model how to use the category enum, when there is one.
+func categoryPromptSuffix(categories []string) string {
+	if len(categories) == 0 {
+		return ""
+	}
+	return "\n- Assign each item the best-fitting category from this list, using the name exactly as written: " +
+		strings.Join(categories, ", ") +
+		"\n- These are the user's own categories and may be in any language; do not translate them" +
+		"\n- If no category clearly fits an item, omit the category field for that item rather than guessing"
+}
+
+func (c *GeminiClient) ParseShoppingText(ctx context.Context, text string, categories []string) ([]ParsedShoppingItem, error) {
 	prompt := `You are a shopping list parser. Parse the following shopping list text into structured items.
 
 Rules:
@@ -92,7 +127,7 @@ Rules:
 - Normalize item names to nominative case (e.g. "йогурта" → "йогурт", "творога" → "творог")
 - Return short generic names without quantity or unit in the name
 - Infer unit from context: кг/kg → "kg"; г/g → "g"; мл/ml → "ml"; л/l → "l"; otherwise → "pcs"
-- If no quantity is specified, assume 1
+- If no quantity is specified, assume 1` + categoryPromptSuffix(categories) + `
 
 Shopping list:
 ` + text
@@ -103,7 +138,7 @@ Shopping list:
 
 	resp, err := c.client.Models.GenerateContent(ctx, c.model, []*genai.Content{content}, &genai.GenerateContentConfig{
 		ResponseMIMEType: "application/json",
-		ResponseSchema:   buildShoppingListSchema(),
+		ResponseSchema:   buildShoppingListSchema(categories),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("gemini parsing error: %w", err)
@@ -126,6 +161,70 @@ Shopping list:
 	}
 
 	return parsed.Items, nil
+}
+
+// SuggestedItemDefaults is a common-sense guess for an item with no purchase history.
+type SuggestedItemDefaults struct {
+	Unit     string `json:"unit"`
+	Category string `json:"category,omitempty"`
+}
+
+// SuggestItemDefaults asks for a common-sense unit and category for a single item
+// name. Used on the receipt path, where items arrive one at a time and there is no
+// parse call to piggyback on.
+//
+// Category is constrained to the family's own names, same as the batch path; with no
+// categories supplied it returns a unit only.
+func (c *GeminiClient) SuggestItemDefaults(ctx context.Context, name string, categories []string) (SuggestedItemDefaults, error) {
+	props := map[string]*genai.Schema{
+		"unit": {
+			Type:        genai.TypeString,
+			Description: "The unit this item is normally bought in. One of: pcs, kg, g, 100g, l, ml, pack",
+		},
+	}
+	if len(categories) > 0 {
+		props["category"] = &genai.Schema{
+			Type: genai.TypeString,
+			Enum: categories,
+			Description: "The single best-fitting category, chosen from the listed values. " +
+				"Omit entirely if none clearly fits — do not guess.",
+		}
+	}
+
+	prompt := "What unit is the grocery item \"" + name + "\" normally bought in?" +
+		categoryPromptSuffix(categories) +
+		"\n\nAnswer for this one item only."
+
+	resp, err := c.client.Models.GenerateContent(ctx, c.model,
+		[]*genai.Content{{Parts: []*genai.Part{{Text: prompt}}}},
+		&genai.GenerateContentConfig{
+			ResponseMIMEType: "application/json",
+			ResponseSchema: &genai.Schema{
+				Type:       genai.TypeObject,
+				Properties: props,
+				Required:   []string{"unit"},
+			},
+		})
+	if err != nil {
+		return SuggestedItemDefaults{}, fmt.Errorf("gemini categorize error: %w", err)
+	}
+
+	if len(resp.Candidates) == 0 || resp.Candidates[0].Content == nil || len(resp.Candidates[0].Content.Parts) == 0 {
+		return SuggestedItemDefaults{}, fmt.Errorf("no candidates returned")
+	}
+
+	responseText := ""
+	for _, part := range resp.Candidates[0].Content.Parts {
+		if part.Text != "" {
+			responseText += part.Text
+		}
+	}
+
+	var out SuggestedItemDefaults
+	if err := json.Unmarshal([]byte(strings.TrimSpace(responseText)), &out); err != nil {
+		return SuggestedItemDefaults{}, fmt.Errorf("failed to decode categorize response: %w, response: %s", err, responseText)
+	}
+	return out, nil
 }
 
 func NewGeminiClient(ctx context.Context) (*GeminiClient, error) {

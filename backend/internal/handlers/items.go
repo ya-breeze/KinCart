@@ -569,13 +569,25 @@ func ParseListText(c *gin.Context) {
 		return
 	}
 
+	// The model may only pick from the family's own category names — they are
+	// user-created and frequently not in English, so a free-text guess would match
+	// nothing. No categories means no category property in the schema at all.
+	var categories []models.Category
+	if err := database.DB.Where("family_id = ?", familyID).Order("sort_order asc").Find(&categories).Error; err != nil {
+		slog.Warn("Could not load categories for parse enrichment", "error", err)
+	}
+	categoryNames := make([]string, 0, len(categories))
+	for _, cat := range categories {
+		categoryNames = append(categoryNames, cat.Name)
+	}
+
 	var parsedItems []ai.ParsedShoppingItem
 	geminiClient, err := ai.NewGeminiClient(c.Request.Context())
 	if err != nil {
 		slog.Info("Gemini unavailable, using fallback parser", "reason", err)
 		parsedItems = ai.ParseShoppingTextFallback(req.Text)
 	} else {
-		parsedItems, err = geminiClient.ParseShoppingText(c.Request.Context(), req.Text)
+		parsedItems, err = geminiClient.ParseShoppingText(c.Request.Context(), req.Text, categoryNames)
 		if err != nil {
 			slog.Warn("Gemini parsing failed, using fallback parser", "error", err)
 			parsedItems = ai.ParseShoppingTextFallback(req.Text)
