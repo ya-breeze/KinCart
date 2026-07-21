@@ -5,7 +5,7 @@ import { Plus, Search, ChevronRight, ChevronDown } from 'lucide-react';
 
 const UNITS = ['pcs', 'kg', 'g', '100g', 'l', 'ml', 'pack'];
 
-const PasteItemsPanel = ({ listId, shops, onItemsAdded, initialText = '' }) => {
+const PasteItemsPanel = ({ listId, shops, categories = [], onItemsAdded, initialText = '' }) => {
     const { showToast } = useToast();
     const [text, setText] = useState(initialText);
     const [selectedShopId, setSelectedShopId] = useState('');
@@ -27,6 +27,9 @@ const PasteItemsPanel = ({ listId, shops, onItemsAdded, initialText = '' }) => {
                     ...item,
                     price: item.suggested_price || 0,
                     description: item.variants?.[0]?.receipt_name || '',
+                    // Seed the editable category from the backend's history/AI
+                    // suggestion; '' means uncategorized and stays overridable below.
+                    category_id: item.suggested_category_id || '',
                 })));
                 setExpandedIndex(null);
             } else {
@@ -49,6 +52,9 @@ const PasteItemsPanel = ({ listId, shops, onItemsAdded, initialText = '' }) => {
                 unit: item.unit,
                 price: item.price || 0,
                 description: item.description || '',
+                // Omit when uncategorized so the backend keeps it unset rather than
+                // trying to validate an empty category id.
+                ...(item.category_id ? { category_id: item.category_id } : {}),
             }));
             const resp = await fetch(`${API_BASE_URL}/api/lists/${listId}/items/bulk`, {
                 method: 'POST',
@@ -86,6 +92,8 @@ const PasteItemsPanel = ({ listId, shops, onItemsAdded, initialText = '' }) => {
     const toggleExpand = (index) => {
         setExpandedIndex(prev => prev === index ? null : index);
     };
+
+    const categoryName = (catId) => (catId ? categories.find(c => c.id === catId)?.name || '' : '');
 
     if (parsedItems) {
         return (
@@ -143,6 +151,11 @@ const PasteItemsPanel = ({ listId, shops, onItemsAdded, initialText = '' }) => {
                                     <span style={{ fontSize: '0.72rem', background: 'var(--success)', color: 'white', padding: '2px 8px', borderRadius: '20px', fontWeight: 700, whiteSpace: 'nowrap' }}>
                                         {item.unit}
                                     </span>
+                                    {categoryName(item.category_id) && (
+                                        <span style={{ fontSize: '0.72rem', background: 'var(--bg-primary)', color: 'var(--text-muted)', padding: '2px 8px', borderRadius: '20px', fontWeight: 600, whiteSpace: 'nowrap', border: '1px solid var(--border)' }}>
+                                            {categoryName(item.category_id)}
+                                        </span>
+                                    )}
                                     {item.price > 0 && (
                                         <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, whiteSpace: 'nowrap' }}>
                                             ~{item.price.toFixed(2)}
@@ -225,6 +238,20 @@ const PasteItemsPanel = ({ listId, shops, onItemsAdded, initialText = '' }) => {
                                                 />
                                             </div>
                                         </div>
+
+                                        {categories.length > 0 && (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                                                <label style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Category</label>
+                                                <select
+                                                    value={item.category_id || ''}
+                                                    onChange={e => updateItem(i, { category_id: e.target.value })}
+                                                    style={{ padding: '0.4rem 0.6rem', borderRadius: '8px', border: '1px solid var(--border)', background: 'white', fontWeight: 600 }}
+                                                >
+                                                    <option value="">— uncategorized —</option>
+                                                    {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                                </select>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>

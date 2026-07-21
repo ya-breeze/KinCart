@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -23,12 +24,59 @@ import (
 	"kincart/internal/utils"
 )
 
+// defaultItemUnit is what Item.Unit defaults to and what the parsers emit when the
+// text names no unit. Treated as "unspecified" when deciding whether remembered
+// history may override a parsed unit.
+const defaultItemUnit = "pcs"
+
 // enforceBoughtAbsentExclusivity applies the "bought wins" invariant to an item
 // being created. Creation handlers bind a full models.Item from JSON, so a client
 // can name both flags in one payload; UpdateItem's guard never sees those requests.
 func enforceBoughtAbsentExclusivity(item *models.Item) {
 	if item.IsBought {
 		item.IsAbsent = false
+	}
+}
+
+// applyRememberedDefaults fills the unit and category the request left unspecified
+// from this family's purchase history, using the list's shop for per-shop unit memory.
+//
+// History only, deliberately: these are the synchronous add paths, so an unseen item
+// keeps pcs/uncategorized rather than blocking the request on an AI round-trip. The
+// AI fallback lives on the paste preview (batched into the parse call already in
+// flight) and the receipt-confirm path (ConfirmMatch/ConfirmAllMatches, where the
+// call is made before the write transaction).
+//
+// Resolution is batched, so a bulk add of N items costs one query rather than N.
+func applyRememberedDefaults(ctx context.Context, items []models.Item, familyID uuid.UUID, shopID *uuid.UUID) {
+	names := make([]string, 0, len(items))
+	for i := range items {
+		// "pcs" is the default the client sends when the user picked nothing, so it
+		// counts as unspecified — same rule the paste preview applies.
+		needsUnit := items[i].Unit == "" || items[i].Unit == defaultItemUnit
+		if needsUnit || items[i].CategoryID == uuid.Nil {
+			names = append(names, items[i].Name)
+		}
+	}
+	if len(names) == 0 {
+		return
+	}
+
+	byName, err := services.ResolveItemDefaultsBatch(ctx, database.DB, familyID, names, shopID)
+	if err != nil {
+		// A missing hint is not worth failing the add over.
+		slog.Warn("Could not resolve remembered item defaults", "error", err)
+		return
+	}
+
+	for i := range items {
+		defaults := byName[strings.ToLower(items[i].Name)]
+		if defaults.Unit != "" && (items[i].Unit == "" || items[i].Unit == defaultItemUnit) {
+			items[i].Unit = defaults.Unit
+		}
+		if items[i].CategoryID == uuid.Nil && defaults.CategoryID != nil {
+			items[i].CategoryID = *defaults.CategoryID
+		}
 	}
 }
 
@@ -53,6 +101,12 @@ func AddItemToList(c *gin.Context) {
 	item.TenantModel.FamilyID = familyID
 	item.ListID = list.ID
 	enforceBoughtAbsentExclusivity(&item)
+
+	// Before validation: a category filled in from history belongs to this family
+	// by construction, so it passes the ownership check below.
+	single := []models.Item{item}
+	applyRememberedDefaults(c.Request.Context(), single, familyID, list.ShopID)
+	item = single[0]
 
 	// Verify category ownership if provided
 	if err := validateItemsFamily([]models.Item{item}, familyID); err != nil {
@@ -419,7 +473,7 @@ func GetFrequentItems(c *gin.Context) {
 	for _, fi := range freqItems {
 		var aliases []models.ItemAlias
 		database.DB.Preload("Shop").
-			Where("family_id = ? AND LOWER(planned_name) = ?", familyID, strings.ToLower(fi.ItemName)).
+			Where("family_id = ? AND planned_name_lower = ?", familyID, strings.ToLower(fi.ItemName)).
 			Order("purchase_count DESC").
 			Find(&aliases)
 
@@ -551,6 +605,83 @@ type parsedItemResult struct {
 	SuggestedPrice float64             `json:"suggested_price,omitempty"`
 	AliasCount     int                 `json:"alias_count,omitempty"`
 	Variants       []parsedItemVariant `json:"variants,omitempty"`
+	// Resolved category for this item, from purchase history or the AI's
+	// constrained pick. Name travels with the ID so the preview can show it
+	// without loading the category list itself.
+	SuggestedCategoryID   *uuid.UUID `json:"suggested_category_id,omitempty"`
+	SuggestedCategoryName string     `json:"suggested_category_name,omitempty"`
+}
+
+// enrichParsedItem attaches the price hint, alias variants and the resolved unit and
+// category to one parsed item.
+//
+// matched is this name's slice of the aliases ParseListText already batch-loaded, so
+// nothing here queries: resolving per item would reintroduce the N+1 that batch load
+// exists to avoid.
+func enrichParsedItem(item ai.ParsedShoppingItem, matched []models.ItemAlias,
+	shopID *uuid.UUID, categories []models.Category) parsedItemResult {
+	result := parsedItemResult{ParsedShoppingItem: item, AliasCount: len(matched)}
+
+	defaults := services.ItemDefaultsFromAliases(matched, shopID)
+
+	// A unit written into the pasted text is an explicit choice and wins. "pcs" is
+	// what the parsers emit when the text named no unit, so it does not count as
+	// explicit and history may override it — otherwise a remembered unit could never
+	// apply, since parsing always yields some unit.
+	if defaults.Unit != "" && (result.Unit == "" || result.Unit == defaultItemUnit) {
+		result.Unit = defaults.Unit
+	}
+
+	// History first, then the AI's pick. The schema constrains that pick to the
+	// family's own category names, but it is still matched Go-side: an unmatched
+	// name leaves the item uncategorized rather than inventing a category.
+	var candidate *uuid.UUID
+	switch {
+	case defaults.CategoryID != nil:
+		candidate = defaults.CategoryID
+	case item.Category != "":
+		candidate = services.MatchCategoryName(categories, item.Category)
+	}
+	// Surface the suggestion only if it maps to a live category. A history id can
+	// dangle when its category was deleted after the alias recorded it; sending a
+	// dead id would make the confirmed bulk-add 400 in validateItemsFamily.
+	for _, cat := range categories {
+		if candidate != nil && cat.ID == *candidate {
+			id := cat.ID
+			result.SuggestedCategoryID = &id
+			result.SuggestedCategoryName = cat.Name
+			break
+		}
+	}
+
+	if len(matched) == 0 {
+		return result
+	}
+
+	// Reorder so the shop-preferred alias is first (becomes the default variant)
+	if shopID != nil {
+		for j, a := range matched {
+			if a.ShopID != nil && *a.ShopID == *shopID {
+				matched[0], matched[j] = matched[j], matched[0]
+				break
+			}
+		}
+	}
+	result.SuggestedPrice = matched[0].LastPrice
+	result.Variants = make([]parsedItemVariant, len(matched))
+	for j, a := range matched {
+		shopName := ""
+		if a.Shop != nil {
+			shopName = a.Shop.Name
+		}
+		result.Variants[j] = parsedItemVariant{
+			ReceiptName: a.ReceiptName,
+			ShopName:    shopName,
+			LastPrice:   a.LastPrice,
+			Count:       a.PurchaseCount,
+		}
+	}
+	return result
 }
 
 func ParseListText(c *gin.Context) {
@@ -569,13 +700,22 @@ func ParseListText(c *gin.Context) {
 		return
 	}
 
+	// The model may only pick from the family's own category names — they are
+	// user-created and frequently not in English, so a free-text guess would match
+	// nothing. The same slice resolves whatever it picks back to a row.
+	categories, err := services.LoadFamilyCategories(c.Request.Context(), database.DB, familyID)
+	if err != nil {
+		slog.Warn("Could not load categories for parse enrichment", "error", err)
+	}
+	categoryNames := services.CategoryNames(categories)
+
 	var parsedItems []ai.ParsedShoppingItem
 	geminiClient, err := ai.NewGeminiClient(c.Request.Context())
 	if err != nil {
 		slog.Info("Gemini unavailable, using fallback parser", "reason", err)
 		parsedItems = ai.ParseShoppingTextFallback(req.Text)
 	} else {
-		parsedItems, err = geminiClient.ParseShoppingText(c.Request.Context(), req.Text)
+		parsedItems, err = geminiClient.ParseShoppingText(c.Request.Context(), req.Text, categoryNames)
 		if err != nil {
 			slog.Warn("Gemini parsing failed, using fallback parser", "error", err)
 			parsedItems = ai.ParseShoppingTextFallback(req.Text)
@@ -588,57 +728,39 @@ func ParseListText(c *gin.Context) {
 		names[i] = strings.ToLower(item.Name)
 	}
 
+	// Match on the indexed planned_name_lower column, populated Go-side (and
+	// backfilled in db.go). SQLite's LOWER() folds ASCII only, so the previous
+	// LOWER(planned_name) comparison silently found nothing for Cyrillic or
+	// accented Czech names — the price hint, and now the unit/category defaults,
+	// simply never appeared for them.
 	var aliases []models.ItemAlias
 	if len(names) > 0 {
 		database.DB.Preload("Shop").
-			Where("family_id = ? AND LOWER(planned_name) IN ?", familyID, names).
+			Where("family_id = ? AND planned_name_lower IN ?", familyID, names).
 			Order("purchase_count DESC").
 			Find(&aliases)
 	}
 
 	byName := make(map[string][]models.ItemAlias)
 	for _, a := range aliases {
-		key := strings.ToLower(a.PlannedName)
-		byName[key] = append(byName[key], a)
+		byName[a.PlannedNameLower] = append(byName[a.PlannedNameLower], a)
 	}
 
+	// The request's shop wins; otherwise fall back to the shop the list itself is
+	// for, so per-shop unit memory still applies when the client doesn't name one.
 	var shopID *uuid.UUID
 	if req.ShopID != "" {
 		if parsed, err := uuid.Parse(req.ShopID); err == nil {
 			shopID = &parsed
 		}
 	}
+	if shopID == nil {
+		shopID = list.ShopID
+	}
 
 	results := make([]parsedItemResult, len(parsedItems))
 	for i, item := range parsedItems {
-		matched := byName[strings.ToLower(item.Name)]
-		result := parsedItemResult{ParsedShoppingItem: item, AliasCount: len(matched)}
-		if len(matched) > 0 {
-			// Reorder so shop-preferred alias is first (becomes default variant)
-			if shopID != nil {
-				for j, a := range matched {
-					if a.ShopID != nil && *a.ShopID == *shopID {
-						matched[0], matched[j] = matched[j], matched[0]
-						break
-					}
-				}
-			}
-			result.SuggestedPrice = matched[0].LastPrice
-			result.Variants = make([]parsedItemVariant, len(matched))
-			for j, a := range matched {
-				shopName := ""
-				if a.Shop != nil {
-					shopName = a.Shop.Name
-				}
-				result.Variants[j] = parsedItemVariant{
-					ReceiptName: a.ReceiptName,
-					ShopName:    shopName,
-					LastPrice:   a.LastPrice,
-					Count:       a.PurchaseCount,
-				}
-			}
-		}
-		results[i] = result
+		results[i] = enrichParsedItem(item, byName[strings.ToLower(item.Name)], shopID, categories)
 	}
 
 	c.JSON(http.StatusOK, results)
@@ -670,6 +792,13 @@ func BulkAddItems(c *gin.Context) {
 		items[i].TenantModel.FamilyID = familyID
 		items[i].ListID = list.ID
 		enforceBoughtAbsentExclusivity(&items[i])
+	}
+
+	applyRememberedDefaults(c.Request.Context(), items, familyID, list.ShopID)
+
+	if err := validateItemsFamily(items, familyID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 
 	if err := database.DB.Create(&items).Error; err != nil {
@@ -836,7 +965,10 @@ func LinkItemAsAlias(c *gin.Context) {
 	}
 
 	// Upsert alias
-	alias, err := services.UpsertItemAlias(database.DB, familyID, plannedName, scannedItem.Name, scannedItem.Price, shopID)
+	// The scanned item is the one actually bought, so its unit/category are what
+	// history should remember for this name.
+	alias, err := services.UpsertItemAlias(database.DB, familyID, plannedName, scannedItem.Name, scannedItem.Price, shopID,
+		scannedItem.Unit, services.CategoryIDPtr(scannedItem.CategoryID))
 	if err != nil {
 		slog.Error("Failed to upsert item alias", "planned", plannedName, "receipt", scannedItem.Name, "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create alias"})

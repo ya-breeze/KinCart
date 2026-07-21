@@ -2,9 +2,7 @@
 
 ## Purpose
 Parse freeform pasted text into structured list items for bulk addition.
-
 ## Requirements
-
 ### Requirement: Parse freeform text into items
 
 The manager SHALL be able to paste a freeform shopping list and have it parsed into structured items.
@@ -67,3 +65,22 @@ The system SHALL validate pasted input and reject empty text.
 #### Scenario: Empty text rejected
 - **WHEN** the manager submits an empty or whitespace-only string
 - **THEN** the server returns 400 and no parsing is attempted
+
+### Requirement: Paste preview enriches unit and category
+
+The paste-to-list parse preview SHALL enrich each parsed item with a remembered or inferred unit and category, in addition to the existing price hint.
+
+#### Scenario: Preview shows remembered unit and category
+- **GIVEN** a pasted item name that exists in purchase history
+- **WHEN** the parse preview is generated
+- **THEN** each parsed item includes the remembered unit and category (per the item-defaults resolution, using the target list's shop where available)
+
+#### Scenario: Preview falls back to AI for unseen items
+- **GIVEN** a pasted item name with no purchase history
+- **WHEN** the parse preview is generated and the AI service is available
+- **THEN** the parsed item includes an AI-suggested unit and category
+
+#### Scenario: Confirmed items keep their previewed defaults
+- **WHEN** the user confirms the parsed items into the list
+- **THEN** the created items carry the previewed unit and category
+

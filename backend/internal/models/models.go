@@ -172,7 +172,15 @@ type ItemAlias struct {
 	ShopID           *uuid.UUID `gorm:"type:uuid" json:"shop_id"`
 	Shop             *Shop      `gorm:"foreignKey:ShopID" json:"shop"`
 	LastPrice        float64    `json:"last_price"`
-	PurchaseCount    int        `gorm:"default:1" json:"purchase_count"`
-	LastUsedAt       time.Time  `json:"last_used_at"`
-	CreatedAt        time.Time  `json:"created_at"`
+	// Unit the item was last bought as at this shop ("pcs", "kg", ...). Empty
+	// until a purchase records one; per-shop because the same item is often a
+	// pack at one shop and loose at another.
+	Unit string `json:"unit"`
+	// CategoryID the item was last filed under. Nullable — an alias predating
+	// this column, or one whose category could never be resolved, records none
+	// and simply offers no hint. Shop-independent, unlike Unit.
+	CategoryID    *uuid.UUID `gorm:"type:uuid" json:"category_id"`
+	PurchaseCount int        `gorm:"default:1" json:"purchase_count"`
+	LastUsedAt    time.Time  `json:"last_used_at"`
+	CreatedAt     time.Time  `json:"created_at"`
 }

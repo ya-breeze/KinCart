@@ -950,6 +950,7 @@ const ListDetail = () => {
                     <PasteItemsPanel
                         listId={id}
                         shops={shops}
+                        categories={categories}
                         initialText={query}
                         onItemsAdded={() => { setShowPasteModal(false); setQuery(''); fetchList(); fetchFrequentItems(); }}
                     />

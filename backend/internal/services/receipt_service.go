@@ -28,6 +28,10 @@ const (
 	matchStatusAuto      = "auto"
 	matchStatusConfirmed = "confirmed"
 	matchStatusUnmatched = "unmatched"
+
+	// geminiCategorizeTimeout bounds the single-item AI categorize call on the
+	// receipt-confirm path so a slow Gemini cannot hang the user's request.
+	geminiCategorizeTimeout = 10 * time.Second
 )
 
 // ErrGeminiUnavailable is returned when the Gemini AI client is not configured.
@@ -50,6 +54,7 @@ type ReceiptParser interface {
 	ParseReceipt(ctx context.Context, imagePath string, knownItems []string) (*ai.ParsedReceipt, error)
 	ParseReceiptText(ctx context.Context, receiptText string, knownItems []string) (*ai.ParsedReceipt, error)
 	MatchReceiptItems(ctx context.Context, receiptItems []string, plannedItems []string) (*ai.MatchResult, error)
+	SuggestItemDefaults(ctx context.Context, name string, categories []string) (ai.SuggestedItemDefaults, error)
 }
 
 // MatchSuggestionItem is the JSON element stored in ReceiptItem.SuggestedItems.
@@ -217,7 +222,7 @@ func (s *ReceiptService) ProcessReceipt(ctx context.Context, receiptID uuid.UUID
 
 		s.updateListTitle(tx, listID, receipt.Date)
 
-		needsReview, err := s.applyItemMatches(tx, receipt.ID, receipt.FamilyID, parsed.Items, matchPlans, listItems)
+		needsReview, err := s.applyItemMatches(tx, receipt.ID, receipt.FamilyID, parsed.Items, matchPlans, listItems, receipt.ShopID)
 		if err != nil {
 			return err
 		}
@@ -420,7 +425,7 @@ func collectMatchedItemIDs(plans []receiptItemMatchPlan) map[uuid.UUID]bool {
 
 // applyItemMatches creates ReceiptItem records and links/creates planned items.
 // Returns true if the receipt needs manual review.
-func (s *ReceiptService) applyItemMatches(tx *gorm.DB, receiptID uuid.UUID, familyID uuid.UUID, parsedItems []ai.ParsedReceiptItem, plans []receiptItemMatchPlan, listItems []models.Item) (bool, error) {
+func (s *ReceiptService) applyItemMatches(tx *gorm.DB, receiptID uuid.UUID, familyID uuid.UUID, parsedItems []ai.ParsedReceiptItem, plans []receiptItemMatchPlan, listItems []models.Item, shopID *uuid.UUID) (bool, error) {
 	// Build Item lookup by ID for quick access
 	itemByID := map[uuid.UUID]models.Item{}
 	for _, item := range listItems {
@@ -468,6 +473,12 @@ func (s *ReceiptService) applyItemMatches(tx *gorm.DB, receiptID uuid.UUID, fami
 				return false, err
 			}
 			s.updateItemFrequency(tx, familyID, item.Name, parsedItem.Price)
+			// Record what it was bought as, same as the manual match path, so an
+			// auto-matched purchase also refreshes the remembered unit/category and
+			// increments the alias purchase count. Without this, once an item starts
+			// auto-matching its history stops updating and recategorisation via
+			// receipts never self-corrects.
+			s.upsertItemAlias(tx, familyID, item.Name, receiptItem.Name, parsedItem.Price, shopID, item.Unit, CategoryIDPtr(item.CategoryID))
 		} else {
 			// Unmatched — store suggestions for user review
 			needsReview = true
@@ -611,6 +622,19 @@ func (s *ReceiptService) ConfirmMatch(ctx context.Context, receiptItemID uint, p
 
 	wasPreviouslyMatched := receiptItem.MatchedItemID != nil
 
+	// A new list item is created only when linking to no planned item and this
+	// receipt item was not already matched (the `default` switch branch below).
+	// Resolve its defaults only in that case — otherwise linking to an existing
+	// planned item, or unmatching, would pay for a history read and a possible
+	// synchronous Gemini call whose result is discarded. Resolved before the
+	// transaction so neither the history read nor the AI fallback holds the write lock.
+	var newUnit string
+	var newCategoryID uuid.UUID
+	willCreateNewItem := plannedItemID == nil && !wasPreviouslyMatched
+	if willCreateNewItem {
+		newUnit, newCategoryID = s.resolveNewReceiptItemDefaults(ctx, familyID, receiptItem.Name, receipt.ShopID, receiptItem.Unit)
+	}
+
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		// Clear any previous association when re-matching
 		if receiptItem.MatchedItemID != nil {
@@ -652,7 +676,7 @@ func (s *ReceiptService) ConfirmMatch(ctx context.Context, receiptItemID uint, p
 			}
 
 			// Upsert ItemAlias for future auto-matching
-			s.upsertItemAlias(tx, familyID, item.Name, receiptItem.Name, receiptItem.Price, receipt.ShopID)
+			s.upsertItemAlias(tx, familyID, item.Name, receiptItem.Name, receiptItem.Price, receipt.ShopID, item.Unit, CategoryIDPtr(item.CategoryID))
 			s.updateItemFrequency(tx, familyID, item.Name, receiptItem.Price)
 
 			receiptItem.MatchedItemID = plannedItemID
@@ -661,22 +685,18 @@ func (s *ReceiptService) ConfirmMatch(ctx context.Context, receiptItemID uint, p
 			// Unmatch: revert to "unmatched" so user can pick a different match
 			receiptItem.MatchStatus = matchStatusUnmatched
 		default:
-			// Create new list item from receipt data (extra/impulse buy)
-			var defaultCategoryID uuid.UUID
-			var cat models.Category
-			if err := tx.Where("family_id = ?", familyID).Order("sort_order asc").First(&cat).Error; err == nil {
-				defaultCategoryID = cat.ID
-			}
-
+			// Create new list item from receipt data (extra/impulse buy). Category
+			// and unit come from history/AI (resolved above), not the first category
+			// by sort order.
 			newItem := models.Item{
 				TenantModel:      coremodels.TenantModel{ID: uuid.New(), FamilyID: familyID},
 				Name:             receiptItem.Name,
 				ListID:           *receipt.ListID,
-				CategoryID:       defaultCategoryID,
+				CategoryID:       newCategoryID,
 				IsBought:         true,
 				Price:            receiptItem.Price,
 				Quantity:         receiptItem.Quantity,
-				Unit:             receiptItem.Unit,
+				Unit:             newUnit,
 				ReceiptItemID:    &receiptItemID,
 				IsReceiptCreated: true,
 			}
@@ -685,7 +705,7 @@ func (s *ReceiptService) ConfirmMatch(ctx context.Context, receiptItemID uint, p
 			}
 
 			// Self-alias so it's recognized in future receipts
-			s.upsertItemAlias(tx, familyID, receiptItem.Name, receiptItem.Name, receiptItem.Price, receipt.ShopID)
+			s.upsertItemAlias(tx, familyID, receiptItem.Name, receiptItem.Name, receiptItem.Price, receipt.ShopID, newItem.Unit, CategoryIDPtr(newItem.CategoryID))
 			s.updateItemFrequency(tx, familyID, receiptItem.Name, receiptItem.Price)
 
 			receiptItem.MatchedItemID = &newItem.ID
@@ -735,13 +755,21 @@ func (s *ReceiptService) ConfirmAllMatches(ctx context.Context, receiptID uuid.U
 		return fmt.Errorf("receipt has no associated list")
 	}
 
-	return s.db.Transaction(func(tx *gorm.DB) error {
-		var defaultCategoryID uuid.UUID
-		var cat models.Category
-		if err := tx.Where("family_id = ?", familyID).Order("sort_order asc").First(&cat).Error; err == nil {
-			defaultCategoryID = cat.ID
+	// Resolve defaults for every item we may create, before the transaction, so the
+	// history reads and AI fallbacks stay off the write lock. Keyed by receipt item ID.
+	type itemDefaults struct {
+		unit       string
+		categoryID uuid.UUID
+	}
+	resolved := make(map[uint]itemDefaults)
+	for _, ri := range receipt.Items {
+		if ri.MatchStatus == matchStatusUnmatched {
+			unit, categoryID := s.resolveNewReceiptItemDefaults(ctx, familyID, ri.Name, receipt.ShopID, ri.Unit)
+			resolved[ri.ID] = itemDefaults{unit: unit, categoryID: categoryID}
 		}
+	}
 
+	return s.db.Transaction(func(tx *gorm.DB) error {
 		for _, ri := range receipt.Items {
 			switch ri.MatchStatus {
 			case matchStatusAuto:
@@ -751,23 +779,25 @@ func (s *ReceiptService) ConfirmAllMatches(ctx context.Context, receiptID uuid.U
 					return fmt.Errorf("failed to confirm auto-match for %q: %w", ri.Name, err)
 				}
 			case matchStatusUnmatched:
-				// Create new list item (extra buy)
+				// Create new list item (extra buy). Category/unit from history/AI
+				// (resolved above), not the first category by sort order.
+				def := resolved[ri.ID]
 				newItem := models.Item{
 					TenantModel:      coremodels.TenantModel{ID: uuid.New(), FamilyID: familyID},
 					Name:             ri.Name,
 					ListID:           *receipt.ListID,
-					CategoryID:       defaultCategoryID,
+					CategoryID:       def.categoryID,
 					IsBought:         true,
 					Price:            ri.Price,
 					Quantity:         ri.Quantity,
-					Unit:             ri.Unit,
+					Unit:             def.unit,
 					ReceiptItemID:    &ri.ID,
 					IsReceiptCreated: true,
 				}
 				if err := tx.Create(&newItem).Error; err != nil {
 					return fmt.Errorf("failed to create item from receipt in confirm-all for %q: %w", ri.Name, err)
 				}
-				s.upsertItemAlias(tx, familyID, ri.Name, ri.Name, ri.Price, receipt.ShopID)
+				s.upsertItemAlias(tx, familyID, ri.Name, ri.Name, ri.Price, receipt.ShopID, newItem.Unit, CategoryIDPtr(newItem.CategoryID))
 				s.updateItemFrequency(tx, familyID, ri.Name, ri.Price)
 
 				ri.MatchedItemID = &newItem.ID
@@ -807,7 +837,12 @@ func (s *ReceiptService) checkAndUpdateReceiptStatus(db *gorm.DB, receiptID uuid
 
 // UpsertItemAlias creates or increments a planned_name → receipt_name mapping for a family.
 // Returns the resulting alias record.
-func UpsertItemAlias(tx *gorm.DB, familyID uuid.UUID, plannedName, receiptName string, price float64, shopID *uuid.UUID) (*models.ItemAlias, error) {
+//
+// unit and categoryID record what the item was bought as, so later additions of the
+// same name can be prefilled. Latest wins, but an empty unit or nil categoryID never
+// erases a value already recorded — a caller that simply does not know (an item with
+// no category set, say) must not wipe out history gathered from earlier purchases.
+func UpsertItemAlias(tx *gorm.DB, familyID uuid.UUID, plannedName, receiptName string, price float64, shopID *uuid.UUID, unit string, categoryID *uuid.UUID) (*models.ItemAlias, error) {
 	plannedLower := strings.ToLower(plannedName)
 	receiptLower := strings.ToLower(receiptName)
 
@@ -832,6 +867,8 @@ func UpsertItemAlias(tx *gorm.DB, familyID uuid.UUID, plannedName, receiptName s
 			ReceiptNameLower: receiptLower,
 			ShopID:           shopID,
 			LastPrice:        price,
+			Unit:             unit,
+			CategoryID:       categoryID,
 			PurchaseCount:    1,
 			LastUsedAt:       time.Now(),
 		}
@@ -843,15 +880,91 @@ func UpsertItemAlias(tx *gorm.DB, familyID uuid.UUID, plannedName, receiptName s
 	alias.PurchaseCount++
 	alias.LastPrice = price
 	alias.LastUsedAt = time.Now()
+	// Latest wins, but only when the caller actually knows: an empty unit or nil
+	// category leaves whatever earlier purchases recorded intact.
+	if unit != "" {
+		alias.Unit = unit
+	}
+	if categoryID != nil {
+		alias.CategoryID = categoryID
+	}
 	if err := tx.Save(&alias).Error; err != nil {
 		return nil, err
 	}
 	return &alias, nil
 }
 
+// resolveNewReceiptItemDefaults decides the unit and category for a list item being
+// created from an unmatched receipt item, replacing the old "first category by
+// sort_order" default.
+//
+// Called BEFORE the write transaction, deliberately. The creation sites run inside
+// ConfirmMatch / ConfirmAllMatches — user-triggered, not the background ticker the
+// design first assumed — so both the history read and any AI call must stay off the
+// SQLite write lock. Resolving here and passing the result in keeps the transaction
+// free of network I/O.
+//
+// Unit: the receipt's own parsed unit is real data about what was bought and wins;
+// history/AI only fills a blank. Category: receipt items carry none, so it is
+// history first, then a constrained AI guess, then uncategorized (uuid.Nil).
+func (s *ReceiptService) resolveNewReceiptItemDefaults(ctx context.Context, familyID uuid.UUID,
+	name string, shopID *uuid.UUID, receiptUnit string) (unit string, categoryID uuid.UUID) {
+	unit = receiptUnit
+
+	defaults, err := ResolveItemDefaults(ctx, s.db, familyID, name, shopID)
+	if err != nil {
+		slog.Warn("Could not resolve receipt item history defaults", "name", name, "error", err)
+	}
+	if unit == "" {
+		unit = defaults.Unit
+	}
+	if defaults.CategoryID != nil {
+		return unit, *defaults.CategoryID
+	}
+
+	// History missed. A constrained AI guess is allowed here (unlike the synchronous
+	// manual-add paths) because the receipt review flow tolerates a brief pause, and
+	// this runs outside the transaction. Guarded so a nil client is a plain skip.
+	if s.gemini == nil {
+		return unit, uuid.Nil
+	}
+	categories, err := LoadFamilyCategories(ctx, s.db, familyID)
+	if err != nil {
+		slog.Warn("Could not load categories for receipt AI categorize", "error", err)
+		return unit, uuid.Nil
+	}
+	// Bound the call: this runs on the user-triggered receipt-confirm path, so a
+	// hung Gemini must not hang the request. On timeout the err branch below
+	// degrades to uncategorized, same as any other AI failure.
+	aiCtx, cancel := context.WithTimeout(ctx, geminiCategorizeTimeout)
+	defer cancel()
+	suggestion, err := s.gemini.SuggestItemDefaults(aiCtx, name, CategoryNames(categories))
+	if err != nil {
+		slog.Warn("AI categorize failed for receipt item", "name", name, "error", err)
+		return unit, uuid.Nil
+	}
+	if unit == "" {
+		unit = suggestion.Unit
+	}
+	if matched := MatchCategoryName(categories, suggestion.Category); matched != nil {
+		return unit, *matched
+	}
+	return unit, uuid.Nil
+}
+
+// CategoryIDPtr converts an Item's non-pointer CategoryID into the nullable form
+// ItemAlias stores, mapping the zero UUID ("uncategorized") to nil so it is recorded
+// as "unknown" rather than as a category that does not exist.
+func CategoryIDPtr(id uuid.UUID) *uuid.UUID {
+	if id == uuid.Nil {
+		return nil
+	}
+	return &id
+}
+
 // upsertItemAlias is the internal wrapper used by receipt processing; swallows errors with a warning.
-func (s *ReceiptService) upsertItemAlias(tx *gorm.DB, familyID uuid.UUID, plannedName string, receiptName string, price float64, shopID *uuid.UUID) {
-	if _, err := UpsertItemAlias(tx, familyID, plannedName, receiptName, price, shopID); err != nil {
+func (s *ReceiptService) upsertItemAlias(tx *gorm.DB, familyID uuid.UUID, plannedName string, receiptName string, price float64, shopID *uuid.UUID, unit string, categoryID *uuid.UUID) {
+	if _, err := UpsertItemAlias(tx, familyID, plannedName, receiptName, price, shopID, unit, categoryID); err != nil {
 		slog.Warn("Failed to upsert item alias", "planned", plannedName, "receipt", receiptName, "error", err)
 	}
 }

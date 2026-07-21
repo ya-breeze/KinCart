@@ -20,9 +20,17 @@ import (
 
 // MockParser implements ReceiptParser
 type MockParser struct {
-	ParseFunc      func(ctx context.Context, imagePath string, knownItems []string) (*ai.ParsedReceipt, error)
-	ParseTextFunc  func(ctx context.Context, receiptText string, knownItems []string) (*ai.ParsedReceipt, error)
-	MatchItemsFunc func(ctx context.Context, receiptItems []string, plannedItems []string) (*ai.MatchResult, error)
+	ParseFunc          func(ctx context.Context, imagePath string, knownItems []string) (*ai.ParsedReceipt, error)
+	ParseTextFunc      func(ctx context.Context, receiptText string, knownItems []string) (*ai.ParsedReceipt, error)
+	MatchItemsFunc     func(ctx context.Context, receiptItems []string, plannedItems []string) (*ai.MatchResult, error)
+	SuggestDefaultFunc func(ctx context.Context, name string, categories []string) (ai.SuggestedItemDefaults, error)
+}
+
+func (m *MockParser) SuggestItemDefaults(ctx context.Context, name string, categories []string) (ai.SuggestedItemDefaults, error) {
+	if m.SuggestDefaultFunc != nil {
+		return m.SuggestDefaultFunc(ctx, name, categories)
+	}
+	return ai.SuggestedItemDefaults{}, nil
 }
 
 func (m *MockParser) ParseReceipt(ctx context.Context, imagePath string, knownItems []string) (*ai.ParsedReceipt, error) {

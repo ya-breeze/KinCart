@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 func GetCategories(c *gin.Context) {
@@ -110,19 +111,35 @@ func DeleteCategory(c *gin.Context) {
 	familyID := c.MustGet("family_id").(uuid.UUID)
 	categoryIDStr := c.Param("id")
 
-	catID, err := uuid.Parse(categoryIDStr)
-	if err != nil {
+	catID, parseErr := uuid.Parse(categoryIDStr)
+	if parseErr != nil {
 		slog.Warn("Invalid category ID format in delete", "category_id", categoryIDStr, "ip", c.ClientIP())
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid category ID"})
 		return
 	}
 
-	// Clear category from items scoped by family
-	database.DB.Model(&models.Item{}).
-		Where("category_id = ? AND list_id IN (SELECT id FROM shopping_lists WHERE family_id = ?)", catID, familyID).
-		Update("category_id", uuid.Nil)
+	// Detach the category and delete it atomically: clearing items/aliases but then
+	// failing the delete would leave them uncategorized while the category persists.
+	txErr := database.DB.Transaction(func(tx *gorm.DB) error {
+		// Clear category from items scoped by family.
+		if err := tx.Model(&models.Item{}).
+			Where("category_id = ? AND list_id IN (SELECT id FROM shopping_lists WHERE family_id = ?)", catID, familyID).
+			Update("category_id", uuid.Nil).Error; err != nil {
+			return err
+		}
 
-	if err := database.DB.Where("id = ? AND family_id = ?", catID, familyID).Delete(&models.Category{}).Error; err != nil {
+		// Clear the category from purchase history too. ItemAlias.CategoryID feeds the
+		// remembered-defaults resolver; a dangling id here would otherwise be prefilled
+		// onto new items and then rejected by validateItemsFamily (a valid add 400s).
+		if err := tx.Model(&models.ItemAlias{}).
+			Where("category_id = ? AND family_id = ?", catID, familyID).
+			Updates(map[string]interface{}{"category_id": nil}).Error; err != nil {
+			return err
+		}
+
+		return tx.Where("id = ? AND family_id = ?", catID, familyID).Delete(&models.Category{}).Error
+	})
+	if txErr != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete category"})
 		return
 	}
