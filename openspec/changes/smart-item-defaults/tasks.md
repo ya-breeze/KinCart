@@ -19,6 +19,8 @@
 - [x] 3.4 `AddItemToList` and `BulkAddItems`: fill empty unit/category from alias history only, using the list's shop. **No Gemini call on these paths** — an unseen item keeps `pcs`/uncategorized
 - [x] 3.5 `receipt_service.go` (both new-item creation sites, ~665 and ~740): replace the first-category default with `resolveItemDefaults`
 - [x] 3.6 Tests: receipt-created item lands in the remembered category, not the first-by-sort-order one; manual add of an unseen item issues no AI call
+- [x] 3.7 `applyItemMatches` (auto-match path): upsert the alias with the planned item's unit/category so auto-matched purchases also refresh history (found in review — was recording frequency only). Thread `shopID` in; test that a high-confidence auto-match records the category and increments `PurchaseCount`
+- [x] 3.8 Bound the receipt-path AI categorize call with a 10s `context.WithTimeout` so a slow Gemini cannot hang the confirm; test that an AI error degrades to uncategorized
 
 ## 4. Frontend
 

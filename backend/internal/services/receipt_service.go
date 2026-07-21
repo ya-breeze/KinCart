@@ -28,6 +28,10 @@ const (
 	matchStatusAuto      = "auto"
 	matchStatusConfirmed = "confirmed"
 	matchStatusUnmatched = "unmatched"
+
+	// geminiCategorizeTimeout bounds the single-item AI categorize call on the
+	// receipt-confirm path so a slow Gemini cannot hang the user's request.
+	geminiCategorizeTimeout = 10 * time.Second
 )
 
 // ErrGeminiUnavailable is returned when the Gemini AI client is not configured.
@@ -218,7 +222,7 @@ func (s *ReceiptService) ProcessReceipt(ctx context.Context, receiptID uuid.UUID
 
 		s.updateListTitle(tx, listID, receipt.Date)
 
-		needsReview, err := s.applyItemMatches(tx, receipt.ID, receipt.FamilyID, parsed.Items, matchPlans, listItems)
+		needsReview, err := s.applyItemMatches(tx, receipt.ID, receipt.FamilyID, parsed.Items, matchPlans, listItems, receipt.ShopID)
 		if err != nil {
 			return err
 		}
@@ -421,7 +425,7 @@ func collectMatchedItemIDs(plans []receiptItemMatchPlan) map[uuid.UUID]bool {
 
 // applyItemMatches creates ReceiptItem records and links/creates planned items.
 // Returns true if the receipt needs manual review.
-func (s *ReceiptService) applyItemMatches(tx *gorm.DB, receiptID uuid.UUID, familyID uuid.UUID, parsedItems []ai.ParsedReceiptItem, plans []receiptItemMatchPlan, listItems []models.Item) (bool, error) {
+func (s *ReceiptService) applyItemMatches(tx *gorm.DB, receiptID uuid.UUID, familyID uuid.UUID, parsedItems []ai.ParsedReceiptItem, plans []receiptItemMatchPlan, listItems []models.Item, shopID *uuid.UUID) (bool, error) {
 	// Build Item lookup by ID for quick access
 	itemByID := map[uuid.UUID]models.Item{}
 	for _, item := range listItems {
@@ -469,6 +473,12 @@ func (s *ReceiptService) applyItemMatches(tx *gorm.DB, receiptID uuid.UUID, fami
 				return false, err
 			}
 			s.updateItemFrequency(tx, familyID, item.Name, parsedItem.Price)
+			// Record what it was bought as, same as the manual match path, so an
+			// auto-matched purchase also refreshes the remembered unit/category and
+			// increments the alias purchase count. Without this, once an item starts
+			// auto-matching its history stops updating and recategorisation via
+			// receipts never self-corrects.
+			s.upsertItemAlias(tx, familyID, item.Name, receiptItem.Name, parsedItem.Price, shopID, item.Unit, CategoryIDPtr(item.CategoryID))
 		} else {
 			// Unmatched — store suggestions for user review
 			needsReview = true
@@ -923,7 +933,12 @@ func (s *ReceiptService) resolveNewReceiptItemDefaults(ctx context.Context, fami
 		slog.Warn("Could not load categories for receipt AI categorize", "error", err)
 		return unit, uuid.Nil
 	}
-	suggestion, err := s.gemini.SuggestItemDefaults(ctx, name, CategoryNames(categories))
+	// Bound the call: this runs on the user-triggered receipt-confirm path, so a
+	// hung Gemini must not hang the request. On timeout the err branch below
+	// degrades to uncategorized, same as any other AI failure.
+	aiCtx, cancel := context.WithTimeout(ctx, geminiCategorizeTimeout)
+	defer cancel()
+	suggestion, err := s.gemini.SuggestItemDefaults(aiCtx, name, CategoryNames(categories))
 	if err != nil {
 		slog.Warn("AI categorize failed for receipt item", "name", name, "error", err)
 		return unit, uuid.Nil

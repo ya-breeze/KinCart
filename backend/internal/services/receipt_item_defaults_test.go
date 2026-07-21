@@ -174,6 +174,81 @@ func TestConfirmMatch_LinkingExistingItemSkipsResolution(t *testing.T) {
 	assert.Equal(t, 0, aiCalls, "linking an existing item must not trigger the AI categorize call")
 }
 
+// A failing AI call (an error, as a timeout would produce) must not fail the confirm:
+// the new item is created uncategorized. This is the degradation the geminiCategorizeTimeout
+// relies on.
+func TestConfirmMatch_NewItemAIErrorLeavesUncategorized(t *testing.T) {
+	mock := &MockParser{
+		SuggestDefaultFunc: func(_ context.Context, _ string, _ []string) (ai.SuggestedItemDefaults, error) {
+			return ai.SuggestedItemDefaults{}, context.DeadlineExceeded
+		},
+	}
+	db, svc, familyID, receiptItemID := receiptFixture(t, mock, "widget")
+	seedCategory(t, db, familyID, "Dairy", 0)
+
+	require.NoError(t, svc.ConfirmMatch(context.Background(), receiptItemID, nil, familyID),
+		"an AI error must degrade, not fail the confirm")
+
+	item := createdItem(t, db, receiptItemID)
+	assert.Equal(t, uuid.Nil, item.CategoryID)
+}
+
+// An auto-matched purchase (ProcessReceipt, high confidence) records the planned
+// item's unit/category to history, so the remembered defaults stay fresh instead of
+// freezing at whatever they were when the alias was first created.
+func TestProcessReceipt_AutoMatchRecordsCategoryToHistory(t *testing.T) {
+	db := setupTestDB()
+
+	family := models.Family{Family: coremodels.Family{ID: uuid.New(), Name: "Fam"}}
+	require.NoError(t, db.Create(&family).Error)
+	list := models.ShoppingList{
+		TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID},
+		Title:       "Weekly",
+	}
+	require.NoError(t, db.Create(&list).Error)
+	dairy := models.Category{TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID}, Name: "Dairy"}
+	require.NoError(t, db.Create(&dairy).Error)
+
+	// Planned item already filed under Dairy, as "pack".
+	milk := models.Item{
+		TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID},
+		Name:        "Milk", ListID: list.ID, CategoryID: dairy.ID, Unit: "pack",
+	}
+	require.NoError(t, db.Create(&milk).Error)
+
+	receipt := models.Receipt{
+		TenantModel: coremodels.TenantModel{ID: uuid.New(), FamilyID: family.ID},
+		ListID:      &list.ID, ImagePath: "r.jpg", Status: "new",
+	}
+	require.NoError(t, db.Create(&receipt).Error)
+
+	mock := &MockParser{
+		ParseFunc: func(_ context.Context, _ string, _ []string) (*ai.ParsedReceipt, error) {
+			return &ai.ParsedReceipt{
+				StoreName: "Shop", Date: "2024-01-30", Total: 2.5,
+				Items: []ai.ParsedReceiptItem{{Name: "Milk", Price: 2.5, Quantity: 1, TotalPrice: 2.5}},
+			}, nil
+		},
+		MatchItemsFunc: func(_ context.Context, _ []string, _ []string) (*ai.MatchResult, error) {
+			return &ai.MatchResult{Suggestions: []ai.MatchSuggestion{{
+				ReceiptItemName: "Milk",
+				Matches:         []ai.MatchCandidate{{PlannedItemName: "Milk", Confidence: 95}},
+			}}}, nil
+		},
+	}
+	svc := NewReceiptService(db, mock, nil, "/tmp")
+
+	require.NoError(t, svc.ProcessReceipt(context.Background(), receipt.ID, list.ID))
+
+	// The auto-match must have created/refreshed an alias carrying the category.
+	var alias models.ItemAlias
+	require.NoError(t, db.Where("family_id = ? AND planned_name_lower = ?", family.ID, "milk").First(&alias).Error,
+		"auto-match should record an alias for the purchased item")
+	require.NotNil(t, alias.CategoryID)
+	assert.Equal(t, dairy.ID, *alias.CategoryID, "the planned item's category is recorded to history")
+	assert.Equal(t, "pack", alias.Unit)
+}
+
 // ConfirmAllMatches applies remembered categories to every unmatched item it creates.
 func TestConfirmAllMatches_NewItemsUseRememberedCategory(t *testing.T) {
 	db, svc, familyID, receiptItemID := receiptFixture(t, nil, "yogurt")
