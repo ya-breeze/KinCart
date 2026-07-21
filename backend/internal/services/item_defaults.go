@@ -84,7 +84,47 @@ func ResolveItemDefaultsBatch(ctx context.Context, tx *gorm.DB, familyID uuid.UU
 	for name, group := range grouped {
 		out[name] = ItemDefaultsFromAliases(group, shopID)
 	}
+
+	// Drop any resolved category whose category row no longer exists — a category
+	// deleted after the alias recorded it leaves a dangling id. Prefilling it would
+	// make a valid add fail validation, or save a receipt item pointing at nothing.
+	if err := dropDeadCategories(ctx, tx, familyID, out); err != nil {
+		return nil, err
+	}
 	return out, nil
+}
+
+// dropDeadCategories nils out any CategoryID in the results that does not match a
+// live category for the family. One query, only when at least one category resolved.
+func dropDeadCategories(ctx context.Context, tx *gorm.DB, familyID uuid.UUID, out map[string]ItemDefaults) error {
+	ids := make([]uuid.UUID, 0, len(out))
+	for _, d := range out {
+		if d.CategoryID != nil {
+			ids = append(ids, *d.CategoryID)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+
+	var liveIDs []uuid.UUID
+	if err := tx.WithContext(ctx).Model(&models.Category{}).
+		Where("family_id = ? AND id IN ?", familyID, ids).
+		Pluck("id", &liveIDs).Error; err != nil {
+		return err
+	}
+	live := make(map[uuid.UUID]bool, len(liveIDs))
+	for _, id := range liveIDs {
+		live[id] = true
+	}
+
+	for name, d := range out {
+		if d.CategoryID != nil && !live[*d.CategoryID] {
+			d.CategoryID = nil
+			out[name] = d
+		}
+	}
+	return nil
 }
 
 // ItemDefaultsFromAliases derives the defaults from aliases the caller has already

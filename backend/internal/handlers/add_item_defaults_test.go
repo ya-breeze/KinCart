@@ -100,6 +100,33 @@ func TestAddItemToList_FillsFromHistory(t *testing.T) {
 	assert.Equal(t, dairy.ID, got.CategoryID)
 }
 
+// Regression: a remembered category that was since deleted must not make a valid add
+// fail. The alias's dangling category id must be ignored, leaving the item
+// uncategorized rather than 400ing in validateItemsFamily.
+func TestAddItemToList_DeletedRememberedCategoryDoesNotReject(t *testing.T) {
+	setupAddItemTestDB(t)
+	fam := uuid.New()
+	require.NoError(t, database.DB.Create(&models.Family{Family: coremodels.Family{ID: fam, Name: "F"}}).Error)
+	list := newAddTestList(t, fam, nil)
+
+	// Alias points at a category id that has no live Category row (as if deleted).
+	ghost := uuid.New()
+	alias := models.ItemAlias{
+		FamilyID: fam, PlannedName: "yogurt", PlannedNameLower: "yogurt",
+		ReceiptName: "yogurt", ReceiptNameLower: "yogurt",
+		Unit: "pack", CategoryID: &ghost, PurchaseCount: 3, LastUsedAt: time.Now(),
+	}
+	require.NoError(t, database.DB.Create(&alias).Error)
+
+	w := doAddItemToList(t, fam, list.ID, `{"name":"yogurt","quantity":1,"unit":"pcs"}`)
+	require.Equal(t, http.StatusCreated, w.Code, "a dead remembered category must not 400 the add; body: %s", w.Body.String())
+
+	var got models.Item
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
+	assert.Equal(t, uuid.Nil, got.CategoryID, "the dangling category is dropped, item is uncategorized")
+	assert.Equal(t, "pack", got.Unit, "the remembered unit still applies")
+}
+
 // An explicit category on the request survives; history does not overwrite it.
 func TestAddItemToList_ExplicitCategoryKept(t *testing.T) {
 	setupAddItemTestDB(t)

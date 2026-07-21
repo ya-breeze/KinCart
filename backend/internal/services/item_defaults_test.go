@@ -126,6 +126,21 @@ func TestResolveItemDefaults_CategoryTieBrokenByPurchaseCount(t *testing.T) {
 	assert.Equal(t, dairy.ID, *got.CategoryID, "identical timestamps break toward more purchases")
 }
 
+// A category recorded on an alias but since deleted must not be returned — it would
+// otherwise be prefilled onto a new item and rejected by validateItemsFamily.
+func TestResolveItemDefaults_DropsDeletedCategory(t *testing.T) {
+	db := setupTestDB()
+	fam := uuid.New()
+	// Alias references a category id with no live Category row.
+	ghost := uuid.New()
+	mkAlias(t, db, fam, "jogurt", nil, "pack", &ghost, 5, time.Now())
+
+	got, err := ResolveItemDefaults(context.Background(), db, fam, "jogurt", nil)
+	assert.NoError(t, err)
+	assert.Equal(t, "pack", got.Unit, "unit is unaffected")
+	assert.Nil(t, got.CategoryID, "a dangling (deleted) category id is dropped")
+}
+
 func TestResolveItemDefaults_EmptyWhenUnknown(t *testing.T) {
 	db := setupTestDB()
 	fam := uuid.New()

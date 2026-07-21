@@ -44,7 +44,8 @@ func enforceBoughtAbsentExclusivity(item *models.Item) {
 // History only, deliberately: these are the synchronous add paths, so an unseen item
 // keeps pcs/uncategorized rather than blocking the request on an AI round-trip. The
 // AI fallback lives on the paste preview (batched into the parse call already in
-// flight) and receipt processing (a background ticker).
+// flight) and the receipt-confirm path (ConfirmMatch/ConfirmAllMatches, where the
+// call is made before the write transaction).
 //
 // Resolution is batched, so a bulk add of N items costs one query rather than N.
 func applyRememberedDefaults(ctx context.Context, items []models.Item, familyID uuid.UUID, shopID *uuid.UUID) {
@@ -634,14 +635,20 @@ func enrichParsedItem(item ai.ParsedShoppingItem, matched []models.ItemAlias,
 	// History first, then the AI's pick. The schema constrains that pick to the
 	// family's own category names, but it is still matched Go-side: an unmatched
 	// name leaves the item uncategorized rather than inventing a category.
+	var candidate *uuid.UUID
 	switch {
 	case defaults.CategoryID != nil:
-		result.SuggestedCategoryID = defaults.CategoryID
+		candidate = defaults.CategoryID
 	case item.Category != "":
-		result.SuggestedCategoryID = services.MatchCategoryName(categories, item.Category)
+		candidate = services.MatchCategoryName(categories, item.Category)
 	}
+	// Surface the suggestion only if it maps to a live category. A history id can
+	// dangle when its category was deleted after the alias recorded it; sending a
+	// dead id would make the confirmed bulk-add 400 in validateItemsFamily.
 	for _, cat := range categories {
-		if result.SuggestedCategoryID != nil && cat.ID == *result.SuggestedCategoryID {
+		if candidate != nil && cat.ID == *candidate {
+			id := cat.ID
+			result.SuggestedCategoryID = &id
 			result.SuggestedCategoryName = cat.Name
 			break
 		}

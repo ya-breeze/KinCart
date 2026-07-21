@@ -21,6 +21,7 @@
 - [x] 3.6 Tests: receipt-created item lands in the remembered category, not the first-by-sort-order one; manual add of an unseen item issues no AI call
 - [x] 3.7 `applyItemMatches` (auto-match path): upsert the alias with the planned item's unit/category so auto-matched purchases also refresh history (found in review — was recording frequency only). Thread `shopID` in; test that a high-confidence auto-match records the category and increments `PurchaseCount`
 - [x] 3.8 Bound the receipt-path AI categorize call with a 10s `context.WithTimeout` so a slow Gemini cannot hang the confirm; test that an AI error degrades to uncategorized
+- [x] 3.9 Handle a remembered category that was later deleted (found in review): `DeleteCategory` now clears `item_aliases.category_id`; the resolver drops category ids with no live category row; the paste preview only surfaces a live category. Prevents a valid add from 400ing and a receipt item from saving a dangling category. Regression tests on all three
 
 ## 4. Frontend
 

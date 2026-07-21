@@ -122,6 +122,13 @@ func DeleteCategory(c *gin.Context) {
 		Where("category_id = ? AND list_id IN (SELECT id FROM shopping_lists WHERE family_id = ?)", catID, familyID).
 		Update("category_id", uuid.Nil)
 
+	// Clear the category from purchase history too. ItemAlias.CategoryID feeds the
+	// remembered-defaults resolver; a dangling id here would otherwise be prefilled
+	// onto new items and then rejected by validateItemsFamily (a valid add 400s).
+	database.DB.Model(&models.ItemAlias{}).
+		Where("category_id = ? AND family_id = ?", catID, familyID).
+		Updates(map[string]interface{}{"category_id": nil})
+
 	if err := database.DB.Where("id = ? AND family_id = ?", catID, familyID).Delete(&models.Category{}).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete category"})
 		return
